@@ -10,3 +10,4 @@
 /runtime/media/.venv/
 /runtime/media/__pycache__/
 /runtime/media/models/
+/storage/framework/testing/

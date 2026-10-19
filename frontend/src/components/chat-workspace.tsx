@@ -1446,6 +1446,15 @@ export default function ChatWorkspace() {
               temporary chat messages.
             </p>
           )}
+          {selectedModel?.id === -1 && mediaMode === "chat" && (
+            <p className="muted provider-notice">
+              NVIDIA hosted chat: your message, included history, selected files
+              and personalization are sent to NVIDIA.{" "}
+              {temporary
+                ? "Temporary mode prevents chat storage in this app; NVIDIA’s policies still apply."
+                : "Your conversation is saved in your account."}
+            </p>
+          )}
           <form
             className="composer"
             onSubmit={send}

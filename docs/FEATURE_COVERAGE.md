@@ -1,6 +1,6 @@
 # Openmindai feature coverage
 
-Openmindai is an independent self-hosted chat application. This implementation reproduces selected familiar workflows; it is not complete ChatGPT product parity. All inference uses the administrator's own runtime and Hugging Face downloadable models. No commercial model-provider integration is included.
+Openmindai is an independent self-hosted chat application. This implementation reproduces selected familiar workflows; it is not complete ChatGPT product parity. Local inference uses the administrator's own runtime and Hugging Face downloadable models. Optional interactive NVIDIA Nemotron hosted chat is available through the Next.js server, with Laravel DB persistence; see [NVIDIA setup](NVIDIA_FRONTEND_CHAT.md). Background tasks/media retain their self-hosted runtimes.
 
 | Feature | Current implementation |
 | --- | --- |

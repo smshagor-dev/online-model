@@ -68,3 +68,7 @@ The integration suite starts a production Next.js process and an isolated fake L
 Openmindai now uses real SSE streaming and database-backed projects, explicit memory/custom instructions, full-history search, pinned/archived chats, editable/regenerated branches, share snapshots, text/code file library, feedback, canvas and data export. See [feature coverage](../docs/FEATURE_COVERAGE.md) for supported and absent capabilities. Existing deployments must run the new Laravel migrations and rebuild this frontend. The frontend auth cookie was renamed to `openmindai_token`; sign in again after upgrading.
 
 Set Laravel `APP_NAME=Openmindai`. Optional `SEARXNG_SEARCH_URL` must point to your own SearXNG `/search` endpoint with JSON output enabled. The web-search control appears only when that backend capability is configured. There is no commercial AI fallback. Production SSE needs proxy buffering disabled and concurrent PHP workers for stop requests. On Unix, a local PHP development server can use `PHP_CLI_SERVER_WORKERS=4`; a single-worker server cannot process a cancellation request until its stream finishes.
+
+## NVIDIA Nemotron chat
+
+See [NVIDIA setup](../docs/NVIDIA_FRONTEND_CHAT.md) for direct Next.js server-to-NVIDIA chat with Laravel message persistence. This is an explicit chat provider selection. Keep the API key in server environment variables. Scheduled tools and media continue to use the self-hosted runtime.

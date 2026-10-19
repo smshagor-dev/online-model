@@ -4,6 +4,7 @@ use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CanvasController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\FrontendChatController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StreamChatController;
@@ -78,6 +79,9 @@ Route::prefix('v1')->group(function () {
         Route::get('export', [$workspace, 'export'])->middleware('throttle:sensitive');
         Route::put('conversations/{id}/messages/{message}/feedback', [$workspace, 'feedback']);
         Route::post('conversations/{id}/messages/{message}/stop', [$workspace, 'stop']);
+        Route::post('chat/frontend/begin', [FrontendChatController::class, 'begin'])->middleware('throttle:chat');
+        Route::post('chat/frontend/status', [FrontendChatController::class, 'status']);
+        Route::post('chat/frontend/finish', [FrontendChatController::class, 'finish']);
         Route::post('chat/stream', StreamChatController::class)->middleware('throttle:chat');
 
         Route::post('logout', [AuthController::class, 'logout']);

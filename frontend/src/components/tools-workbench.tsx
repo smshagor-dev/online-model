@@ -109,7 +109,7 @@ function AssistantBuilder({ onUse }: { onUse: (a: Assistant) => void }) {
     ])
       .then(([a, m, f]) => {
         setItems(a);
-        setModels(m);
+        setModels(m.filter((model) => model.id > 0));
         setFiles(f.data);
       })
       .catch((e) => {
@@ -300,7 +300,7 @@ function TaskPlanner({
     ])
       .then(([t, m, caps]) => {
         setTasks(t);
-        setModels(m);
+        setModels(m.filter((model) => model.id > 0));
         setSearch(caps.web_search);
       })
       .catch((e) => {
@@ -360,7 +360,9 @@ function TaskPlanner({
         {research
           ? "Search up to five sources, read public HTML pages and generate a sourced report. Unreadable pages are marked; snippets are not full-page verification."
           : "Run prompts now or schedule one-time, daily or weekly runs. Results stay in task history. Times below use your browser’s timezone."}{" "}
-        The server scheduler and task worker must be running.
+        The server scheduler and task worker must be running. These tools
+        require a configured local model; NVIDIA hosted chat is available in the
+        chat workspace.
       </p>
       {research && !search && (
         <p role="status">
@@ -456,7 +458,10 @@ function TaskPlanner({
           });
         }}
       >
-        <fieldset disabled={busy} className="settings-fieldset">
+        <fieldset
+          disabled={busy || models.length === 0}
+          className="settings-fieldset"
+        >
           <h3>{editing ? "Edit task" : "Create task"}</h3>
           <label>
             Title

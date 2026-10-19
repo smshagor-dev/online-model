@@ -1,6 +1,6 @@
 # Openmindai
 
-Laravel 12 / PHP 8.2 backend for Hugging Face model storage and self-hosted chat. No commercial model-provider integrations are included.
+Laravel 12 / PHP 8.2 backend for Hugging Face model storage and self-hosted chat. Optional NVIDIA Nemotron chat connects directly from the Next.js server while Laravel stores chat history.
 
 ## Web frontend
 
@@ -78,7 +78,7 @@ The lockfile resolves dependencies against PHP 8.2. CI tests PHP 8.2 and 8.3. Do
 
 ## Self-hosted media studio
 
-Queued image/vision/audio/speech/Wan-video integrations and PDF/DOCX text extraction, with private DB task records and file storage. Requires separate compatible HF snapshots and a private runtime. See [runtime setup](runtime/media/README.md) and [feature coverage](docs/FEATURE_COVERAGE.md). No commercial inference API is used. Real GPU inference remains deployment-specific validation.
+Queued image/vision/audio/speech/Wan-video integrations and PDF/DOCX text extraction, with private DB task records and file storage. Requires separate compatible HF snapshots and a private runtime. See [runtime setup](runtime/media/README.md) and [feature coverage](docs/FEATURE_COVERAGE.md). Media inference uses only the configured self-hosted runtime. Real GPU inference remains deployment-specific validation.
 
 ## User settings
 
@@ -87,3 +87,7 @@ Profile photo/name, confirmed email changes, password and 2FA/device controls, p
 ## Workspace tools
 
 Tools & library includes assistant builder, scheduled tasks, bounded sourced research, unified library, voice input and an optional reviewed Python runner. Composer supports file drop/preview and inline media previews; Canvas supports split preview and version comparison; chats have a saved-branch navigator. Run migrations and the tasks queue worker/scheduler after updating. See [feature coverage](docs/FEATURE_COVERAGE.md) and [runtime deployment](runtime/media/README.md) for the exact supported scope and remaining live-host/device validation.
+
+## NVIDIA hosted chat
+
+Interactive Nemotron chat can connect directly from the Next.js server to NVIDIA while Laravel stores user/assistant messages and owns authentication/context. See [NVIDIA frontend setup](docs/NVIDIA_FRONTEND_CHAT.md). Keys are server-only; no live NVIDIA account/key is bundled. Existing local models remain available.

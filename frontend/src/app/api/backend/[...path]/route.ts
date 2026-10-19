@@ -1,3 +1,9 @@
+import {
+  nvidiaChat,
+  nvidiaEnabled,
+  nvidiaModel,
+  NVIDIA_MODEL_ID,
+} from "@/lib/nvidia-chat";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -84,6 +90,46 @@ async function proxy(
       JSON.parse(body);
     } catch {
       return NextResponse.json({ message: "Invalid JSON." }, { status: 400 });
+    }
+  }
+  if (
+    endpoint === "chat/stream" &&
+    request.method === "POST" &&
+    nvidiaEnabled() &&
+    Number(JSON.parse(body!)?.model_id) === NVIDIA_MODEL_ID
+  ) {
+    const response = await nvidiaChat(body!, token!, base, request.signal);
+    if (response.status === 401) jar.delete(cookieName);
+    return response;
+  }
+  if (endpoint === "models" && request.method === "GET" && nvidiaEnabled()) {
+    // Authenticate against Laravel before exposing the frontend-hosted model.
+    try {
+      const response = await fetch(`${base.replace(/\/$/, "")}/models`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(10000),
+      });
+      if (response.status === 401) jar.delete(cookieName);
+      if (!response.ok)
+        return NextResponse.json(
+          { message: "Cannot load models." },
+          { status: response.status },
+        );
+      const local = await response.json();
+      return NextResponse.json(
+        [nvidiaModel(), ...(Array.isArray(local) ? local : [])],
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    } catch {
+      return NextResponse.json(
+        { message: "Cannot connect to backend." },
+        { status: 503 },
+      );
     }
   }
   try {
