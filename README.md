@@ -75,3 +75,7 @@ composer audit
 ```
 
 The lockfile resolves dependencies against PHP 8.2. CI tests PHP 8.2 and 8.3. Do not commit `.env`, tokens, downloaded weights, user data, or `vendor/`.
+
+## Self-hosted media studio
+
+Queued image/vision/audio/speech/Wan-video integrations and PDF/DOCX text extraction, with private DB task records and file storage. Requires separate compatible HF snapshots and a private runtime. See [runtime setup](runtime/media/README.md) and [feature coverage](docs/FEATURE_COVERAGE.md). No commercial inference API is used. Real GPU inference remains deployment-specific validation.

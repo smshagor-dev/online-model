@@ -27,6 +27,18 @@ before(async () => {
             user: { id: 1, name: "Test User", email: "test@example.com" },
           }),
         );
+      if (req.url === "/api/v1/media/9/output") {
+        res.setHeader("Content-Type", "image/png");
+        return res.end(Buffer.from("private-png-fixture"));
+      }
+      if (req.url === "/api/v1/media/10/output") {
+        res.setHeader("Content-Type", "text/html");
+        return res.end("<script>invalid media</script>");
+      }
+      if (req.url === "/api/v1/media" && req.method === "POST") {
+        res.statusCode = 202;
+        return res.end(JSON.stringify({ id: 9, status: "queued" }));
+      }
       if (req.url === "/api/v1/logout") {
         res.statusCode = 204;
         return res.end();
@@ -245,4 +257,25 @@ test("brand asset is served from this application", async () => {
   const r = await fetch(origin + "/openmindai-logo.png");
   assert.equal(r.status, 200);
   assert.match(r.headers.get("content-type"), /image\/png/);
+});
+
+test("media uploads accept bounded base64 JSON through the authenticated proxy", async () => {
+  const auth = await login();
+  const cookie = auth.headers.get("set-cookie").split(";")[0];
+  const r = await request("media", { method: "POST", headers: { ...headers(), Cookie: cookie }, body: JSON.stringify({ kind: "vision", prompt: "Describe", input: "a".repeat(200_000) }) });
+  assert.equal(r.status, 202);
+  assert.equal(lastRequest.authorization, "Bearer fixture-secret-token");
+  assert.equal(JSON.parse(lastRequest.body).input.length, 200_000);
+});
+test("media binary downloads preserve privacy and reject HTML", async () => {
+  assert.equal((await request("media/9/output")).status, 401);
+  const auth = await login();
+  const cookie = auth.headers.get("set-cookie").split(";")[0];
+  const r = await request("media/9/output", { headers: { Cookie: cookie } });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get("content-type"), "image/png");
+  assert.match(r.headers.get("cache-control"), /private.*no-store/);
+  assert.match(r.headers.get("content-disposition"), /attachment; filename="openmindai-9.png"/);
+  assert.equal(await r.text(), "private-png-fixture");
+  assert.equal((await request("media/10/output", { headers: { Cookie: cookie } })).status, 502);
 });

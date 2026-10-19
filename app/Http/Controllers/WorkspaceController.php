@@ -6,6 +6,7 @@ use App\Models\Attachment;
 use App\Models\Canvas;
 use App\Models\Conversation;
 use App\Models\ConversationShare;
+use App\Models\MediaTask;
 use App\Models\Memory;
 use App\Models\Project;
 use App\Services\WebSearch;
@@ -24,7 +25,7 @@ class WorkspaceController
 
     public function capabilities()
     {
-        return ['streaming' => true, 'projects' => true, 'memory' => true, 'attachments' => ['text', 'markdown', 'csv', 'json', 'source-code'], 'image_generation' => false, 'voice_transcription' => false, 'web_search' => (bool) config('models.search_url'), 'code_execution' => false];
+        return ['streaming' => true, 'projects' => true, 'memory' => true, 'attachments' => ['text', 'markdown', 'csv', 'json', 'source-code'], 'media' => config('media.url') && config('media.key') ? array_values(array_intersect(config('media.kinds'), ['image', 'vision', 'transcription', 'speech', 'video', 'document'])) : [], 'image_generation' => (bool) (config('media.url') && config('media.key') && in_array('image', config('media.kinds'))), 'voice_transcription' => (bool) (config('media.url') && config('media.key') && in_array('transcription', config('media.kinds'))), 'web_search' => (bool) config('models.search_url'), 'code_execution' => false];
     }
 
     public function preferences(Request $r)
@@ -184,7 +185,7 @@ class WorkspaceController
 
     public function export(Request $r)
     {
-        return ['canvases' => Canvas::where('user_id', $r->user()->id)->get(), 'exported_at' => now()->toIso8601String(), 'user' => $r->user()->only('name', 'email', 'custom_instructions', 'memory_enabled'), 'projects' => Project::where('user_id', $r->user()->id)->get(), 'memories' => Memory::where('user_id', $r->user()->id)->get(), 'conversations' => Conversation::where('user_id', $r->user()->id)->with('messages')->get(), 'attachments' => Attachment::where('user_id', $r->user()->id)->get()->makeVisible('content')];
+        return ['media_tasks' => MediaTask::where('user_id', $r->user()->id)->get(), 'canvases' => Canvas::where('user_id', $r->user()->id)->get(), 'exported_at' => now()->toIso8601String(), 'user' => $r->user()->only('name', 'email', 'custom_instructions', 'memory_enabled'), 'projects' => Project::where('user_id', $r->user()->id)->get(), 'memories' => Memory::where('user_id', $r->user()->id)->get(), 'conversations' => Conversation::where('user_id', $r->user()->id)->with('messages')->get(), 'attachments' => Attachment::where('user_id', $r->user()->id)->get()->makeVisible('content')];
     }
 
     public function stop(Request $r, int $id, int $message)

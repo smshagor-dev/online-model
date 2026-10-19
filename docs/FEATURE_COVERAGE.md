@@ -21,11 +21,15 @@ Openmindai is an independent self-hosted chat application. This implementation r
 | Read aloud | Browser speech synthesis with an installed on-device voice only; availability depends on the device |
 | Web search | Optional self-hosted SearXNG JSON adapter; up to five sanitized snippets/source URLs; not full-page browsing or deep research |
 
+## Self-hosted media integrations
+
+Media studio now provides queued image generation, image understanding, audio transcription, speech generation, short Wan video generation and PDF/DOCX text extraction. Includes task ownership, quotas, status/failure handling, private previews/downloads, deletion and reuse of text in chat. The Laravel/Next workflows and Python HTTP contract are tested with fixtures. Real model/GPU inference has not been validated in this environment. These capabilities remain disabled until the administrator provisions compatible revision-pinned HF snapshots, runs the private Python runtime and queue worker, and enables the kinds. See [runtime setup](../runtime/media/README.md). Media snapshot provisioning is a CLI operation; the existing admin click-to-download form remains GGUF-only.
+
 ## Not implemented
 
-The following are absent, rather than simulated by buttons: image/video generation, image understanding, PDF/DOCX parsing, audio transcription, realtime speech conversation, screen/video sharing, autonomous browser agents, arbitrary code/data-analysis execution, a GPT/assistant marketplace, external account connectors/MCP administration, scheduled AI tasks, subscriptions/payments, team collaboration and advanced multi-page deep research. These require separate implementation, secure execution environments, suitable self-hosted engines/models and deployment capacity. Downloading a GGUF file does not provide those capabilities.
+The following are absent, rather than simulated by buttons: realtime speech conversation, screen/video sharing, autonomous browser agents, arbitrary code/data-analysis execution, a GPT/assistant marketplace, external account connectors/MCP administration, scheduled AI tasks, subscriptions/payments, team collaboration and advanced multi-page deep research. These require separate implementation, secure execution environments, suitable self-hosted engines/models and deployment capacity. Downloading a GGUF file does not provide those capabilities.
 
-The read-aloud feature is not realtime voice chat. Canvas is a text/document editor, not a browser or code-execution sandbox. Search snippets are not a verified multi-page research report. Memory is explicit stored user notes, not automatic cross-conversation learning.
+The read-aloud feature and queued speech generation are not realtime voice chat. Canvas is a text/document editor, not a browser or code-execution sandbox. Search snippets are not a verified multi-page research report. Memory is explicit stored user notes, not automatic cross-conversation learning.
 
 ## Privacy and operational details
 

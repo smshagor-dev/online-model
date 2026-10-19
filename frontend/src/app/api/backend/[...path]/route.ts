@@ -12,12 +12,12 @@ const publicPaths = new Set([
   "email/resend",
 ]);
 const routes: Record<string, RegExp> = {
-  GET: /^(me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
-  POST: /^(login|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/stream)?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
+  GET: /^(media(?:\/\d+(?:\/output)?)?|me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
+  POST: /^(media|login|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/stream)?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
   PATCH: /^(me|preferences|conversations\/\d+)$/,
   PUT: /^(me\/password|projects\/\d+|canvases\/\d+|memories\/\d+|conversations\/\d+\/messages\/\d+\/feedback)$/,
   DELETE:
-    /^(me|2fa|tokens\/\d+|conversations\/\d+|projects\/\d+|canvases\/\d+|memories\/\d+|attachments\/\d+|shares\/\d+)$/,
+    /^(media\/\d+|me|2fa|tokens\/\d+|conversations\/\d+|projects\/\d+|canvases\/\d+|memories\/\d+|attachments\/\d+|shares\/\d+)$/,
 };
 async function proxy(
   request: NextRequest,
@@ -61,7 +61,7 @@ async function proxy(
         const { value, done } = await reader.read();
         if (done) break;
         size += value.byteLength;
-        if (size > 100_000) {
+        if (size > (endpoint === "media" ? 11_000_000 : 100_000)) {
           await reader.cancel();
           return NextResponse.json(
             { message: "Request is too large." },
@@ -119,6 +119,22 @@ async function proxy(
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache, no-transform",
           "X-Accel-Buffering": "no",
+        },
+      });
+    }
+    if (upstream.ok && /^media\/\d+\/output$/.test(endpoint)) {
+      const mime = upstream.headers.get("content-type")?.split(";")[0];
+      if (!mime || !["image/png", "audio/wav", "video/mp4"].includes(mime))
+        return NextResponse.json(
+          { message: "Invalid media format." },
+          { status: 502 },
+        );
+      return new NextResponse(upstream.body, {
+        headers: {
+          "Content-Type": mime,
+          "Content-Disposition": `attachment; filename="openmindai-${endpoint.split("/")[1]}.${mime === "image/png" ? "png" : mime === "audio/wav" ? "wav" : "mp4"}"`,
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff",
         },
       });
     }

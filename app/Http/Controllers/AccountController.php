@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MediaTask;
 use App\Services\TwoFactor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -109,6 +110,7 @@ class AccountController
         DB::transaction(function () use ($u) {
             $u->tokens()->delete();
             DB::table('sessions')->where('user_id', $u->id)->delete();
+            MediaTask::where('user_id', $u->id)->eachById(fn ($task) => $task->delete());
             $u->delete();
         });
 

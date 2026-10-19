@@ -1,6 +1,8 @@
 <?php
 
+use App\Jobs\RunMediaTask;
 use App\Models\ConversationShare;
+use App\Models\MediaTask;
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
@@ -32,3 +34,12 @@ Schedule::command('sanctum:prune-expired --hours=24')->daily();
 
 Schedule::call(fn () => Message::where('status', 'generating')->where('updated_at', '<', now()->subMinutes(10))->update(['status' => 'failed']))->everyMinute();
 Schedule::call(fn () => ConversationShare::where('expires_at', '<', now())->delete())->daily();
+
+// A killed queue process cannot run its failure hook. Clean abandoned media inputs.
+Schedule::call(function () {
+    MediaTask::where(function ($q) {
+        $q->where('status', 'running')->where('updated_at', '<', now()->subMinutes(20));
+    })->orWhere(function ($q) {
+        $q->where('status', 'queued')->where('created_at', '<', now()->subDay());
+    })->eachById(fn ($task) => (new RunMediaTask($task->id))->failed(null));
+})->everyFiveMinutes();

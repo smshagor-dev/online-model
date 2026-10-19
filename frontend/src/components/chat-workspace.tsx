@@ -38,6 +38,7 @@ import Image from "next/image";
 import Dialog from "./dialog";
 const AuthDialog = dynamic(() => import("./auth-dialog"));
 const AccountDialog = dynamic(() => import("./account-dialog"));
+const MediaDialog = dynamic(() => import("./media-dialog"));
 const CanvasDialog = dynamic(() => import("./canvas-dialog"));
 const WorkspaceDialog = dynamic(() => import("./workspace-dialog"));
 const ConversationDialog = dynamic(() => import("./conversation-dialog"));
@@ -83,6 +84,7 @@ export default function ChatWorkspace() {
   const [searchAvailable, setSearchAvailable] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
   const [canvasInitial, setCanvasInitial] = useState<string | null>(null);
+  const [mediaOpen, setMediaOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [toolsChat, setToolsChat] = useState<Conversation | null>(null);
   const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
@@ -148,6 +150,7 @@ export default function ChatWorkspace() {
     generationRef.current?.abort();
     uploadRequest.current?.abort();
     setWorkspaceOpen(false);
+    setMediaOpen(false);
     setCanvasInitial(null);
     setToolsChat(null);
     setUser(null);
@@ -741,6 +744,12 @@ export default function ChatWorkspace() {
             >
               <FolderOpen size={18} />
               Projects & memory
+            </button>
+            <button
+              className="sidebar-action"
+              onClick={() => setMediaOpen(true)}
+            >
+              <Sparkles size={18} /> Media studio
             </button>
             <select
               aria-label="Filter by project"
@@ -1387,6 +1396,15 @@ export default function ChatWorkspace() {
               [...previous.filter((f) => f.id !== a.id), a].slice(-5),
             )
           }
+        />
+      )}
+      {mediaOpen && (
+        <MediaDialog
+          onClose={() => setMediaOpen(false)}
+          onUse={(text) => {
+            setDraft(text);
+            setMediaOpen(false);
+          }}
         />
       )}
       {workspaceOpen && (

@@ -4,6 +4,7 @@ use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CanvasController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\MediaController;
 use App\Http\Controllers\StreamChatController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,11 @@ Route::prefix('v1')->group(function () {
         Route::post('email/resend', [AuthController::class, 'resend']);
     });
     Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
+        Route::get('media', [MediaController::class, 'index']);
+        Route::post('media', [MediaController::class, 'create'])->middleware('throttle:sensitive');
+        Route::get('media/{id}', [MediaController::class, 'show']);
+        Route::get('media/{id}/output', [MediaController::class, 'output']);
+        Route::delete('media/{id}', [MediaController::class, 'delete']);
         Route::get('canvases', [CanvasController::class, 'index']);
         Route::get('canvases/{id}', [CanvasController::class, 'show']);
         Route::post('canvases', [CanvasController::class, 'create']);

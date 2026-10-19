@@ -6,3 +6,7 @@
 /storage/app/models/*
 /bootstrap/cache/*.php
 .phpunit.result.cache
+/storage/app/private/
+/runtime/media/.venv/
+/runtime/media/__pycache__/
+/runtime/media/models/
