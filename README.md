@@ -2,6 +2,10 @@
 
 Laravel 12 / PHP 8.2 backend for Hugging Face model storage and self-hosted chat. No commercial model-provider integrations are included.
 
+## Web frontend
+
+The `frontend/` folder contains the Next.js 16.4.2 chat application. See [frontend setup](frontend/README.md) for local development, secure Laravel integration and Node/cPanel deployment.
+
 ## Features
 
 - Versioned REST API, Sanctum bearer tokens with 30-day expiry and device revocation.

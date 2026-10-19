@@ -1,4 +1,4 @@
-name: Backend validation
+name: Backend and frontend validation
 on: [push, pull_request]
 jobs:
   tests:
@@ -21,3 +21,20 @@ jobs:
       - run: php artisan test
       - run: php artisan route:cache && php artisan view:cache && php artisan config:cache
       - run: composer audit
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run test:integration
+      - run: npm audit --omit=dev

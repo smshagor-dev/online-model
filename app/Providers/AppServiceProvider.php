@@ -18,6 +18,6 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('api', fn ($r) => Limit::perMinute(60)->by($r->user()?->id ?: $r->ip()));
         RateLimiter::for('sensitive', fn ($r) => Limit::perMinute(5)->by('sensitive:'.$r->user()->id));
         RateLimiter::for('chat', fn ($r) => [Limit::perMinute(10)->by('chat:'.$r->user()->id), Limit::perDay(config('models.daily_limit'))->by('chat-day:'.$r->user()->id)]);
-        ResetPassword::createUrlUsing(fn ($user, $token) => url('/reset-password?'.http_build_query(['token' => $token, 'email' => $user->email])));
+        ResetPassword::createUrlUsing(fn ($user, $token) => rtrim(config('app.frontend_url') ?: config('app.url'), '/').'/reset-password?'.http_build_query(['token' => $token, 'email' => $user->email]));
     }
 }

@@ -6,7 +6,10 @@ use App\Models\AiModel;
 use App\Models\Conversation;
 use App\Models\User;
 use App\Services\TwoFactor;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Middleware\TrustProxies;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
@@ -162,5 +165,34 @@ class BackendTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
         $this->assertTrue(Hash::check('NewStrongPassword456', $u->fresh()->password));
         $this->postJson('/api/v1/reset-password', ['email' => $u->email, 'token' => $token, 'password' => 'AnotherPassword123', 'password_confirmation' => 'AnotherPassword123'])->assertStatus(422);
+    }
+
+    public function test_history_is_ordered_by_latest_activity(): void
+    {
+        $user = $this->user();
+        $older = Conversation::create(['user_id' => $user->id, 'title' => 'Older but active']);
+        $newer = Conversation::create(['user_id' => $user->id, 'title' => 'Newer but idle']);
+        $older->forceFill(['updated_at' => now()->addMinute()])->save();
+        Sanctum::actingAs($user);
+        $this->getJson('/api/v1/conversations')->assertOk()->assertJsonPath('data.0.id', $older->id);
+    }
+
+    public function test_password_reset_link_uses_configured_frontend(): void
+    {
+        config(['app.frontend_url' => 'https://chat.example.com']);
+        $mail = (new ResetPassword('test-token'))->toMail($this->user());
+        $this->assertStringStartsWith('https://chat.example.com/reset-password?', $mail->actionUrl);
+        $this->assertStringContainsString('token=test-token', $mail->actionUrl);
+    }
+
+    public function test_forwarded_ip_is_accepted_only_from_configured_proxy(): void
+    {
+        $request = Request::create('/api/v1/login', 'POST', server: ['REMOTE_ADDR' => '10.0.0.2', 'HTTP_X_FORWARDED_FOR' => '203.0.113.8']);
+        config(['trustedproxy.proxies' => ['10.0.0.2']]);
+        $response = app(TrustProxies::class)->handle($request, fn ($r) => response($r->ip()));
+        $this->assertSame('203.0.113.8', $response->getContent());
+        config(['trustedproxy.proxies' => []]);
+        $response = app(TrustProxies::class)->handle($request, fn ($r) => response($r->ip()));
+        $this->assertSame('10.0.0.2', $response->getContent());
     }
 }

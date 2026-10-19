@@ -19,7 +19,7 @@ class ChatController
 
     public function index(Request $r)
     {
-        return Conversation::where('user_id', $r->user()->id)->latest()->paginate(20);
+        return Conversation::where('user_id', $r->user()->id)->latest('updated_at')->latest('id')->paginate(20);
     }
 
     public function show(Request $r, int $id)

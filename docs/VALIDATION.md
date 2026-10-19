@@ -12,3 +12,12 @@ Before production use, perform registration → delivered verification email →
 - Composer strict validation, Pint formatting, route/view/config compilation and dependency advisory audit passed.
 - A live Hugging Face GGUF search and repository metadata request succeeded. No multi-GB model was downloaded during validation.
 - Browser automation was attempted; browser installation availability is environment-dependent. The admin views are rendered by feature tests.
+
+## Next.js frontend verification
+
+- Production Next.js 16.4.2 build and TypeScript compilation passed.
+- 22 Laravel feature tests passed with 64 assertions, including updated-activity history ordering, frontend password reset URLs, and explicit proxy-IP trust.
+- 11 production Next.js HTTP integration tests passed: rendered workspace HTML, cookie authentication, CSRF origin enforcement, route restrictions, numeric pagination, chat forwarding, upstream errors, rate-limit headers, logout and oversized-body rejection.
+- An additional local Next.js → real Laravel → SQLite flow passed: login, model listing, chat, two persisted messages, logout/login, restored history, deletion and logout. Inference used a local HTTP fixture, not downloaded model weights.
+- Frontend production dependency audit reported zero vulnerabilities.
+- No interactive browser/visual QA or real hosting deployment was performed for this frontend. HTTP rendering and API tests do not establish mobile visual correctness or real GPU inference performance.
