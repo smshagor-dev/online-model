@@ -10,14 +10,15 @@ const publicPaths = new Set([
   "forgot-password",
   "reset-password",
   "email/resend",
+  "email/change/confirm",
 ]);
 const routes: Record<string, RegExp> = {
   GET: /^(media(?:\/\d+(?:\/output)?)?|me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
-  POST: /^(media|login|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/stream)?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
+  POST: /^(me\/(avatar|email)|email\/change\/confirm|settings\/data|media|login|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/stream)?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
   PATCH: /^(me|preferences|conversations\/\d+)$/,
   PUT: /^(me\/password|projects\/\d+|canvases\/\d+|memories\/\d+|conversations\/\d+\/messages\/\d+\/feedback)$/,
   DELETE:
-    /^(media\/\d+|me|2fa|tokens\/\d+|conversations\/\d+|projects\/\d+|canvases\/\d+|memories\/\d+|attachments\/\d+|shares\/\d+)$/,
+    /^(me\/(avatar|email)|media\/\d+|me|2fa|tokens\/\d+|conversations\/\d+|projects\/\d+|canvases\/\d+|memories\/\d+|attachments\/\d+|shares\/\d+)$/,
 };
 async function proxy(
   request: NextRequest,
@@ -61,7 +62,14 @@ async function proxy(
         const { value, done } = await reader.read();
         if (done) break;
         size += value.byteLength;
-        if (size > (endpoint === "media" ? 11_000_000 : 100_000)) {
+        if (
+          size >
+          (endpoint === "media"
+            ? 11_000_000
+            : endpoint === "me/avatar"
+              ? 130_000
+              : 100_000)
+        ) {
           await reader.cancel();
           return NextResponse.json(
             { message: "Request is too large." },
@@ -163,7 +171,12 @@ async function proxy(
     if (
       upstream.status === 401 ||
       (upstream.ok &&
-        ["logout", "logout-all", "me/password"].includes(endpoint)) ||
+        [
+          "logout",
+          "logout-all",
+          "me/password",
+          "email/change/confirm",
+        ].includes(endpoint)) ||
       (upstream.ok && endpoint === "me" && request.method === "DELETE")
     )
       jar.delete(cookieName);

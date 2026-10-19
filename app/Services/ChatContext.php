@@ -13,8 +13,24 @@ class ChatContext
     {
         $system = 'You are Openmindai, a helpful assistant. Be accurate, clear, and honest about uncertainty. Never claim tools or capabilities you did not use.';
         if (! $temporary) {
-            if ($user->custom_instructions) {
-                $system .= "\nUser instructions:\n".$user->custom_instructions;
+            if ($user->personalization_enabled) {
+                foreach (['nickname' => 'Address the user as', 'occupation' => 'Occupation', 'about_you' => 'User background'] as $field => $label) {
+                    if ($user->$field) {
+                        $system .= "\n".$label.': '.$user->$field;
+                    }
+                }
+                if ($user->response_style !== 'default') {
+                    $system .= "\nPreferred response style: ".$user->response_style;
+                }
+                if ($user->response_length !== 'default') {
+                    $system .= "\nPreferred response length: ".$user->response_length;
+                }
+                if ($user->response_language !== 'auto') {
+                    $system .= "\nPreferred response language: ".$user->response_language;
+                }
+                if ($user->custom_instructions) {
+                    $system .= "\nUser instructions:\n".$user->custom_instructions;
+                }
             }
             if ($user->memory_enabled) {
                 $memory = Memory::where('user_id', $user->id)->latest()->limit(20)->pluck('content')->implode("\n");

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Check,
   Copy,
@@ -11,20 +11,45 @@ import {
   UserRound,
 } from "lucide-react";
 import Dialog from "./dialog";
-import { api, type User } from "@/lib/api";
-type Device = { id: number; name: string; last_used_at: string | null };
+import SettingsPreferences from "./settings-preferences";
+import SettingsData, { IdentityFields } from "./settings-data";
+import ProfilePhoto from "./profile-photo";
+import { api as requestApi, type User } from "@/lib/api";
+type Device = {
+  current: boolean;
+  id: number;
+  name: string;
+  last_used_at: string | null;
+};
 export default function AccountDialog({
   user,
   onClose,
   onUpdate,
   onSignedOut,
+  onChanged,
+  onDataChanged,
 }: {
   user: User;
   onClose: () => void;
   onUpdate: (user: User) => void;
   onSignedOut: () => void;
+  onChanged: () => void;
+  onDataChanged: () => void;
 }) {
-  const [tab, setTab] = useState("profile");
+  const requests = useRef(new AbortController());
+  useEffect(() => {
+    requests.current = new AbortController();
+    return () => requests.current.abort();
+  }, []);
+  function api<T>(
+    path: string,
+    method = "GET",
+    body?: unknown,
+    signal?: AbortSignal,
+  ) {
+    return requestApi<T>(path, method, body, signal || requests.current.signal);
+  }
+  const [tab, setTab] = useState("general");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -52,9 +77,9 @@ export default function AccountDialog({
     try {
       await action();
     } catch (e) {
-      setError((e as Error).message);
+      if (!requests.current.signal.aborted) setError((e as Error).message);
     } finally {
-      setBusy(false);
+      if (!requests.current.signal.aborted) setBusy(false);
     }
   }
   function values(event: React.FormEvent<HTMLFormElement>) {
@@ -75,13 +100,21 @@ export default function AccountDialog({
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Account settings">
           {[
-            { id: "profile", title: "General", icon: UserRound },
+            { id: "general", title: "General", icon: UserRound },
+            {
+              id: "personalization",
+              title: "Personalization",
+              icon: UserRound,
+            },
+            { id: "data", title: "Data controls", icon: Download },
+            { id: "profile", title: "Account", icon: UserRound },
             { id: "security", title: "Security", icon: ShieldCheck },
             { id: "devices", title: "Devices", icon: Monitor },
           ].map((item) => (
             <button
               key={item.id}
               className={tab === item.id ? "selected" : ""}
+              aria-current={tab === item.id ? "page" : undefined}
               disabled={busy}
               onClick={() => {
                 setTab(item.id);
@@ -105,9 +138,27 @@ export default function AccountDialog({
               {notice}
             </p>
           )}
+          {(tab === "general" || tab === "personalization") && (
+            <SettingsPreferences
+              key={tab}
+              section={tab}
+              onChanged={onChanged}
+            />
+          )}
+          {tab === "data" && (
+            <SettingsData
+              user={user}
+              onChanged={() => {
+                onChanged();
+                onDataChanged();
+              }}
+              onSignedOut={onSignedOut}
+            />
+          )}
           {tab === "profile" && (
             <>
               <h3>Your profile</h3>
+              <ProfilePhoto user={user} onUpdate={onUpdate} />
               <p className="muted">{user.email}</p>
               <form
                 className="form-stack"
@@ -130,6 +181,65 @@ export default function AccountDialog({
                 </label>
                 <button className="primary-button" disabled={busy}>
                   Save changes
+                </button>
+              </form>
+              <hr />
+              <h3>Email address</h3>
+              <p className="muted">
+                {user.email_verified_at
+                  ? "Verified email"
+                  : "Email verification pending"}
+                : {user.email}
+              </p>
+              {user.pending_email && (
+                <div className="manage-card">
+                  <p>Pending confirmation: {user.pending_email}</p>
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        await api("me/email", "DELETE");
+                        await refresh();
+                        setNotice("Email change cancelled.");
+                      })
+                    }
+                  >
+                    Cancel email change
+                  </button>
+                </div>
+              )}
+              <form
+                className="form-stack"
+                onSubmit={(e) => {
+                  const data = values(e);
+                  void run(async () => {
+                    const result = await api<{ message: string }>(
+                      "me/email",
+                      "POST",
+                      data,
+                    );
+                    await refresh();
+                    setNotice(result.message);
+                  });
+                }}
+              >
+                <label>
+                  New email
+                  <input
+                    name="email"
+                    type="email"
+                    required
+                    maxLength={254}
+                    autoComplete="email"
+                  />
+                </label>
+                <IdentityFields twoFactor={!!user.two_factor_confirmed_at} />
+                <small className="muted">
+                  Your current address stays active until you confirm the link
+                  sent to the new one. Confirmation signs out every device.
+                </small>
+                <button className="secondary-button" disabled={busy}>
+                  Send confirmation link
                 </button>
               </form>
               <hr />
@@ -310,7 +420,7 @@ export default function AccountDialog({
                         );
                         const link = document.createElement("a");
                         link.href = url;
-                        link.download = "online-model-recovery-codes.txt";
+                        link.download = "openmindai-recovery-codes.txt";
                         link.click();
                         setTimeout(() => URL.revokeObjectURL(url), 1000);
                       }}
@@ -411,7 +521,10 @@ export default function AccountDialog({
                 <div className="device-row" key={device.id}>
                   <Monitor size={19} />
                   <div>
-                    <strong>{device.name}</strong>
+                    <strong>
+                      {device.name}
+                      {device.current ? " (this device)" : ""}
+                    </strong>
                     <small>
                       {device.last_used_at
                         ? new Date(device.last_used_at).toLocaleDateString()
@@ -427,11 +540,7 @@ export default function AccountDialog({
                         setDevices(
                           devices.filter((item) => item.id !== device.id),
                         );
-                        try {
-                          await api("me");
-                        } catch {
-                          onSignedOut();
-                        }
+                        if (device.current) onSignedOut();
                       })
                     }
                   >

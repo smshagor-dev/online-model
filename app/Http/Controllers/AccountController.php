@@ -28,7 +28,7 @@ class AccountController
     {
         $d = $r->validate(['current_password' => 'required|current_password', 'password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()]]);
         $u = $r->user();
-        $u->update(['password' => $d['password']]);
+        $u->forceFill(['password' => $d['password'], 'pending_email' => null, 'email_change_token' => null, 'email_change_expires_at' => null])->save();
         $u->tokens()->delete();
         DB::table('sessions')->where('user_id', $u->id)->delete();
 
@@ -37,7 +37,7 @@ class AccountController
 
     public function tokens(Request $r)
     {
-        return $r->user()->tokens()->get(['id', 'name', 'last_used_at', 'created_at', 'expires_at']);
+        return $r->user()->tokens()->get(['id', 'name', 'last_used_at', 'created_at', 'expires_at'])->map(fn ($token) => [...$token->toArray(), 'current' => $token->id === $r->user()->currentAccessToken()?->id]);
     }
 
     public function revoke(Request $r, int $id)
@@ -96,6 +96,7 @@ class AccountController
     public function logoutAll(Request $r)
     {
         $r->user()->tokens()->delete();
+        DB::table('sessions')->where('user_id', $r->user()->id)->delete();
 
         return response()->noContent();
     }

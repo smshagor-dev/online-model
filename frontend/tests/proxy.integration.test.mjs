@@ -73,6 +73,22 @@ before(async () => {
         res.setHeader("Content-Type", "text/html");
         return res.end("<html>upstream error</html>");
       }
+      if (req.url === "/api/v1/email/change/confirm")
+        return res.end(JSON.stringify({ message: "Email changed." }));
+      if (req.url === "/api/v1/me/avatar")
+        return res.end(
+          JSON.stringify({ id: 1, avatar: "data:image/png;base64,fixture" }),
+        );
+      if (req.url === "/api/v1/settings/data")
+        return res.end(JSON.stringify({ message: "Completed." }));
+      if (req.url === "/api/v1/preferences")
+        return res.end(
+          JSON.stringify({
+            theme: "system",
+            send_on_enter: false,
+            response_language: "Bangla",
+          }),
+        );
       if (req.url === "/api/v1/me")
         return res.end(JSON.stringify({ id: 1, name: "Test User" }));
       res.statusCode = 404;
@@ -262,7 +278,15 @@ test("brand asset is served from this application", async () => {
 test("media uploads accept bounded base64 JSON through the authenticated proxy", async () => {
   const auth = await login();
   const cookie = auth.headers.get("set-cookie").split(";")[0];
-  const r = await request("media", { method: "POST", headers: { ...headers(), Cookie: cookie }, body: JSON.stringify({ kind: "vision", prompt: "Describe", input: "a".repeat(200_000) }) });
+  const r = await request("media", {
+    method: "POST",
+    headers: { ...headers(), Cookie: cookie },
+    body: JSON.stringify({
+      kind: "vision",
+      prompt: "Describe",
+      input: "a".repeat(200_000),
+    }),
+  });
   assert.equal(r.status, 202);
   assert.equal(lastRequest.authorization, "Bearer fixture-secret-token");
   assert.equal(JSON.parse(lastRequest.body).input.length, 200_000);
@@ -275,7 +299,63 @@ test("media binary downloads preserve privacy and reject HTML", async () => {
   assert.equal(r.status, 200);
   assert.equal(r.headers.get("content-type"), "image/png");
   assert.match(r.headers.get("cache-control"), /private.*no-store/);
-  assert.match(r.headers.get("content-disposition"), /attachment; filename="openmindai-9.png"/);
+  assert.match(
+    r.headers.get("content-disposition"),
+    /attachment; filename="openmindai-9.png"/,
+  );
   assert.equal(await r.text(), "private-png-fixture");
-  assert.equal((await request("media/10/output", { headers: { Cookie: cookie } })).status, 502);
+  assert.equal(
+    (await request("media/10/output", { headers: { Cookie: cookie } })).status,
+    502,
+  );
+});
+
+test("profile settings and data actions use the authenticated proxy", async () => {
+  const auth = await login();
+  const cookie = auth.headers.get("set-cookie").split(";")[0];
+  let r = await request("preferences", {
+    method: "PATCH",
+    headers: { ...headers(), Cookie: cookie },
+    body: JSON.stringify({ theme: "system", send_on_enter: false }),
+  });
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).send_on_enter, false);
+  assert.equal(lastRequest.authorization, "Bearer fixture-secret-token");
+  r = await request("me/avatar", {
+    method: "POST",
+    headers: { ...headers(), Cookie: cookie },
+    body: JSON.stringify({ image: "a".repeat(120_000) }),
+  });
+  assert.equal(r.status, 200);
+  r = await request("settings/data", {
+    method: "POST",
+    headers: { ...headers(), Cookie: cookie },
+    body: JSON.stringify({ action: "delete_chats" }),
+  });
+  assert.equal(r.status, 200);
+  assert.equal(
+    (
+      await request("settings/data", {
+        method: "POST",
+        headers: headers(),
+        body: "{}",
+      })
+    ).status,
+    401,
+  );
+});
+test("email confirmation is explicit, unauthenticated and clears the old cookie", async () => {
+  const page = await fetch(
+    `${origin}/confirm-email?account=1&token=${"a".repeat(64)}`,
+  );
+  assert.equal(page.status, 200);
+  assert.ok((await page.text()).includes("Confirm my email change"));
+  const r = await request("email/change/confirm", {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ account: 1, token: "a".repeat(64) }),
+  });
+  assert.equal(r.status, 200);
+  assert.equal(lastRequest.authorization, undefined);
+  assert.match(r.headers.get("set-cookie"), /(?:Max-Age=0|Expires=Thu, 01 Jan 1970)/);
 });

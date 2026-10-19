@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CanvasController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\MediaController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StreamChatController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     Route::get('shared/{token}', [WorkspaceController::class, 'shared'])->middleware('throttle:60,1');
     Route::middleware('throttle:auth')->group(function () {
+        Route::post('email/change/confirm', [SettingsController::class, 'confirmEmail']);
         Route::post('register', [AuthController::class, 'register']);
         Route::post('login', [AuthController::class, 'login']);
         Route::post('forgot-password', [AuthController::class, 'forgot']);
@@ -19,6 +21,13 @@ Route::prefix('v1')->group(function () {
         Route::post('email/resend', [AuthController::class, 'resend']);
     });
     Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
+        Route::middleware('throttle:sensitive')->group(function () {
+            Route::post('me/avatar', [SettingsController::class, 'avatar']);
+            Route::delete('me/avatar', [SettingsController::class, 'removeAvatar']);
+            Route::post('me/email', [SettingsController::class, 'email']);
+            Route::delete('me/email', [SettingsController::class, 'cancelEmail']);
+            Route::post('settings/data', [SettingsController::class, 'bulk']);
+        });
         Route::get('media', [MediaController::class, 'index']);
         Route::post('media', [MediaController::class, 'create'])->middleware('throttle:sensitive');
         Route::get('media/{id}', [MediaController::class, 'show']);

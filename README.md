@@ -79,3 +79,7 @@ The lockfile resolves dependencies against PHP 8.2. CI tests PHP 8.2 and 8.3. Do
 ## Self-hosted media studio
 
 Queued image/vision/audio/speech/Wan-video integrations and PDF/DOCX text extraction, with private DB task records and file storage. Requires separate compatible HF snapshots and a private runtime. See [runtime setup](runtime/media/README.md) and [feature coverage](docs/FEATURE_COVERAGE.md). No commercial inference API is used. Real GPU inference remains deployment-specific validation.
+
+## User settings
+
+Profile photo/name, confirmed email changes, password and 2FA/device controls, persisted appearance/accessibility/notification preferences, response personalization, memory management, archived chats and data deletion/export are available from Settings. Run `php artisan migrate --force` after updating. Email changes need SMTP and `FRONTEND_URL`. See [feature coverage](docs/FEATURE_COVERAGE.md) for behavior and deployment limits.

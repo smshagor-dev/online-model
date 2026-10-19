@@ -57,7 +57,7 @@ class AuthController
         $r->validate(['email' => 'required|email', 'token' => 'required|string', 'password' => ['required', 'confirmed', PasswordRule::min(12)->mixedCase()->numbers()]]);
         $status = Password::reset($r->only('email', 'password', 'password_confirmation', 'token'), function (User $u, string $password) {
             DB::transaction(function () use ($u, $password) {
-                $u->forceFill(['password' => $password, 'remember_token' => bin2hex(random_bytes(30))])->save();
+                $u->forceFill(['password' => $password, 'pending_email' => null, 'email_change_token' => null, 'email_change_expires_at' => null, 'remember_token' => bin2hex(random_bytes(30))])->save();
                 $u->tokens()->delete();
                 DB::table('sessions')->where('user_id', $u->id)->delete();
             });
@@ -84,6 +84,6 @@ class AuthController
             $u->notify(new VerifyEmail);
         }
 
-return ['message' => 'If eligible, a verification link has been sent.'];
+        return ['message' => 'If eligible, a verification link has been sent.'];
     }
 }

@@ -9,6 +9,7 @@ use App\Models\ConversationShare;
 use App\Models\MediaTask;
 use App\Models\Memory;
 use App\Models\Project;
+use App\Services\UserSettings;
 use App\Services\WebSearch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -30,12 +31,12 @@ class WorkspaceController
 
     public function preferences(Request $r)
     {
-        return $r->user()->only('custom_instructions', 'memory_enabled', 'theme');
+        return $r->user()->only(UserSettings::FIELDS);
     }
 
     public function savePreferences(Request $r)
     {
-        $d = $r->validate(['custom_instructions' => 'nullable|string|max:8000', 'memory_enabled' => 'sometimes|boolean', 'theme' => 'sometimes|in:dark,light,system']);
+        $d = $r->validate(UserSettings::rules());
         $r->user()->forceFill($d)->save();
 
         return $this->preferences($r);
@@ -185,7 +186,7 @@ class WorkspaceController
 
     public function export(Request $r)
     {
-        return ['media_tasks' => MediaTask::where('user_id', $r->user()->id)->get(), 'canvases' => Canvas::where('user_id', $r->user()->id)->get(), 'exported_at' => now()->toIso8601String(), 'user' => $r->user()->only('name', 'email', 'custom_instructions', 'memory_enabled'), 'projects' => Project::where('user_id', $r->user()->id)->get(), 'memories' => Memory::where('user_id', $r->user()->id)->get(), 'conversations' => Conversation::where('user_id', $r->user()->id)->with('messages')->get(), 'attachments' => Attachment::where('user_id', $r->user()->id)->get()->makeVisible('content')];
+        return ['media_tasks' => MediaTask::where('user_id', $r->user()->id)->get(), 'canvases' => Canvas::where('user_id', $r->user()->id)->get(), 'preferences' => $this->preferences($r), 'exported_at' => now()->toIso8601String(), 'user' => $r->user()->only('name', 'email', 'avatar', 'custom_instructions', 'memory_enabled'), 'projects' => Project::where('user_id', $r->user()->id)->get(), 'memories' => Memory::where('user_id', $r->user()->id)->get(), 'conversations' => Conversation::where('user_id', $r->user()->id)->with('messages')->get(), 'attachments' => Attachment::where('user_id', $r->user()->id)->get()->makeVisible('content')];
     }
 
     public function stop(Request $r, int $id, int $message)

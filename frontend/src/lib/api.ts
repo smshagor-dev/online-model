@@ -42,6 +42,10 @@ export async function api<T>(
 export type User = {
   id: number;
   name: string;
+  avatar?: string | null;
+  is_admin?: boolean;
+  pending_email?: string | null;
+  email_verified_at?: string | null;
   email: string;
   two_factor_confirmed_at: string | null;
 };

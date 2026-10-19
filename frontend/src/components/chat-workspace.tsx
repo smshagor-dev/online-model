@@ -36,6 +36,7 @@ import {
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Dialog from "./dialog";
+import { applyAppearance, type Preferences } from "@/lib/settings";
 const AuthDialog = dynamic(() => import("./auth-dialog"));
 const AccountDialog = dynamic(() => import("./account-dialog"));
 const MediaDialog = dynamic(() => import("./media-dialog"));
@@ -81,6 +82,8 @@ const suggestions = [
   },
 ];
 export default function ChatWorkspace() {
+  const [settingsRevision, setSettingsRevision] = useState(0);
+  const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [searchAvailable, setSearchAvailable] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
   const [canvasInitial, setCanvasInitial] = useState<string | null>(null);
@@ -154,6 +157,11 @@ export default function ChatWorkspace() {
     setCanvasInitial(null);
     setToolsChat(null);
     setUser(null);
+    setPreferences(null);
+    delete document.documentElement.dataset.accent;
+    delete document.documentElement.dataset.textSize;
+    delete document.documentElement.dataset.reducedMotion;
+    delete document.documentElement.dataset.theme;
     setModels([]);
     setModelId(null);
     setConversations([]);
@@ -240,26 +248,32 @@ export default function ChatWorkspace() {
     )
       .then(setProjects)
       .catch(report);
-    void api<{ theme: string }>(
-      "preferences",
-      "GET",
-      undefined,
-      controller.signal,
-    )
-      .then((p) => {
-        document.documentElement.dataset.theme =
-          p.theme === "system"
-            ? matchMedia("(prefers-color-scheme: light)").matches
-              ? "light"
-              : "dark"
-            : p.theme;
-      })
-      .catch(report);
     return () => {
       controller.abort();
       historyRequest.current?.abort();
     };
   }, [user?.id, refreshHistory, report]); // Reload data only when the signed-in identity changes.
+  useEffect(() => {
+    if (!user) return;
+    const controller = new AbortController();
+    const media = matchMedia("(prefers-color-scheme: light)");
+    let saved: Preferences | null = null;
+    const change = () => {
+      if (saved) applyAppearance(saved);
+    };
+    api<Preferences>("preferences", "GET", undefined, controller.signal)
+      .then((p) => {
+        saved = p;
+        setPreferences(p);
+        change();
+      })
+      .catch(report);
+    media.addEventListener("change", change);
+    return () => {
+      controller.abort();
+      media.removeEventListener("change", change);
+    };
+  }, [user?.id, settingsRevision, report]);
   useEffect(() => {
     const element = inputRef.current;
     if (element) {
@@ -275,7 +289,7 @@ export default function ChatWorkspace() {
     if (!loadingChat)
       scrollRef.current?.scrollTo({
         top: scrollRef.current.scrollHeight,
-        behavior: "smooth",
+        behavior: preferences?.reduced_motion ? "instant" : "smooth",
       });
   }, [messages.length, busy, loadingChat]);
   useEffect(() => {
@@ -327,9 +341,9 @@ export default function ChatWorkspace() {
   const scrollBottom = useCallback(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
+      behavior: preferences?.reduced_motion ? "instant" : "smooth",
     });
-  }, []);
+  }, [preferences?.reduced_motion]);
   useEffect(() => {
     filtersRef.current = { search, projectId, archived };
     if (!user) return;
@@ -495,6 +509,24 @@ export default function ChatWorkspace() {
               ),
             );
           if (event === "error") setError(String(data.message));
+          if (
+            event === "done" &&
+            data.status === "complete" &&
+            preferences?.completion_notifications &&
+            document.hidden &&
+            "Notification" in window &&
+            Notification.permission === "granted"
+          ) {
+            try {
+              new Notification("Openmindai", {
+                body: "Your response is ready.",
+                tag: "openmindai-response",
+                icon: "/openmindai-logo.png",
+              });
+            } catch {
+              /* Mobile browsers may require service-worker notifications. */
+            }
+          }
           if (event === "done")
             setMessages((previous) =>
               previous.map((m, i) =>
@@ -868,7 +900,11 @@ export default function ChatWorkspace() {
                 aria-expanded={accountMenu}
               >
                 <span className="avatar">
-                  {user.name.charAt(0).toUpperCase()}
+                  {user.avatar ? (
+                    <img src={user.avatar} alt="" />
+                  ) : (
+                    user.name.charAt(0).toUpperCase()
+                  )}
                 </span>
                 <span>
                   <strong>{user.name}</strong>
@@ -1276,6 +1312,7 @@ export default function ChatWorkspace() {
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (
+                  (preferences?.send_on_enter ?? true) &&
                   e.key === "Enter" &&
                   !e.shiftKey &&
                   !e.nativeEvent.isComposing
@@ -1420,6 +1457,7 @@ export default function ChatWorkspace() {
             newChat();
           }}
           onChanged={() => {
+            setSettingsRevision((v) => v + 1);
             void api<{ id: number; name: string }[]>("projects")
               .then(setProjects)
               .catch(report);
@@ -1448,6 +1486,18 @@ export default function ChatWorkspace() {
           user={user}
           onClose={() => setAccountOpen(false)}
           onUpdate={setUser}
+          onChanged={() => setSettingsRevision((v) => v + 1)}
+          onDataChanged={() => {
+            generationRef.current?.abort();
+            chatRequest.current?.abort();
+            setBusy(false);
+            setLoadingChat(false);
+            setConversationId(null);
+            setMessages([]);
+            setAttachments([]);
+            setDraft("");
+            void refreshHistory().catch(report);
+          }}
           onSignedOut={clearSession}
         />
       )}
