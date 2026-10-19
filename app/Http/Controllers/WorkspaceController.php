@@ -22,14 +22,14 @@ class WorkspaceController
 {
     public function search(Request $r)
     {
-        $d = $r->validate(['query' => 'required|string|max:500']);
+        $d = $r->validate(['query' => 'required|string|max:500', 'time_range' => 'sometimes|in:day,week,month,year']);
 
-        return ['results' => app(WebSearch::class)->search($d['query'])];
+        return ['results' => app(WebSearch::class)->search($d['query'], ['time_range' => $d['time_range'] ?? null])];
     }
 
     public function capabilities()
     {
-        return ['streaming' => true, 'projects' => true, 'memory' => true, 'attachments' => ['text', 'markdown', 'csv', 'json', 'source-code'], 'media' => config('media.url') && config('media.key') ? array_values(array_intersect(config('media.kinds'), ['image', 'vision', 'transcription', 'speech', 'video', 'document', 'code'])) : [], 'image_generation' => (bool) (config('media.url') && config('media.key') && in_array('image', config('media.kinds'))), 'voice_transcription' => (bool) (config('media.url') && config('media.key') && in_array('transcription', config('media.kinds'))), 'web_search' => (bool) config('models.search_url'), 'code_execution' => (bool) (config('media.url') && config('media.key') && in_array('code', config('media.kinds')))];
+        return ['streaming' => true, 'projects' => true, 'memory' => true, 'attachments' => ['text', 'markdown', 'csv', 'json', 'source-code'], 'media' => config('media.url') && config('media.key') ? array_values(array_intersect(config('media.kinds'), ['image', 'vision', 'transcription', 'speech', 'video', 'document', 'code'])) : [], 'image_generation' => (bool) (config('media.url') && config('media.key') && in_array('image', config('media.kinds'))), 'voice_transcription' => (bool) (config('media.url') && config('media.key') && in_array('transcription', config('media.kinds'))), 'web_search' => (bool) config('models.search_url'), 'deep_research' => (bool) config('models.search_url'), 'code_execution' => (bool) (config('media.url') && config('media.key') && in_array('code', config('media.kinds')))];
     }
 
     public function preferences(Request $r)

@@ -160,7 +160,7 @@ async function proxy(
           : {}),
       },
       signal: AbortSignal.timeout(
-        endpoint.startsWith("chat") ? 150_000 : 30_000,
+        endpoint.startsWith("chat") ? 220_000 : 30_000,
       ),
     });
     if (

@@ -91,3 +91,7 @@ Tools & library includes assistant builder, scheduled tasks, bounded sourced res
 ## NVIDIA hosted chat
 
 Interactive Nemotron chat can connect directly from the Next.js server to NVIDIA while Laravel stores user/assistant messages and owns authentication/context. See [NVIDIA frontend setup](docs/NVIDIA_FRONTEND_CHAT.md). Keys are server-only; no live NVIDIA account/key is bundled. Existing local models remain available.
+
+## Web search and deep research
+
+Chat supports search snippets or a deeper report with multiple queries, diverse sources, public-page reading, freshness filters and source cards. NVIDIA reports keep inference on the Next.js server and chat storage in Laravel. Configure your own SearXNG service; see [search and research setup](docs/WEB_RESEARCH.md) for limits, privacy and background research requirements.

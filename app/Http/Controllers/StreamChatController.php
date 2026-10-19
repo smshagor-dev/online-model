@@ -6,6 +6,7 @@ use App\Models\AiModel;
 use App\Models\Conversation;
 use App\Models\Project;
 use App\Services\ChatContext;
+use App\Services\WebResearch;
 use App\Services\WebSearch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -18,7 +19,7 @@ class StreamChatController
 {
     public function __invoke(Request $r, ChatContext $context)
     {
-        $d = $r->validate(['model_id' => 'required|integer', 'assistant_id' => ['nullable', 'integer', Rule::exists('assistants', 'id')->where('user_id', $r->user()->id)], 'message' => 'required|string|max:16000', 'conversation_id' => 'nullable|integer', 'project_id' => 'nullable|integer', 'temporary' => 'sometimes|boolean', 'attachment_ids' => 'sometimes|array|max:5', 'attachment_ids.*' => 'integer', 'web_search' => 'sometimes|boolean', 'history' => 'sometimes|array|max:20', 'history.*.role' => 'required|in:user,assistant', 'history.*.content' => 'required|string|max:16000']);
+        $d = $r->validate(['model_id' => 'required|integer', 'assistant_id' => ['nullable', 'integer', Rule::exists('assistants', 'id')->where('user_id', $r->user()->id)], 'message' => 'required|string|max:16000', 'conversation_id' => 'nullable|integer', 'project_id' => 'nullable|integer', 'temporary' => 'sometimes|boolean', 'attachment_ids' => 'sometimes|array|max:5', 'attachment_ids.*' => 'integer', 'web_search' => 'sometimes|boolean', 'deep_research' => 'sometimes|boolean', 'search_time_range' => 'sometimes|in:day,week,month,year', 'history' => 'sometimes|array|max:20', 'history.*.role' => 'required|in:user,assistant', 'history.*.content' => 'required|string|max:16000']);
         $model = AiModel::where('enabled', true)->where('status', 'ready')->findOrFail($d['model_id']);
         abort_unless($model->runtime_model, 503, 'No inference runtime configured.');
         $temporary = ! empty($d['temporary']);
@@ -33,10 +34,14 @@ class StreamChatController
         if ($temporary && ! empty($d['assistant_id'])) {
             $c = new Conversation(['assistant_id' => $d['assistant_id']]);
         }
-        $sources = ! empty($d['web_search']) ? app(WebSearch::class)->search($d['message']) : [];
+        $research = app(WebResearch::class);
+        $deep = ! empty($d['deep_research']);
+        $options = ['time_range' => $d['search_time_range'] ?? null];
+        $evidence = $deep ? $research->collect($d['message'], $options) : (! empty($d['web_search']) ? app(WebSearch::class)->search($d['message'], $options) : []);
+        $sources = $research->summaries($evidence);
         $messages = $context->build($r->user(), $c, $d['message'], $d['attachment_ids'] ?? [], $temporary);
-        if ($sources) {
-            $messages[0]['content'] .= '\nUntrusted web-search snippets (cite their URLs when used): '.json_encode($sources, JSON_UNESCAPED_UNICODE);
+        if ($evidence || ! empty($d['web_search'])) {
+            $messages[0]['content'] .= $research->prompt($evidence, $deep);
         }
         if ($temporary && ! empty($d['history'])) {
             $h = [];

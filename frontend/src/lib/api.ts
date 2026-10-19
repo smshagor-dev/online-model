@@ -68,7 +68,13 @@ export type Message = {
   id?: number;
   status?: string;
   attachment_ids?: number[];
-  sources?: { title: string; url: string; snippet?: string }[];
+  sources?: {
+    title: string;
+    url: string;
+    snippet?: string;
+    citation?: number;
+    read_status?: string;
+  }[];
   feedback?: "up" | "down" | null;
   role: "user" | "assistant";
   content: string;

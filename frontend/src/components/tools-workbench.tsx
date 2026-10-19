@@ -46,8 +46,10 @@ export default function ToolsWorkbench({
   onAssistant,
   onText,
   onAttachment,
+  onResearch,
 }: {
   initial?: string;
+  onResearch: () => void;
   onClose: () => void;
   onAssistant: (a: {
     id: number;
@@ -75,6 +77,11 @@ export default function ToolsWorkbench({
         )}
       </div>
       {tab === "assistants" && <AssistantBuilder onUse={onAssistant} />}
+      {tab === "research" && (
+        <button type="button" onClick={onResearch}>
+          Start deep research in chat
+        </button>
+      )}
       {(tab === "tasks" || tab === "research") && (
         <TaskPlanner key={tab} research={tab === "research"} onText={onText} />
       )}
@@ -358,7 +365,7 @@ function TaskPlanner({
       <h3>{research ? "Research workspace" : "Scheduled tasks"}</h3>
       <p className="muted">
         {research
-          ? "Search up to five sources, read public HTML pages and generate a sourced report. Unreadable pages are marked; snippets are not full-page verification."
+          ? "Search three complementary queries, collect up to eight diverse sources and read up to six public pages for a sourced report. Unavailable pages and snippet-only evidence are clearly marked. Use Deep research in the chat composer for NVIDIA reports."
           : "Run prompts now or schedule one-time, daily or weekly runs. Results stay in task history. Times below use your browser’s timezone."}{" "}
         The server scheduler and task worker must be running. These tools
         require a configured local model; NVIDIA hosted chat is available in the

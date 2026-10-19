@@ -54,7 +54,11 @@ export async function nvidiaChat(
   };
   let lease: Lease;
   try {
-    const prepared = await backend("begin", JSON.parse(body), 15000);
+    const prepared = await backend(
+      "begin",
+      JSON.parse(body),
+      JSON.parse(body).deep_research ? 80000 : 15000,
+    );
     if (!prepared.ok) {
       let data;
       try {

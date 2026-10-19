@@ -102,6 +102,8 @@ export default function ChatWorkspace() {
   const [mediaKinds, setMediaKinds] = useState<string[]>([]);
   const [searchAvailable, setSearchAvailable] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
+  const [deepResearch, setDeepResearch] = useState(false);
+  const [searchTimeRange, setSearchTimeRange] = useState("");
   const [canvasInitial, setCanvasInitial] = useState<string | null>(null);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
@@ -198,6 +200,7 @@ export default function ChatWorkspace() {
     setArchived(false);
     setSearch("");
     setWebSearch(false);
+    setDeepResearch(false);
   }, []);
   const report = useCallback(
     (e: unknown) => {
@@ -530,6 +533,8 @@ export default function ChatWorkspace() {
           ...(projectId ? { project_id: projectId } : {}),
           temporary,
           web_search: webSearch,
+          deep_research: deepResearch,
+          ...(searchTimeRange ? { search_time_range: searchTimeRange } : {}),
           attachment_ids:
             override?.attachmentIds ?? attachments.map((a) => a.id),
           ...(temporary
@@ -1268,15 +1273,26 @@ export default function ChatWorkspace() {
                           )}
                         {!!message.sources?.length && (
                           <div className="source-links">
-                            {message.sources.map((source) => (
-                              <a
-                                key={source.url}
-                                href={source.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {source.title}
-                              </a>
+                            {message.sources.map((source, sourceIndex) => (
+                              <details key={source.url}>
+                                <summary>
+                                  {source.citation || sourceIndex + 1}.{" "}
+                                  {source.title} ·{" "}
+                                  {source.read_status === "read"
+                                    ? "Page read"
+                                    : source.read_status === "unavailable"
+                                      ? "Page unavailable · snippet only"
+                                      : "Search snippet"}
+                                </summary>
+                                <a
+                                  href={source.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  {source.url}
+                                </a>
+                                {source.snippet && <p>{source.snippet}</p>}
+                              </details>
                             ))}
                           </div>
                         )}
@@ -1298,6 +1314,44 @@ export default function ChatWorkspace() {
                                 <ThumbsDown size={14} />
                               </button>
                             </>
+                          )}
+                          {!!message.sources?.length && message.content && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => {
+                                const evidence = message
+                                  .sources!.map(
+                                    (
+                                      source,
+                                      i,
+                                    ) => `${source.citation || i + 1}. ${source.title}
+${source.url}
+${source.read_status === "read" ? "Page read" : "Snippet only"}`,
+                                  )
+                                  .join("\n\n");
+                                const url = URL.createObjectURL(
+                                  new Blob(
+                                    [
+                                      message.content +
+                                        "\n\n## Source evidence\n\n" +
+                                        evidence,
+                                    ],
+                                    { type: "text/markdown;charset=utf-8" },
+                                  ),
+                                );
+                                const link = document.createElement("a");
+                                link.href = url;
+                                link.download = `openmindai-research-${message.id || index}.md`;
+                                link.click();
+                                setTimeout(
+                                  () => URL.revokeObjectURL(url),
+                                  1000,
+                                );
+                              }}
+                            >
+                              Download report
+                            </button>
                           )}
                           {index > 0 && messages[index - 1].id && (
                             <button
@@ -1519,17 +1573,59 @@ export default function ChatWorkspace() {
                 ))}
               </div>
             )}
+            {busy && deepResearch && (
+              <p className="muted" role="status">
+                Researching sources and drafting your report… This may take a
+                few minutes.
+              </p>
+            )}
             <div className="composer-toolbar">
               {searchAvailable && (
                 <button
                   type="button"
                   className={`temporary-toggle ${webSearch ? "enabled" : ""}`}
                   disabled={busy}
-                  onClick={() => setWebSearch(!webSearch)}
+                  aria-pressed={webSearch && !deepResearch}
+                  onClick={() => {
+                    setWebSearch(!webSearch || deepResearch);
+                    setDeepResearch(false);
+                  }}
                 >
                   <Search size={13} />
-                  {webSearch ? "Web search on" : "Web search"}
+                  {webSearch && !deepResearch ? "Web search on" : "Web search"}
                 </button>
+              )}
+              {searchAvailable && (
+                <>
+                  <button
+                    type="button"
+                    className={`temporary-toggle ${deepResearch ? "enabled" : ""}`}
+                    disabled={busy}
+                    aria-pressed={deepResearch}
+                    onClick={() => {
+                      setDeepResearch(!deepResearch);
+                      setWebSearch(!deepResearch);
+                    }}
+                  >
+                    Deep research
+                  </button>
+                  {webSearch && (
+                    <select
+                      aria-label="Search freshness"
+                      value={searchTimeRange}
+                      disabled={busy}
+                      onChange={(event) =>
+                        setSearchTimeRange(event.target.value)
+                      }
+                    >
+                      <option value="">Any time</option>
+                      <option value="day">Past day</option>
+                      <option value="week">Past week</option>
+                      <option value="month">Past month</option>
+                      <option value="year">Past year</option>
+                    </select>
+                  )}
+                </>
               )}
               <button
                 type="button"
@@ -1604,6 +1700,18 @@ export default function ChatWorkspace() {
       {toolsOpen && user && (
         <ToolsWorkbench
           initial={toolsOpen}
+          onResearch={() => {
+            if (!searchAvailable) {
+              setError(
+                "Web research needs a configured search service. Ask your administrator to enable SearXNG.",
+              );
+              setToolsOpen(null);
+              return;
+            }
+            setDeepResearch(true);
+            setWebSearch(true);
+            setToolsOpen(null);
+          }}
           onClose={() => setToolsOpen(null)}
           onAssistant={(a) => {
             newChat();

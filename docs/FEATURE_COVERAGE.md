@@ -19,7 +19,7 @@ Openmindai is an independent self-hosted chat application. This implementation r
 | Canvas | Private Markdown/code documents, edit/preview/save, optimistic version checks, reuse in chat; code is never executed |
 | Feedback | Owned assistant-message thumbs up/down |
 | Read aloud | Browser speech synthesis with an installed on-device voice only; availability depends on the device |
-| Web search | Optional self-hosted SearXNG JSON adapter; up to five sanitized snippets/source URLs; not full-page browsing or deep research |
+| Web search | Self-hosted SearXNG snippets with freshness filters, canonical URL deduplication and source cards; optional interactive deep research on NVIDIA or local models |
 
 ## Self-hosted media integrations
 
@@ -53,7 +53,7 @@ Data controls include export with profile/preferences, paginated archived-chat r
 
 The Tools & library workspace adds private assistant creation/editing/deletion, model selection and up to five owned text knowledge files. Assistant instructions are carried into saved conversations and their branches. The gallery is private to each user; it is not a public marketplace.
 
-Tasks support manual runs and one-time/daily/weekly scheduling, edit/pause/delete, paginated run history, progress steps, cancellation and downloadable results. Research uses self-hosted search, reads up to five public HTML/text pages with DNS pinned to validated public addresses, rejects redirects/private targets, and synthesizes a report with source text/status available in expandable panels. It is bounded research, not an autonomous browser or a guarantee of factual verification. A cancelled active HTTP inference may finish server-side; its result is discarded.
+Tasks support manual runs and one-time/daily/weekly scheduling, edit/pause/delete, paginated run history, progress steps, cancellation and downloadable results. Research uses three complementary searches, collects up to eight unique sources with hostname diversity, and attempts to read up to six public HTML/text pages with DNS pinned to validated public addresses. Redirects/private targets are rejected. Reports include citations and source summaries/read status; extracted full page text is model context and is not retained in source records. See [research setup](WEB_RESEARCH.md) for limits and interactive NVIDIA support. It is bounded research, not an autonomous browser or a guarantee of factual verification. A cancelled active HTTP inference may finish server-side; its result is discarded.
 
 Library combines searchable, paginated text files and media tasks, type filters, text/image/audio/video previews, private downloads, deletion and reuse in chat. Composer supports drag/drop and local image/PDF/audio preview before submitting to owned media tasks; DOCX becomes extracted text after processing. Media creation modes produce inline preview cards, and results remain in the Library. Inline preview placement is local to the current browser workspace view, not persisted as multimodal message blocks in chat history.
 

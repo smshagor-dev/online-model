@@ -53,7 +53,7 @@ class WebReader
             }
             $port = $p['port'] ?? ($p['scheme'] === 'https' ? 443 : 80);
             $ip = $ips[0];
-            $response = Http::connectTimeout(5)->timeout(15)->withHeaders(['User-Agent' => 'Openmindai-Research/1.0', 'Accept' => 'text/html,text/plain'])->withOptions(['handler' => new CurlHandler, 'progress' => function ($total, $downloaded) {
+            $response = Http::connectTimeout(5)->timeout(6)->withHeaders(['User-Agent' => 'Openmindai-Research/1.0', 'Accept' => 'text/html,text/plain'])->withOptions(['handler' => new CurlHandler, 'progress' => function ($total, $downloaded) {
                 if ($downloaded > 2000000) {
                     throw new \RuntimeException('Page too large.');
                 }

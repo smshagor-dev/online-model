@@ -48,7 +48,12 @@ function fixture({
 test("Next server connects directly to NVIDIA and persists only final answer to backend", async () => {
   const f = fixture();
   const r = await nvidiaChat(
-    JSON.stringify({ message: "Hi", model_id: -1 }),
+    JSON.stringify({
+      message: "Hi",
+      model_id: -1,
+      deep_research: true,
+      search_time_range: "week",
+    }),
     "user-token",
     "https://backend/api/v1",
     new AbortController().signal,
@@ -66,6 +71,11 @@ test("Next server connects directly to NVIDIA and persists only final answer to 
     "a".repeat(64),
   ])
     assert.ok(!text.includes(secret));
+  const begin = f.calls.find((x) => x.url.endsWith("/begin"));
+  assert.equal(begin.body.deep_research, true);
+  assert.equal(begin.body.search_time_range, "week");
+  const provider = f.calls.find((x) => x.url.includes("nvidia.com"));
+  assert.equal(provider.body.messages[0].content, "PRIVATE CONTEXT");
   const done = f.calls.find((x) => x.url.endsWith("/finish"));
   assert.equal(done.body.content, "Hello");
   assert.equal(done.body.status, "complete");

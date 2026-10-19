@@ -2072,3 +2072,42 @@ html[data-theme="light"] .shared-message.user {
   border-radius: 10px;
   margin-top: 12px;
 }
+
+/* Research controls and evidence cards */
+.composer-toolbar {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.composer-toolbar select {
+  max-width: 140px;
+  border: 1px solid var(--border, #526052);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  padding: 6px;
+}
+.composer-toolbar option {
+  color: #202620;
+  background: #fff;
+}
+.source-links details {
+  flex: 1 1 220px;
+  min-width: 0;
+  border: 1px solid #526052;
+  border-radius: 9px;
+  padding: 10px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.source-links summary {
+  cursor: pointer;
+}
+.source-links details a {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+  border: 0;
+  padding: 8px 0;
+  color: inherit;
+  text-decoration: underline;
+}
