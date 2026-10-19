@@ -14,7 +14,16 @@ class MediaController
 {
     public function index(Request $r)
     {
-        return MediaTask::where('user_id', $r->user()->id)->latest('id')->paginate(20);
+        $r->validate(['q' => 'nullable|string|max:100', 'kind' => 'nullable|in:image,vision,document,transcription,speech,video,code']);
+        $query = MediaTask::where('user_id', $r->user()->id);
+        if ($r->filled('q')) {
+            $query->where('prompt', 'like', '%'.$r->query('q').'%');
+        }
+        if ($r->filled('kind')) {
+            $query->where('kind', $r->query('kind'));
+        }
+
+        return $query->latest('id')->paginate(20);
     }
 
     public function show(Request $r, int $id)
@@ -24,7 +33,7 @@ class MediaController
 
     public function create(Request $r)
     {
-        $d = $r->validate(['kind' => 'required|in:image,vision,transcription,speech,video,document', 'prompt' => 'present|string|max:4000', 'input' => 'nullable|string|max:11000000']);
+        $d = $r->validate(['kind' => 'required|in:image,vision,transcription,speech,video,document,code', 'prompt' => 'present|string|max:4000', 'input' => 'nullable|string|max:11000000', 'approved' => 'exclude_unless:kind,code|required|accepted']);
         abort_unless(config('media.url') && config('media.key') && in_array($d['kind'], config('media.kinds'), true), 503, 'This self-hosted engine is not enabled.');
         $needsInput = in_array($d['kind'], ['vision', 'transcription', 'document'], true);
         abort_if($needsInput !== ! empty($d['input']), 422, 'This task requires the appropriate image/audio input only.');
@@ -69,7 +78,7 @@ class MediaController
 
         // Authenticated binary download; never expose a public storage URL.
         return Storage::disk('local')->download($task->output_path, 'openmindai-'.$task->id.match ($task->output_mime) {
-            'image/png' => '.png', 'audio/wav' => '.wav', 'video/mp4' => '.mp4', default => '.bin',
+            'image/png' => '.png', 'audio/wav' => '.wav', 'video/mp4' => '.mp4', 'application/zip' => '.zip', default => '.bin',
         }, ['Content-Type' => $task->output_mime, 'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
     }
 

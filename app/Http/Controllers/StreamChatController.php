@@ -11,13 +11,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class StreamChatController
 {
     public function __invoke(Request $r, ChatContext $context)
     {
-        $d = $r->validate(['model_id' => 'required|integer', 'message' => 'required|string|max:16000', 'conversation_id' => 'nullable|integer', 'project_id' => 'nullable|integer', 'temporary' => 'sometimes|boolean', 'attachment_ids' => 'sometimes|array|max:5', 'attachment_ids.*' => 'integer', 'web_search' => 'sometimes|boolean', 'history' => 'sometimes|array|max:20', 'history.*.role' => 'required|in:user,assistant', 'history.*.content' => 'required|string|max:16000']);
+        $d = $r->validate(['model_id' => 'required|integer', 'assistant_id' => ['nullable', 'integer', Rule::exists('assistants', 'id')->where('user_id', $r->user()->id)], 'message' => 'required|string|max:16000', 'conversation_id' => 'nullable|integer', 'project_id' => 'nullable|integer', 'temporary' => 'sometimes|boolean', 'attachment_ids' => 'sometimes|array|max:5', 'attachment_ids.*' => 'integer', 'web_search' => 'sometimes|boolean', 'history' => 'sometimes|array|max:20', 'history.*.role' => 'required|in:user,assistant', 'history.*.content' => 'required|string|max:16000']);
         $model = AiModel::where('enabled', true)->where('status', 'ready')->findOrFail($d['model_id']);
         abort_unless($model->runtime_model, 503, 'No inference runtime configured.');
         $temporary = ! empty($d['temporary']);
@@ -27,7 +28,10 @@ class StreamChatController
             Project::where('user_id', $r->user()->id)->findOrFail($d['project_id']);
         }
         if (! $c && ! $temporary) {
-            $c = new Conversation(['user_id' => $r->user()->id, 'title' => mb_substr($d['message'], 0, 80), 'project_id' => $d['project_id'] ?? null]);
+            $c = new Conversation(['user_id' => $r->user()->id, 'title' => mb_substr($d['message'], 0, 80), 'project_id' => $d['project_id'] ?? null, 'assistant_id' => $d['assistant_id'] ?? null]);
+        }
+        if ($temporary && ! empty($d['assistant_id'])) {
+            $c = new Conversation(['assistant_id' => $d['assistant_id']]);
         }
         $sources = ! empty($d['web_search']) ? app(WebSearch::class)->search($d['message']) : [];
         $messages = $context->build($r->user(), $c, $d['message'], $d['attachment_ids'] ?? [], $temporary);

@@ -89,6 +89,14 @@ before(async () => {
             response_language: "Bangla",
           }),
         );
+      if (req.url === "/api/v1/assistants" || req.url === "/api/v1/tasks")
+        return res.end(JSON.stringify([]));
+      if (req.url === "/api/v1/tasks/7/runs")
+        return res.end(
+          JSON.stringify({ data: [], current_page: 1, last_page: 1 }),
+        );
+      if (req.url === "/api/v1/canvases/3/versions")
+        return res.end(JSON.stringify([{ version: 1 }]));
       if (req.url === "/api/v1/me")
         return res.end(JSON.stringify({ id: 1, name: "Test User" }));
       res.statusCode = 404;
@@ -357,5 +365,29 @@ test("email confirmation is explicit, unauthenticated and clears the old cookie"
   });
   assert.equal(r.status, 200);
   assert.equal(lastRequest.authorization, undefined);
-  assert.match(r.headers.get("set-cookie"), /(?:Max-Age=0|Expires=Thu, 01 Jan 1970)/);
+  assert.match(
+    r.headers.get("set-cookie"),
+    /(?:Max-Age=0|Expires=Thu, 01 Jan 1970)/,
+  );
+});
+
+test("workspace tools and canvas history use only allowlisted authenticated routes", async () => {
+  assert.equal((await request("assistants")).status, 401);
+  const auth = await login();
+  const cookie = auth.headers.get("set-cookie").split(";")[0];
+  for (const path of [
+    "assistants",
+    "tasks",
+    "tasks/7/runs",
+    "canvases/3/versions",
+  ]) {
+    const r = await request(path, { headers: { Cookie: cookie } });
+    assert.equal(r.status, 200);
+    assert.equal(lastRequest.authorization, "Bearer fixture-secret-token");
+  }
+  assert.equal(
+    (await request("tasks/7/execute-shell", { headers: { Cookie: cookie } }))
+      .status,
+    404,
+  );
 });

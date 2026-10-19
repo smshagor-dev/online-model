@@ -7,6 +7,7 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StreamChatController;
+use App\Http\Controllers\ToolsController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
@@ -28,6 +29,20 @@ Route::prefix('v1')->group(function () {
             Route::delete('me/email', [SettingsController::class, 'cancelEmail']);
             Route::post('settings/data', [SettingsController::class, 'bulk']);
         });
+        Route::get('assistants', [ToolsController::class, 'assistants']);
+        Route::post('assistants', [ToolsController::class, 'saveAssistant']);
+        Route::put('assistants/{id}', [ToolsController::class, 'saveAssistant']);
+        Route::delete('assistants/{id}', [ToolsController::class, 'deleteAssistant']);
+        Route::get('tasks', [ToolsController::class, 'tasks']);
+        Route::post('tasks', [ToolsController::class, 'saveTask']);
+        Route::put('tasks/{id}', [ToolsController::class, 'saveTask']);
+        Route::delete('tasks/{id}', [ToolsController::class, 'deleteTask']);
+        Route::get('tasks/{id}/runs', [ToolsController::class, 'runs']);
+        Route::post('tasks/{id}/runs', [ToolsController::class, 'run'])->middleware('throttle:chat');
+        Route::delete('tasks/{id}/runs/{run}', [ToolsController::class, 'cancelRun']);
+        Route::get('conversations/{id}/branches', [ToolsController::class, 'branches']);
+        Route::get('canvases/{id}/versions', [CanvasController::class, 'versions']);
+        Route::get('canvases/{id}/versions/{version}', [CanvasController::class, 'version']);
         Route::get('media', [MediaController::class, 'index']);
         Route::post('media', [MediaController::class, 'create'])->middleware('throttle:sensitive');
         Route::get('media/{id}', [MediaController::class, 'show']);

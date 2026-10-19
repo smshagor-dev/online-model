@@ -13,12 +13,12 @@ const publicPaths = new Set([
   "email/change/confirm",
 ]);
 const routes: Record<string, RegExp> = {
-  GET: /^(media(?:\/\d+(?:\/output)?)?|me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
-  POST: /^(me\/(avatar|email)|email\/change\/confirm|settings\/data|media|login|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/stream)?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
+  GET: /^(assistants|tasks(?:\/\d+\/runs)?|canvases\/\d+\/versions(?:\/\d+)?|conversations\/\d+\/branches|media(?:\/\d+(?:\/output)?)?|me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
+  POST: /^(assistants|tasks(?:\/\d+\/runs)?|me\/(avatar|email)|email\/change\/confirm|settings\/data|media|login|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/stream)?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
   PATCH: /^(me|preferences|conversations\/\d+)$/,
-  PUT: /^(me\/password|projects\/\d+|canvases\/\d+|memories\/\d+|conversations\/\d+\/messages\/\d+\/feedback)$/,
+  PUT: /^(assistants\/\d+|tasks\/\d+|me\/password|projects\/\d+|canvases\/\d+|memories\/\d+|conversations\/\d+\/messages\/\d+\/feedback)$/,
   DELETE:
-    /^(me\/(avatar|email)|media\/\d+|me|2fa|tokens\/\d+|conversations\/\d+|projects\/\d+|canvases\/\d+|memories\/\d+|attachments\/\d+|shares\/\d+)$/,
+    /^(assistants\/\d+|tasks\/\d+(?:\/runs\/\d+)?|me\/(avatar|email)|media\/\d+|me|2fa|tokens\/\d+|conversations\/\d+|projects\/\d+|canvases\/\d+|memories\/\d+|attachments\/\d+|shares\/\d+)$/,
 };
 async function proxy(
   request: NextRequest,
@@ -91,7 +91,7 @@ async function proxy(
     // Only a numeric page parameter reaches Laravel; clients cannot choose an upstream URL.
     const page = request.nextUrl.searchParams.get("page");
     if (page && /^\d{1,6}$/.test(page)) url.searchParams.set("page", page);
-    for (const key of ["q", "project_id", "archived"]) {
+    for (const key of ["q", "project_id", "archived", "kind"]) {
       const value = request.nextUrl.searchParams.get(key);
       if (value && value.length <= 100) url.searchParams.set(key, value);
     }
@@ -132,7 +132,12 @@ async function proxy(
     }
     if (upstream.ok && /^media\/\d+\/output$/.test(endpoint)) {
       const mime = upstream.headers.get("content-type")?.split(";")[0];
-      if (!mime || !["image/png", "audio/wav", "video/mp4"].includes(mime))
+      if (
+        !mime ||
+        !["image/png", "audio/wav", "video/mp4", "application/zip"].includes(
+          mime,
+        )
+      )
         return NextResponse.json(
           { message: "Invalid media format." },
           { status: 502 },
@@ -140,7 +145,7 @@ async function proxy(
       return new NextResponse(upstream.body, {
         headers: {
           "Content-Type": mime,
-          "Content-Disposition": `attachment; filename="openmindai-${endpoint.split("/")[1]}.${mime === "image/png" ? "png" : mime === "audio/wav" ? "wav" : "mp4"}"`,
+          "Content-Disposition": `attachment; filename="openmindai-${endpoint.split("/")[1]}.${mime === "image/png" ? "png" : mime === "audio/wav" ? "wav" : mime === "application/zip" ? "zip" : "mp4"}"`,
           "Cache-Control": "private, no-store",
           "X-Content-Type-Options": "nosniff",
         },

@@ -53,8 +53,9 @@ export default function MediaDialog({
     const c = new AbortController();
     api<{ media: Kind[] }>("capabilities", "GET", undefined, c.signal)
       .then((caps) => {
-        setKinds(caps.media || []);
-        if (caps.media?.length) setKind(caps.media[0]);
+        setKinds((caps.media || []).filter((k) => String(k) !== "code"));
+        const first = caps.media?.find((k) => String(k) !== "code");
+        if (first) setKind(first);
       })
       .catch((e) => {
         if (!c.signal.aborted) setError(e.message);

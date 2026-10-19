@@ -37,6 +37,9 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import Dialog from "./dialog";
 import { applyAppearance, type Preferences } from "@/lib/settings";
+const ToolsWorkbench = dynamic(() => import("./tools-workbench"));
+const FilePreview = dynamic(() => import("./file-preview"));
+const InlineMedia = dynamic(() => import("./inline-media"));
 const AuthDialog = dynamic(() => import("./auth-dialog"));
 const AccountDialog = dynamic(() => import("./account-dialog"));
 const MediaDialog = dynamic(() => import("./media-dialog"));
@@ -84,6 +87,19 @@ const suggestions = [
 export default function ChatWorkspace() {
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [preferences, setPreferences] = useState<Preferences | null>(null);
+  const [toolsOpen, setToolsOpen] = useState<string | null>(null);
+  const [filePreview, setFilePreview] = useState<File | null>(null);
+  const [inlineMedia, setInlineMedia] = useState<number[]>([]);
+  const [assistant, setAssistant] = useState<{
+    id: number;
+    name: string;
+    model_id: number | null;
+  } | null>(null);
+  const [branches, setBranches] = useState<
+    { id: number; title: string }[] | null
+  >(null);
+  const [mediaMode, setMediaMode] = useState("chat");
+  const [mediaKinds, setMediaKinds] = useState<string[]>([]);
   const [searchAvailable, setSearchAvailable] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
   const [canvasInitial, setCanvasInitial] = useState<string | null>(null);
@@ -154,6 +170,11 @@ export default function ChatWorkspace() {
     uploadRequest.current?.abort();
     setWorkspaceOpen(false);
     setMediaOpen(false);
+    setToolsOpen(null);
+    setFilePreview(null);
+    setInlineMedia([]);
+    setAssistant(null);
+    setBranches(null);
     setCanvasInitial(null);
     setToolsChat(null);
     setUser(null);
@@ -232,13 +253,16 @@ export default function ChatWorkspace() {
         );
       })
       .catch(report);
-    void api<{ web_search: boolean }>(
+    void api<{ web_search: boolean; media: string[] }>(
       "capabilities",
       "GET",
       undefined,
       controller.signal,
     )
-      .then((c) => setSearchAvailable(c.web_search))
+      .then((c) => {
+        setSearchAvailable(c.web_search);
+        setMediaKinds(c.media || []);
+      })
       .catch(report);
     void api<{ id: number; name: string }[]>(
       "projects",
@@ -360,6 +384,9 @@ export default function ChatWorkspace() {
     chatRequest.current?.abort();
     setLoadingChat(false);
     setConversationId(null);
+    setAssistant(null);
+    setMediaMode("chat");
+    setInlineMedia([]);
     setMessages([]);
     setMessagePage(1);
     setAttachments([]);
@@ -392,6 +419,16 @@ export default function ChatWorkspace() {
         );
       if (controller.signal.aborted) return;
       setConversationId(id);
+      setInlineMedia([]);
+      setAssistant(
+        result.conversation.assistant_id
+          ? {
+              id: result.conversation.assistant_id,
+              name: "Custom assistant",
+              model_id: null,
+            }
+          : null,
+      );
       setMessages(result.messages.data);
       setMessagePage(result.messages.current_page);
       setDraft("");
@@ -440,6 +477,33 @@ export default function ChatWorkspace() {
       setAuthOpen(true);
       return;
     }
+    if (mediaMode !== "chat" && !override) {
+      if (!mediaKinds.includes(mediaMode))
+        return setError("This media engine is not configured.");
+      if (text.length > 4000)
+        return setError("Media prompts must be at most 4000 characters.");
+      const controller = new AbortController();
+      generationRef.current = controller;
+      setBusy(true);
+      setError("");
+      try {
+        const task = await api<{ id: number }>(
+          "media",
+          "POST",
+          { kind: mediaMode, prompt: text },
+          controller.signal,
+        );
+        if (!controller.signal.aborted) {
+          setInlineMedia((ids) => [...ids, task.id]);
+          setDraft("");
+        }
+      } catch (e) {
+        report(e);
+      } finally {
+        if (!controller.signal.aborted) setBusy(false);
+      }
+      return;
+    }
     if (!modelId) {
       setError(
         "No model is available yet. Ask your administrator to enable one.",
@@ -460,6 +524,7 @@ export default function ChatWorkspace() {
       await streamChat(
         {
           model_id: modelId,
+          ...(assistant ? { assistant_id: assistant.id } : {}),
           message: text,
           ...(id ? { conversation_id: id } : {}),
           ...(projectId ? { project_id: projectId } : {}),
@@ -619,6 +684,23 @@ export default function ChatWorkspace() {
     } catch (e) {
       report(e);
     }
+  }
+  function handleFile(file: File) {
+    if (!user) {
+      setAuthOpen(true);
+      return;
+    }
+    if (busy || loadingChat || uploading) return;
+    if (file.size > 8000000) {
+      setError("File exceeds 8 MB.");
+      return;
+    }
+    if (
+      /\.(pdf|docx|png|jpe?g|webp|wav|mp3|flac|ogg|webm)$/i.test(file.name) ||
+      /^(image|audio)\//.test(file.type)
+    )
+      setFilePreview(file);
+    else void upload(file);
   }
   async function upload(file: File) {
     if (!user) {
@@ -782,6 +864,14 @@ export default function ChatWorkspace() {
               onClick={() => setMediaOpen(true)}
             >
               <Sparkles size={18} /> Media studio
+            </button>
+            <button
+              className="sidebar-action"
+              disabled={busy}
+              onClick={() => setToolsOpen("assistants")}
+            >
+              <Code2 size={18} />
+              Tools & library
             </button>
             <select
               aria-label="Filter by project"
@@ -1272,6 +1362,9 @@ export default function ChatWorkspace() {
               )}
             </div>
           )}
+          {inlineMedia.map((id) => (
+            <InlineMedia key={id} id={id} onText={setDraft} />
+          ))}
           {loadingChat && (
             <div className="chat-loading" role="status">
               <LoaderCircle className="spin" size={21} />
@@ -1300,7 +1393,71 @@ export default function ChatWorkspace() {
               model library.
             </p>
           )}
-          <form className="composer" onSubmit={send}>
+          {assistant && (
+            <div className="attachment-chips">
+              <span>Assistant: {assistant.name}</span>
+              <button
+                onClick={() => {
+                  newChat();
+                  setAssistant(null);
+                }}
+              >
+                Leave assistant
+              </button>
+            </div>
+          )}
+          {conversationId && (
+            <button
+              className="text-button"
+              disabled={busy}
+              onClick={() =>
+                void api<{ id: number; title: string }[]>(
+                  `conversations/${conversationId}/branches`,
+                )
+                  .then(setBranches)
+                  .catch(report)
+              }
+            >
+              Conversation branches
+            </button>
+          )}
+          <div className="composer-modes">
+            <select
+              aria-label="Message mode"
+              value={mediaMode}
+              onChange={(e) => setMediaMode(e.target.value)}
+            >
+              <option value="chat">Chat</option>
+              {["image", "speech", "video"]
+                .filter((k) => mediaKinds.includes(k))
+                .map((k) => (
+                  <option key={k} value={k}>
+                    Create {k}
+                  </option>
+                ))}
+            </select>
+            <button onClick={() => setToolsOpen("voice")}>Voice</button>
+            <button onClick={() => setToolsOpen("research")}>Research</button>
+            <button onClick={() => setToolsOpen("code")}>Run Python</button>
+          </div>
+          {mediaMode !== "chat" && (
+            <p className="muted">
+              Media tasks are saved separately in Library. They are not
+              temporary chat messages.
+            </p>
+          )}
+          <form
+            className="composer"
+            onSubmit={send}
+            onDragOver={(e) => {
+              if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const f = e.dataTransfer.files[0];
+              if (f) handleFile(f);
+            }}
+          >
             <textarea
               ref={inputRef}
               aria-label="Message"
@@ -1325,11 +1482,11 @@ export default function ChatWorkspace() {
             <input
               ref={fileRef}
               type="file"
-              accept=".txt,.md,.csv,.json,.py,.js,.jsx,.ts,.tsx,.php,.rs,.go,.java,.c,.cpp,.h,.html,.css,.sql,.yaml,.yml,.xml,.sh,.log"
+              accept="image/png,image/jpeg,image/webp,audio/*,.pdf,.docx,.webm,.txt,.md,.csv,.json,.py,.js,.jsx,.ts,.tsx,.php,.rs,.go,.java,.c,.cpp,.h,.html,.css,.sql,.yaml,.yml,.xml,.sh,.log"
               hidden
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) void upload(file);
+                if (file) handleFile(file);
               }}
             />
             {attachments.length > 0 && (
@@ -1435,12 +1592,68 @@ export default function ChatWorkspace() {
           }
         />
       )}
+      {toolsOpen && user && (
+        <ToolsWorkbench
+          initial={toolsOpen}
+          onClose={() => setToolsOpen(null)}
+          onAssistant={(a) => {
+            newChat();
+            setAssistant(a);
+            if (a.model_id) setModelId(a.model_id);
+            setToolsOpen(null);
+          }}
+          onText={(text) => {
+            setDraft(text);
+            setToolsOpen(null);
+          }}
+          onAttachment={(file) => {
+            setAttachments((old) =>
+              [...old.filter((f) => f.id !== file.id), file].slice(-5),
+            );
+            setToolsOpen(null);
+          }}
+        />
+      )}
+      {filePreview && user && (
+        <FilePreview
+          file={filePreview}
+          onClose={() => setFilePreview(null)}
+          onTask={(id) => setInlineMedia((old) => [...old, id])}
+        />
+      )}
+      {branches && (
+        <Dialog title="Conversation branches" onClose={() => setBranches(null)}>
+          <p className="muted">
+            Switch between saved response branches. Each branch keeps its own
+            history.
+          </p>
+          {branches.map((b) => (
+            <button
+              className="manage-card"
+              key={b.id}
+              onClick={() => {
+                setBranches(null);
+                void openChat(b.id);
+              }}
+              aria-current={b.id === conversationId ? "page" : undefined}
+            >
+              {b.title}
+              {b.id === conversationId ? " (current)" : ""}
+            </button>
+          ))}
+        </Dialog>
+      )}
       {mediaOpen && (
         <MediaDialog
           onClose={() => setMediaOpen(false)}
           onUse={(text) => {
             setDraft(text);
             setMediaOpen(false);
+            setToolsOpen(null);
+            setFilePreview(null);
+            setInlineMedia([]);
+            setAssistant(null);
+            setBranches(null);
           }}
         />
       )}

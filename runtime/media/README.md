@@ -81,3 +81,11 @@ Primary implementation references:
 - https://huggingface.co/docs/transformers/main_classes/pipelines
 - https://huggingface.co/docs/diffusers/api/pipelines/wan
 - https://huggingface.co/docs/diffusers/api/pipelines/auto_pipeline
+
+## Optional Python code runner
+
+The workspace includes an explicit-review Python execution panel. It is disabled until configured. It runs code in a separate disposable container, not in PHP, the web app process or the model process. Use a dedicated rootless Docker host (with resource limits supported by its cgroup configuration), keep the engine patched and validate its isolation for your deployment. This is not a claim that ordinary containers eliminate every hostile-code risk. Never expose the Docker daemon to users, mount its socket into execution containers, or run the service on a shared production application host.
+
+Build `Dockerfile.sandbox`, scan/test the image, and configure `MEDIA_CODE_IMAGE=sha256:FULL_LOCAL_IMAGE_ID` (obtain the ID with `docker image inspect --format '{{.Id}}' openmindai-sandbox:local`) or an existing repository image digest on the runtime host. The runner uses `--pull=never`; provisioning must load the exact image into the local engine first. Add `code` to Laravel `MEDIA_ENABLED_KINDS`. Limits: 35 seconds, one CPU, 512 MB RAM, 64 processes, read-only root, no network, no capabilities, non-root user, bounded tmpfs and no host mounts. Input code is at most 4000 characters. Files under `/work/output` (at most 20 files / 10 MB total) and stdout are returned in a private ZIP download. Numpy, pandas and matplotlib are included in the example image; package installation/network access during execution is unavailable. Code is executed only after the user reviews it and selects Run; assistant text never triggers execution automatically.
+
+The Python/API tests mock model inference and Docker calls. Actual GPU generation, microphone recording and container execution must be checked on their target hosts/browsers before enabling the corresponding capabilities.

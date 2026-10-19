@@ -43,9 +43,12 @@ class RunMediaTask implements ShouldQueue
                 throw new \RuntimeException('Media runtime failed.');
             }
             $data = $response->json();
-            $text = in_array($task->kind, ['vision', 'transcription', 'document'], true) ? ($data['text'] ?? null) : null;
+            $text = in_array($task->kind, ['vision', 'transcription', 'document', 'code'], true) ? ($data['text'] ?? null) : null;
+            if ($text !== null && (! is_string($text) || strlen($text) > 100000)) {
+                throw new \RuntimeException('Invalid text output.');
+            }
             $raw = isset($data['data']) ? base64_decode($data['data'], true) : null;
-            $expected = ['image' => 'image/png', 'speech' => 'audio/wav', 'video' => 'video/mp4'];
+            $expected = ['image' => 'image/png', 'speech' => 'audio/wav', 'video' => 'video/mp4', 'code' => 'application/zip'];
             if (isset($expected[$task->kind])) {
                 if (! $raw || strlen($raw) > 20000000 || ($data['mime'] ?? '') !== $expected[$task->kind]) {
                     throw new \RuntimeException('Invalid media output.');

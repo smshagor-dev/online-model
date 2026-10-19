@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import Dialog from "./dialog";
+import CodePreview from "./code-preview";
 import ResponseMarkdown from "./response-markdown";
 type Canvas = {
   id: number;
@@ -19,6 +20,11 @@ export default function CanvasDialog({
   onClose: () => void;
   onUse: (attachment: { id: number; name: string }) => void;
 }) {
+  const [versions, setVersions] = useState<
+    { version: number; title: string }[]
+  >([]);
+  const [compare, setCompare] = useState<string | null>(null);
+  const [split, setSplit] = useState(true);
   const [items, setItems] = useState<Canvas[]>([]);
   const [selected, setSelected] = useState<Canvas | null>(null);
   const [title, setTitle] = useState("Untitled draft");
@@ -32,6 +38,24 @@ export default function CanvasDialog({
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
   }, []);
+  useEffect(() => {
+    if (!selected) {
+      setVersions([]);
+      return;
+    }
+    const c = new AbortController();
+    api<typeof versions>(
+      `canvases/${selected.id}/versions`,
+      "GET",
+      undefined,
+      c.signal,
+    )
+      .then(setVersions)
+      .catch((e) => {
+        if (!c.signal.aborted) setError(e.message);
+      });
+    return () => c.abort();
+  }, [selected?.id, selected?.version]);
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -83,6 +107,61 @@ export default function CanvasDialog({
           {preview ? "Edit" : "Preview"}
         </button>
       </div>
+      <div className="canvas-toolbar">
+        <button onClick={() => setSplit((v) => !v)}>
+          {split ? "Single pane" : "Split editor / preview"}
+        </button>
+        {selected && (
+          <select
+            aria-label="Canvas version history"
+            value=""
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (v)
+                void run(async () => {
+                  const old = await api<Canvas>(
+                    `canvases/${selected.id}/versions/${v}`,
+                  );
+                  setCompare(old.content);
+                });
+            }}
+          >
+            <option value="">Compare saved version…</option>
+            {versions.map((v) => (
+              <option key={v.version} value={v.version}>
+                Version {v.version} · {v.title}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {compare !== null && (
+        <section className="canvas-diff">
+          <h3>Version comparison</h3>
+          <div className="canvas-split">
+            <div>
+              <h4>Saved version</h4>
+              <pre>{compare}</pre>
+            </div>
+            <div>
+              <h4>Current draft</h4>
+              <pre>{content}</pre>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setContent(compare);
+              setCompare(null);
+              setNotice(
+                "Saved version loaded into draft. Save to create a new version.",
+              );
+            }}
+          >
+            Restore into draft
+          </button>
+          <button onClick={() => setCompare(null)}>Close comparison</button>
+        </section>
+      )}
       <form
         className="form-stack"
         onSubmit={(e) => {
@@ -123,26 +202,29 @@ export default function CanvasDialog({
             <option value="code">Code / plain text</option>
           </select>
         </label>
-        {preview ? (
-          <div className="canvas-preview">
-            {format === "markdown" ? (
-              <ResponseMarkdown content={content} />
-            ) : (
-              <pre>{content}</pre>
-            )}
-          </div>
-        ) : (
-          <label>
-            Content
-            <textarea
-              className="canvas-editor"
-              rows={15}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              maxLength={50000}
-            />
-          </label>
-        )}
+        <div className={split ? "canvas-split" : ""}>
+          {(!preview || split) && (
+            <label>
+              Content
+              <textarea
+                className="canvas-editor"
+                rows={15}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                maxLength={50000}
+              />
+            </label>
+          )}
+          {(preview || split) && (
+            <div className="canvas-preview">
+              {format === "markdown" ? (
+                <ResponseMarkdown content={content} />
+              ) : (
+                <CodePreview content={content} />
+              )}
+            </div>
+          )}
+        </div>
         {error && (
           <p className="feedback error" role="alert">
             {error}

@@ -32,6 +32,8 @@ for path in PATHS.values():
 
 if os.environ.get('MEDIA_DOCUMENT_ENABLED') == 'true':
     PATHS['document'] = None
+if os.environ.get('MEDIA_CODE_IMAGE'):
+    PATHS['code'] = None
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 guard = threading.Lock()
@@ -65,7 +67,7 @@ def auth(authorization: str = Header(default='')):
 
 
 class Task(BaseModel):
-    kind: Literal['image', 'vision', 'transcription', 'speech', 'video', 'document']
+    kind: Literal['image', 'vision', 'transcription', 'speech', 'video', 'document', 'code']
     prompt: str = Field(max_length=4000)
     input: str | None = Field(default=None, max_length=10_666_672)
 
@@ -97,13 +99,16 @@ def run(task: Task):
         raw = base64.b64decode(task.input, validate=True) if task.input else None
         if raw and len(raw) > 8_000_000:
             raise ValueError('Input exceeds limit')
+        if task.kind == 'code':
+            from sandbox import execute
+            return execute(task.prompt)
         return {'text': extract_document(raw)} if task.kind == 'document' else infer(task, raw)
     except Exception:
         logging.exception('Local media inference failed')
         raise HTTPException(503, 'Local inference failed') from None
     finally:
         gc.collect()
-        if task.kind != 'document':
+        if task.kind not in ('document', 'code'):
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()

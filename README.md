@@ -83,3 +83,7 @@ Queued image/vision/audio/speech/Wan-video integrations and PDF/DOCX text extrac
 ## User settings
 
 Profile photo/name, confirmed email changes, password and 2FA/device controls, persisted appearance/accessibility/notification preferences, response personalization, memory management, archived chats and data deletion/export are available from Settings. Run `php artisan migrate --force` after updating. Email changes need SMTP and `FRONTEND_URL`. See [feature coverage](docs/FEATURE_COVERAGE.md) for behavior and deployment limits.
+
+## Workspace tools
+
+Tools & library includes assistant builder, scheduled tasks, bounded sourced research, unified library, voice input and an optional reviewed Python runner. Composer supports file drop/preview and inline media previews; Canvas supports split preview and version comparison; chats have a saved-branch navigator. Run migrations and the tasks queue worker/scheduler after updating. See [feature coverage](docs/FEATURE_COVERAGE.md) and [runtime deployment](runtime/media/README.md) for the exact supported scope and remaining live-host/device validation.

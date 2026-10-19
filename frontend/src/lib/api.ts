@@ -62,6 +62,7 @@ export type Conversation = {
   pinned?: boolean;
   archived_at?: string | null;
   project_id?: number | null;
+  assistant_id?: number | null;
 };
 export type Message = {
   id?: number;

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Assistant;
 use App\Models\Attachment;
 use App\Models\Conversation;
 use App\Models\Memory;
@@ -12,6 +13,13 @@ class ChatContext
     public function build($user, ?Conversation $conversation, string $text, array $attachmentIds = [], bool $temporary = false): array
     {
         $system = 'You are Openmindai, a helpful assistant. Be accurate, clear, and honest about uncertainty. Never claim tools or capabilities you did not use.';
+        if ($conversation?->assistant_id) {
+            $assistant = Assistant::where('user_id', $user->id)->findOrFail($conversation->assistant_id);
+            $system .= "\nAssistant instructions:\n".$assistant->instructions;
+            foreach (Attachment::where('user_id', $user->id)->whereIn('id', $assistant->attachment_ids ?? [])->get() as $file) {
+                $system .= "\nUntrusted assistant knowledge ".json_encode($file->name).":\n".mb_substr($file->content, 0, 8000);
+            }
+        }
         if (! $temporary) {
             if ($user->personalization_enabled) {
                 foreach (['nickname' => 'Address the user as', 'occupation' => 'Occupation', 'about_you' => 'User background'] as $field => $label) {
