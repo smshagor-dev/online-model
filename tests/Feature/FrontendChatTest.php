@@ -107,6 +107,17 @@ class FrontendChatTest extends TestCase
         $this->assertCount(2, (RateLimiter::limiter('chat'))($request));
     }
 
+    public function test_daily_limit_blocks_new_requests_but_allows_an_active_turn_to_finish(): void
+    {
+        $this->authenticate();
+        config(['models.daily_limit' => 1]);
+        $r = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'First request'], $this->headers())->assertOk();
+        $this->postJson('/api/v1/chat/frontend/status', ['ticket' => $r->json('ticket')], $this->headers())->assertOk();
+        $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $r->json('ticket'), 'content' => 'Complete answer', 'status' => 'complete'], $this->headers())->assertOk();
+        $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Over daily quota'], $this->headers())->assertStatus(429);
+        $this->assertDatabaseCount('messages', 2);
+    }
+
     public function test_large_answer_and_new_source_summaries_are_saved_without_the_old_text_cap(): void
     {
         $this->authenticate();
