@@ -87,6 +87,8 @@ Route::prefix('v1')->group(function () {
         Route::put('conversations/{id}/messages/{message}/feedback', [$workspace, 'feedback']);
         Route::post('conversations/{id}/messages/{message}/stop', [$workspace, 'stop']);
         Route::post('chat/frontend/begin', [FrontendChatController::class, 'begin'])->middleware('throttle:chat');
+        Route::post('chat/frontend/resume', [FrontendChatController::class, 'resume']);
+        Route::post('chat/frontend/checkpoint', [FrontendChatController::class, 'checkpoint'])->withoutMiddleware('throttle:api');
         Route::post('chat/frontend/status', [FrontendChatController::class, 'status'])->withoutMiddleware('throttle:api');
         Route::post('chat/frontend/tool', [FrontendChatController::class, 'tool'])->withoutMiddleware('throttle:api');
         Route::post('chat/frontend/memory', [FrontendChatController::class, 'remember'])->withoutMiddleware('throttle:api');

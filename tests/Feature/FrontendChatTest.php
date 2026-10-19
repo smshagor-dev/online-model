@@ -168,8 +168,66 @@ class FrontendChatTest extends TestCase
         $this->authenticate();
         $r = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Hello'], $this->headers())->assertOk();
         Conversation::find($r->json('conversation_id'))->delete();
-        $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $r->json('ticket'), 'content' => 'Late answer', 'status' => 'complete'], $this->headers())->assertOk();
+        $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $r->json('ticket'), 'content' => 'Late answer', 'status' => 'complete'], $this->headers())->assertStatus(410);
         $this->assertDatabaseCount('messages', 0);
         $this->assertDatabaseCount('conversations', 0);
+    }
+
+    public function test_interrupted_chat_resumes_same_message_with_encrypted_private_context(): void
+    {
+        $this->authenticate();
+        $first = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Private project'], $this->headers())->assertOk();
+        $id = $first->json('message_id');
+        $state = ['stage' => 'writing', 'content' => 'Partial', 'messages' => [['role' => 'system', 'content' => 'SECRET RESEARCH']], 'sources' => []];
+        $this->postJson('/api/v1/chat/frontend/checkpoint', ['ticket' => $first->json('ticket'), 'state' => $state], $this->headers())->assertOk();
+        $m = Message::findOrFail($id);
+        $this->assertStringNotContainsString('SECRET RESEARCH', $m->getRawOriginal('inference_checkpoint'));
+        $this->assertArrayNotHasKey('inference_checkpoint', $m->toArray());
+        $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $first->json('ticket'), 'content' => 'Partial', 'status' => 'failed'], $this->headers())->assertOk();
+        $this->assertTrue($m->fresh()->resumable);
+        $resumed = $this->postJson('/api/v1/chat/frontend/resume', ['message_id' => $id], $this->headers())->assertOk()->assertJsonPath('message_id', $id)->assertJsonPath('checkpoint.content', 'Partial');
+        $this->assertDatabaseCount('messages', 2);
+        $this->assertNotSame($first->json('ticket'), $resumed->json('ticket'));
+        $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $first->json('ticket'), 'content' => 'OLD WORKER', 'status' => 'complete'], $this->headers())->assertStatus(410);
+        $this->postJson('/api/v1/chat/frontend/checkpoint', ['ticket' => $first->json('ticket'), 'state' => $state], $this->headers())->assertStatus(410);
+        $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $resumed->json('ticket'), 'content' => 'Partial finished', 'status' => 'complete'], $this->headers())->assertOk();
+        $this->assertNull($m->fresh()->inference_checkpoint);
+        $this->assertFalse($m->fresh()->resumable);
+    }
+
+    public function test_live_resume_is_rejected_but_abandoned_stream_can_be_recovered(): void
+    {
+        $this->authenticate();
+        $first = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Hello'], $this->headers())->assertOk();
+        $this->postJson('/api/v1/chat/frontend/resume', ['message_id' => $first->json('message_id')], $this->headers())->assertStatus(409);
+        $this->travel(11)->minutes();
+        $this->postJson('/api/v1/chat/frontend/resume', ['message_id' => $first->json('message_id')], $this->headers())->assertOk();
+        $this->assertDatabaseCount('messages', 2);
+    }
+
+    public function test_resume_requires_owner_latest_turn_and_saved_chat(): void
+    {
+        $owner = $this->authenticate();
+        $first = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Hello'], $this->headers())->assertOk();
+        $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $first->json('ticket'), 'content' => '', 'status' => 'failed'], $this->headers())->assertOk();
+        Sanctum::actingAs($this->user());
+        $this->postJson('/api/v1/chat/frontend/resume', ['message_id' => $first->json('message_id')], $this->headers())->assertNotFound();
+        Sanctum::actingAs($owner);
+        Conversation::find($first->json('conversation_id'))->messages()->create(['role' => 'user', 'content' => 'New turn']);
+        $this->postJson('/api/v1/chat/frontend/resume', ['message_id' => $first->json('message_id')], $this->headers())->assertStatus(409);
+        $temporary = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Private', 'temporary' => true], $this->headers())->assertOk();
+        $this->postJson('/api/v1/chat/frontend/checkpoint', ['ticket' => $temporary->json('ticket'), 'state' => ['content' => 'PRIVATE']], $this->headers())->assertOk()->assertJsonPath('stored', false);
+        $this->assertDatabaseCount('messages', 3);
+    }
+
+    public function test_resume_does_not_charge_another_daily_chat_request(): void
+    {
+        $this->authenticate();
+        config(['models.daily_limit' => 1]);
+        $first = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'One request'], $this->headers())->assertOk();
+        $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $first->json('ticket'), 'content' => '', 'status' => 'failed'], $this->headers())->assertOk();
+        $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'New request'], $this->headers())->assertStatus(429);
+        $this->postJson('/api/v1/chat/frontend/resume', ['message_id' => $first->json('message_id')], $this->headers())->assertOk();
+        $this->assertDatabaseCount('messages', 2);
     }
 }

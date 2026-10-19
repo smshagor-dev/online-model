@@ -67,6 +67,7 @@ export type Conversation = {
 export type Message = {
   id?: number;
   status?: string;
+  resumable?: boolean;
   attachment_ids?: number[];
   sources?: {
     title: string;
@@ -86,12 +87,17 @@ export async function streamChat(
   onEvent: (event: string, data: Record<string, unknown>) => void,
   signal?: AbortSignal,
 ) {
-  const response = await fetch("/api/backend/chat/stream", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal,
-  });
+  const response = await fetch(
+    (body as { resume_message_id?: number }).resume_message_id
+      ? "/api/backend/chat/resume"
+      : "/api/backend/chat/stream",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    },
+  );
   if (!response.ok) {
     const data = await response.json();
     throw new ApiError(

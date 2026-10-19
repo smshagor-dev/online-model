@@ -474,6 +474,7 @@ export default function ChatWorkspace() {
       conversationId: number | null;
       history: Message[];
       attachmentIds?: number[];
+      resumeId?: number;
     },
   ) {
     event?.preventDefault();
@@ -510,7 +511,7 @@ export default function ChatWorkspace() {
       }
       return;
     }
-    if (!modelId) {
+    if (!modelId && !override?.resumeId) {
       setError(
         "No model is available yet. Ask your administrator to enable one.",
       );
@@ -522,8 +523,12 @@ export default function ChatWorkspace() {
     setBusy(true);
     setResearchProgress("Gathering initial sources");
     setMemoryNotice("");
-    setDraft("");
-    setMessages([...history, { role: "user", content: text }]);
+    if (!override?.resumeId) setDraft("");
+    setMessages(
+      override?.resumeId
+        ? history
+        : [...history, { role: "user", content: text }],
+    );
     const controller = new AbortController();
     generationRef.current = controller;
     activeStream.current = null;
@@ -532,6 +537,9 @@ export default function ChatWorkspace() {
       await streamChat(
         {
           model_id: modelId,
+          ...(override?.resumeId
+            ? { resume_message_id: override.resumeId }
+            : {}),
           ...(assistant ? { assistant_id: assistant.id } : {}),
           message: text,
           ...(id ? { conversation_id: id } : {}),
@@ -560,20 +568,36 @@ export default function ChatWorkspace() {
               conversation_id: cid,
               message_id: data.message_id as number | null,
             };
-            setMessages((previous) => [
-              ...previous.slice(0, -1),
-              {
-                ...previous[previous.length - 1],
-                id: data.user_message_id as number | undefined,
-              },
-              {
-                id: data.message_id as number | undefined,
-                role: "assistant",
-                content: "",
-                status: "generating",
-                sources: data.sources as Message["sources"],
-              },
-            ]);
+            if (override?.resumeId)
+              setMessages((previous) =>
+                previous.map((m) =>
+                  m.id === override.resumeId
+                    ? {
+                        ...m,
+                        content: String(data.content || ""),
+                        status: "generating",
+                        resumable: true,
+                        sources: data.sources as Message["sources"],
+                      }
+                    : m,
+                ),
+              );
+            else
+              setMessages((previous) => [
+                ...previous.slice(0, -1),
+                {
+                  ...previous[previous.length - 1],
+                  id: data.user_message_id as number | undefined,
+                },
+                {
+                  id: data.message_id as number | undefined,
+                  role: "assistant",
+                  content: "",
+                  status: "generating",
+                  resumable: Boolean(data.resumable),
+                  sources: data.sources as Message["sources"],
+                },
+              ]);
           }
           if (event === "memory" && Number(data.saved) > 0)
             setMemoryNotice(
@@ -621,14 +645,18 @@ export default function ChatWorkspace() {
             setMessages((previous) =>
               previous.map((m, i) =>
                 i === previous.length - 1
-                  ? { ...m, status: String(data.status) }
+                  ? {
+                      ...m,
+                      status: String(data.status),
+                      resumable: data.status !== "complete" && m.resumable,
+                    }
                   : m,
               ),
             );
         },
         controller.signal,
       );
-      setAttachments([]);
+      if (!override?.resumeId) setAttachments([]);
       if (!temporary) void refreshHistory().catch(report);
     } catch (e) {
       if ((e as Error).name === "AbortError") {
@@ -640,7 +668,7 @@ export default function ChatWorkspace() {
       } else {
         if (!receivedMeta) {
           setMessages(history);
-          setDraft(text);
+          if (!override?.resumeId) setDraft(text);
         }
         report(e);
       }
@@ -1316,6 +1344,26 @@ export default function ChatWorkspace() {
                             ))}
                           </div>
                         )}
+                        {message.resumable &&
+                          message.id &&
+                          message.status !== "complete" &&
+                          index === messages.length - 1 && (
+                            <button
+                              className="secondary-button"
+                              disabled={busy || loadingChat}
+                              onClick={() =>
+                                void send(undefined, {
+                                  text:
+                                    messages[index - 1]?.content || "Continue",
+                                  conversationId,
+                                  history: messages,
+                                  resumeId: message.id,
+                                })
+                              }
+                            >
+                              Resume response
+                            </button>
+                          )}
                         <div className="message-actions">
                           {message.id && (
                             <>

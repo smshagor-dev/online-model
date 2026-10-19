@@ -33,6 +33,7 @@ function fixture({
         { stored: !saveFails },
         { status: saveFails ? 503 : 200 },
       );
+    if (url.endsWith("/checkpoint")) return Response.json({ stored: true });
     if (url.endsWith("/status")) return Response.json({ cancelled: false });
     assert.equal(url, "https://integrate.api.nvidia.com/v1/chat/completions");
     assert.equal(options.headers.Authorization, "Bearer secret-nvidia-key");
@@ -213,4 +214,71 @@ test("opted-in NVIDIA memory is extracted from user text only after chat persist
   assert.equal(memoriesSaved, true);
   assert.match(text, /event: memory/);
   assert.match(text, /"saved":true/);
+});
+
+test("interrupted NVIDIA answer resumes durable context without creating another turn", async () => {
+  const first = fixture({ truncated: true });
+  let checkpoint;
+  const fetchFirst = async (url, options) => {
+    if (url.endsWith("/checkpoint")) {
+      checkpoint = JSON.parse(options.body).state;
+      return Response.json({ stored: true });
+    }
+    return first.fetcher(url, options);
+  };
+  await (
+    await nvidiaChat(
+      '{"message":"Hi"}',
+      "token",
+      "https://backend/api/v1",
+      new AbortController().signal,
+      { config, fetcher: fetchFirst },
+    )
+  ).text();
+  assert.equal(checkpoint.content, "Hello");
+  assert.equal(checkpoint.messages.at(-2).content, "Hello");
+  let saved;
+  const response = await nvidiaChat(
+    '{"resume_message_id":3}',
+    "token",
+    "https://backend/api/v1",
+    new AbortController().signal,
+    {
+      config,
+      fetcher: async (url, options) => {
+        const body = JSON.parse(options.body);
+        if (url.endsWith("/resume")) {
+          assert.equal(body.message_id, 3);
+          return Response.json({
+            ticket: "b".repeat(64),
+            message_id: 3,
+            user_message_id: 2,
+            conversation_id: 1,
+            sources: [],
+            messages: [{ role: "system", content: "PRIVATE CONTEXT" }],
+            checkpoint,
+          });
+        }
+        if (url.endsWith("/checkpoint")) return Response.json({ stored: true });
+        if (url.endsWith("/finish")) {
+          saved = body;
+          return Response.json({ stored: true });
+        }
+        assert.equal(
+          url,
+          "https://integrate.api.nvidia.com/v1/chat/completions",
+        );
+        assert.equal(body.messages.at(-2).content, "Hello");
+        return new Response(
+          'data: {"choices":[{"delta":{"content":" world"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+          { headers: { "Content-Type": "text/event-stream" } },
+        );
+      },
+    },
+  );
+  const output = await response.text();
+  assert.equal(saved.content, "Hello world");
+  assert.equal(saved.status, "complete");
+  assert.match(output, /"content":"Hello"/);
+  assert.ok(!output.includes("PRIVATE CONTEXT"));
 });

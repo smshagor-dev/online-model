@@ -81,6 +81,7 @@ test("provider length boundary continues and saves a single complete answer", as
           saved = body;
           return Response.json({ stored: true });
         }
+        if (url.endsWith("/checkpoint")) return Response.json({ stored: true });
         if (url.endsWith("/status")) return Response.json({ cancelled: false });
         assert.equal(body.max_tokens, undefined);
         generated++;
@@ -126,6 +127,8 @@ test("NVIDIA research searches and reads before saving the sourced report", asyn
             ],
             message_id: 3,
           });
+        if (endpoint.endsWith("/checkpoint"))
+          return Response.json({ stored: true });
         if (endpoint.endsWith("/status"))
           return Response.json({ cancelled: false });
         if (endpoint.endsWith("/tool"))
@@ -170,4 +173,56 @@ test("NVIDIA research searches and reads before saving the sourced report", asyn
   assert.ok(!output.includes("PRIVATE PAGE EVIDENCE"));
   assert.ok(!output.includes("private-key"));
   assert.ok(!output.includes("a".repeat(64)));
+});
+
+test("research checkpoint replays only pending tool and preserves completed evidence", async () => {
+  let checkpoint;
+  let plans = 0;
+  await assert.rejects(
+    () =>
+      researchLoop({
+        sources: [],
+        signal: new AbortController().signal,
+        progress() {},
+        decide: async () =>
+          JSON.stringify({
+            action: "read",
+            url: "https://example.org/pending",
+          }),
+        checkpoint: async (state) => {
+          checkpoint = structuredClone(state);
+        },
+        tool: async () => {
+          throw new Error("Process interrupted");
+        },
+      }),
+    /Process interrupted/,
+  );
+  assert.equal(checkpoint.pending.action, "read");
+  const result = await researchLoop({
+    sources: [],
+    state: checkpoint,
+    signal: new AbortController().signal,
+    progress() {},
+    checkpoint: async (state) => {
+      checkpoint = structuredClone(state);
+    },
+    decide: async (context) => {
+      plans++;
+      assert.ok(context.includes("PRIVATE EVIDENCE"));
+      return JSON.stringify({ action: "finish", reason: "Coverage complete" });
+    },
+    tool: async (action) => {
+      assert.equal(action.url, "https://example.org/pending");
+      return {
+        url: action.url,
+        page_text: "PRIVATE EVIDENCE",
+        read_status: "read",
+      };
+    },
+  });
+  assert.equal(plans, 1);
+  assert.equal(result.sources[0].read_status, "read");
+  assert.equal(checkpoint.pending, null);
+  assert.equal(checkpoint.actions.length, 1);
 });

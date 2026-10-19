@@ -2,6 +2,7 @@ import {
   plannerInstruction,
   researchLoop,
   type Source,
+  type ResearchState,
 } from "./research-loop.ts";
 // Server-only implementation. Never import this module in a client component.
 const endpoint = "https://integrate.api.nvidia.com/v1/chat/completions";
@@ -16,6 +17,15 @@ export function nvidiaModel() {
   };
 }
 type Config = { apiKey: string; bridgeKey: string; model: string };
+type Checkpoint = {
+  stage: "research" | "writing";
+  research?: ResearchState;
+  messages?: { role: string; content: string }[];
+  content?: string;
+  previousPart?: string;
+  finished?: boolean;
+  sources?: Source[];
+};
 type Lease = {
   ticket: string;
   messages: { role: string; content: string }[];
@@ -24,6 +34,9 @@ type Lease = {
   message_id: number | null;
   sources: Source[];
   automatic_memory?: boolean;
+  checkpoint?: Checkpoint | null;
+  deep_research?: boolean;
+  search_time_range?: string | null;
 };
 export async function nvidiaChat(
   body: string,
@@ -68,8 +81,10 @@ export async function nvidiaChat(
   let lease: Lease;
   try {
     const prepared = await backend(
-      "begin",
-      JSON.parse(body),
+      JSON.parse(body).resume_message_id ? "resume" : "begin",
+      JSON.parse(body).resume_message_id
+        ? { message_id: JSON.parse(body).resume_message_id }
+        : JSON.parse(body),
       JSON.parse(body).deep_research ? 80000 : 15000,
     );
     if (!prepared.ok) {
@@ -98,7 +113,7 @@ export async function nvidiaChat(
       { status: 503 },
     );
   }
-  const deep = Boolean(JSON.parse(body).deep_research);
+  const deep = Boolean(lease.deep_research ?? JSON.parse(body).deep_research);
   const encoder = new TextEncoder();
   const upstreamAbort = new AbortController();
   let disconnected = signal.aborted;
@@ -113,7 +128,33 @@ export async function nvidiaChat(
   signal.addEventListener("abort", abort, { once: true });
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      let content = "";
+      let content = lease.checkpoint?.content || "";
+      let checkpoint: Checkpoint = lease.checkpoint || {
+        stage: deep ? "research" : "writing",
+      };
+      let generationMessages = checkpoint.messages || lease.messages;
+      let previousPart = checkpoint.previousPart || "";
+      const saveCheckpoint = async () => {
+        if (!lease.message_id) return;
+        const r = await backend(
+          "checkpoint",
+          {
+            ticket: lease.ticket,
+            state: {
+              ...checkpoint,
+              content,
+              messages: generationMessages,
+              previousPart,
+              sources: lease.sources,
+            },
+          },
+          10000,
+        );
+        if (!r.ok)
+          throw new Error(
+            "NVIDIA progress could not be saved. Generation stopped.",
+          );
+      };
       let status = "complete";
       let finished = false;
       let failure = "";
@@ -138,6 +179,8 @@ export async function nvidiaChat(
           message_id: lease.message_id,
           sources: lease.sources,
           provider: "nvidia",
+          content,
+          resumable: Boolean(lease.message_id),
         });
         if (cancelled) throw new Error("Cancelled");
         poll = setInterval(async () => {
@@ -161,10 +204,15 @@ export async function nvidiaChat(
             polling = false;
           }
         }, options.pollMs || 5000);
-        if (deep) {
+        if (deep && checkpoint.stage === "research") {
           const initial = lease.messages;
           const result = await researchLoop({
             sources: lease.sources,
+            state: checkpoint.research,
+            checkpoint: async (research) => {
+              checkpoint = { ...checkpoint, research };
+              await saveCheckpoint();
+            },
             signal: upstreamAbort.signal,
             progress: (label, sources) => {
               lease.sources = sources;
@@ -176,7 +224,10 @@ export async function nvidiaChat(
                 {
                   ticket: lease.ticket,
                   ...action,
-                  time_range: JSON.parse(body).search_time_range || null,
+                  time_range:
+                    lease.search_time_range ||
+                    JSON.parse(body).search_time_range ||
+                    null,
                 },
                 15000,
                 upstreamAbort.signal,
@@ -252,19 +303,41 @@ export async function nvidiaChat(
                 }
               : message,
           );
+          generationMessages = lease.messages;
+          checkpoint = { stage: "writing" };
+          await saveCheckpoint();
           emit("research", {
             label: "Writing the complete report",
             sources: lease.sources,
           });
         }
-        let generationMessages = lease.messages;
-        let continueAnswer = true;
-        let previousPart = "";
+        let continueAnswer = !checkpoint.finished;
         while (continueAnswer) {
           continueAnswer = false;
           finished = false;
           let finishReason = "";
           const before = content.length;
+          let checkpointAt = Date.now();
+          const savePartial = async () => {
+            const part = content.slice(before);
+            if (!part) return;
+            const original = generationMessages;
+            generationMessages = [
+              ...original,
+              { role: "assistant", content: part },
+              {
+                role: "user",
+                content:
+                  "Continue exactly where the answer stopped without repeating earlier text.",
+              },
+            ];
+            checkpoint = { stage: "writing" };
+            try {
+              await saveCheckpoint();
+            } finally {
+              generationMessages = original;
+            }
+          };
           const response = await fetcher(endpoint, {
             method: "POST",
             redirect: "error",
@@ -327,6 +400,10 @@ export async function nvidiaChat(
                 if (typeof text === "string" && text) {
                   content += text;
                   emit("delta", { content: text });
+                  if (Date.now() - checkpointAt >= 2000) {
+                    await savePartial();
+                    checkpointAt = Date.now();
+                  }
                 }
               }
             }
@@ -334,6 +411,9 @@ export async function nvidiaChat(
               throw new Error("NVIDIA stream disconnected before completion.");
             if (!content.trim())
               throw new Error("NVIDIA returned no answer text.");
+          } catch (error) {
+            await savePartial();
+            throw error;
           } finally {
             await reader.cancel().catch(() => {});
             reader.releaseLock();
@@ -366,6 +446,8 @@ export async function nvidiaChat(
               "NVIDIA stopped before completing the request: " + finishReason,
             );
           }
+          checkpoint = { stage: "writing", finished: !continueAnswer };
+          await saveCheckpoint();
         }
       } catch (e) {
         status = cancelled ? "cancelled" : "failed";

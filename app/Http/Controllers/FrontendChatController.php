@@ -73,12 +73,65 @@ class FrontendChatController
                 });
             }
             $ticket = bin2hex(random_bytes(32));
+            $assistant?->update(['inference_token' => hash('sha256', $ticket), 'inference_checkpoint' => ['messages' => $messages, 'deep_research' => $deep, 'search_time_range' => $d['search_time_range'] ?? null]]);
             Cache::put('frontend-chat:'.hash('sha256', $ticket), ['user_id' => $r->user()->id, 'message_id' => $assistant?->id, 'user_message_id' => $question?->id, 'conversation_id' => $temporary ? null : $c->id, 'lock_owner' => $lock->owner(), 'done' => false, 'deep_research' => $deep], 600);
 
             return ['ticket' => $ticket, 'messages' => $messages, 'conversation_id' => $temporary ? null : $c->id, 'user_message_id' => $question?->id, 'message_id' => $assistant?->id, 'sources' => $sources, 'automatic_memory' => ! $temporary && $r->user()->automatic_memory && $r->user()->memory_enabled];
         } catch (Throwable $e) {
             $assistant?->update(['status' => 'failed']);
             app(HostedChatActivity::class)->finish($r->user()->id, $lock->owner());
+            $lock->release();
+            throw $e;
+        }
+    }
+
+    public function checkpoint(Request $r)
+    {
+        [, $lease] = $this->lease($r);
+        abort_if($lease['done'], 409);
+        $d = $r->validate(['state' => 'required|array']);
+        if (! $lease['message_id']) {
+            return ['stored' => false];
+        }
+
+        return DB::transaction(function () use ($r, $lease, $d) {
+            $m = Message::whereKey($lease['message_id'])->lockForUpdate()->firstOrFail();
+            abort_unless($m->inference_token === hash('sha256', $r->input('ticket')) && $m->status === 'generating', 409);
+            $state = $m->inference_checkpoint ?? [];
+            $state['progress'] = $d['state'];
+            $m->update(['inference_checkpoint' => $state]);
+
+            return ['stored' => true];
+        });
+    }
+
+    public function resume(Request $r)
+    {
+        $this->guard($r);
+        $d = $r->validate(['message_id' => 'required|integer']);
+        $m = Message::whereHas('conversation', fn ($q) => $q->where('user_id', $r->user()->id))->findOrFail($d['message_id']);
+        abort_unless($m->role === 'assistant' && $m->resumable, 409, 'This response cannot be resumed.');
+        app(HostedChatActivity::class)->recover($r->user()->id);
+        $lock = Cache::lock('chat-user:'.$r->user()->id, 86400);
+        abort_unless($lock->get(), 409, 'A request is still running. Try again after it stops.');
+        try {
+            $result = DB::transaction(function () use ($r, $m, $lock) {
+                $c = Conversation::whereKey($m->conversation_id)->lockForUpdate()->firstOrFail();
+                $m = Message::whereKey($m->id)->lockForUpdate()->firstOrFail();
+                abort_unless($m->resumable && (int) $c->messages()->max('id') === $m->id, 409, 'Only the latest interrupted response can resume.');
+                $state = $m->inference_checkpoint;
+                $ticket = bin2hex(random_bytes(32));
+                $question = $c->messages()->where('role', 'user')->where('id', '<', $m->id)->latest('id')->firstOrFail();
+                $m->update(['status' => 'generating', 'inference_token' => hash('sha256', $ticket)]);
+                Cache::forget('stop-message:'.$m->id);
+                Cache::put('frontend-chat:'.hash('sha256', $ticket), ['user_id' => $r->user()->id, 'message_id' => $m->id, 'user_message_id' => $question->id, 'conversation_id' => $c->id, 'lock_owner' => $lock->owner(), 'done' => false, 'deep_research' => $state['deep_research'] ?? false], 600);
+
+                return ['ticket' => $ticket, 'messages' => $state['messages'], 'conversation_id' => $c->id, 'user_message_id' => $question->id, 'message_id' => $m->id, 'sources' => $state['progress']['sources'] ?? $m->sources ?? [], 'checkpoint' => $state['progress'] ?? null, 'deep_research' => $state['deep_research'] ?? false, 'search_time_range' => $state['search_time_range'] ?? null];
+            });
+            app(HostedChatActivity::class)->heartbeat($r->user()->id, $lock->owner());
+
+            return $result;
+        } catch (Throwable $e) {
             $lock->release();
             throw $e;
         }
@@ -92,6 +145,14 @@ class FrontendChatController
         $lease = Cache::get($key);
         abort_unless($lease && $lease['user_id'] === $r->user()->id, 410, 'Chat lease expired.');
 
+        if ($lease['message_id']) {
+            if (! Message::whereKey($lease['message_id'])->where('inference_token', hash('sha256', $d['ticket']))->exists()) {
+                app(HostedChatActivity::class)->finish($r->user()->id, $lease['lock_owner']);
+                Cache::restoreLock('chat-user:'.$r->user()->id, $lease['lock_owner'])->release();
+                abort(410, 'Chat attempt was replaced or deleted.');
+            }
+        }
+
         return [$key, $lease];
     }
 
@@ -102,7 +163,7 @@ class FrontendChatController
         return Cache::lock($key.':finish', 20)->block(3, function () use ($key, $r) {
             $lease = Cache::get($key);
             abort_unless($lease && $lease['user_id'] === $r->user()->id, 410);
-            $cancelled = $lease['message_id'] && (! Message::whereKey($lease['message_id'])->where('status', 'generating')->exists() || Cache::get('stop-message:'.$lease['message_id']));
+            $cancelled = $lease['message_id'] && (! Message::whereKey($lease['message_id'])->where('inference_token', hash('sha256', $r->input('ticket')))->where('status', 'generating')->exists() || Cache::get('stop-message:'.$lease['message_id']));
             if (! $lease['done'] && ! $cancelled) {
                 Cache::put($key, $lease, 600);
                 app(HostedChatActivity::class)->heartbeat($r->user()->id, $lease['lock_owner']);
@@ -168,6 +229,9 @@ class FrontendChatController
                 // Message ownership is checked via its conversation below; deletion is never undone.
                 if ($m) {
                     $updates = ['content' => $d['content'], 'status' => $d['status']];
+                    if ($d['status'] === 'complete') {
+                        $updates['inference_checkpoint'] = null;
+                    }
                     if (isset($d['sources'])) {
                         $updates['sources'] = array_values(array_filter(array_map(function ($source) {
                             $url = WebSearch::canonicalUrl($source['url']);
@@ -175,7 +239,8 @@ class FrontendChatController
                             return $url ? ['url' => $url, 'title' => $source['title'] ?: mb_substr($url, 0, 200), 'snippet' => $source['snippet'] ?? '', 'read_status' => $source['read_status'] ?? 'snippet_only', 'citation' => $source['citation'] ?? 1] : null;
                         }, $d['sources'])));
                     }
-                    $m->update($updates);
+                    $m->fill($updates);
+                    abort_unless(Message::whereKey($m->id)->where('inference_token', hash('sha256', $r->input('ticket')))->update($m->getDirty()), 410);
                 }
             }
             $lease['done'] = true;

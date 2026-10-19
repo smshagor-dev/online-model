@@ -8,6 +8,15 @@ class Message extends Model
 {
     protected $guarded = ['id'];
 
+    protected $hidden = ['inference_checkpoint', 'inference_token'];
+
+    protected $appends = ['resumable'];
+
+    public function getResumableAttribute(): bool
+    {
+        return ! empty($this->getRawOriginal('inference_checkpoint')) && $this->status !== 'complete';
+    }
+
     public function conversation()
     {
         return $this->belongsTo(Conversation::class);
@@ -15,6 +24,6 @@ class Message extends Model
 
     protected function casts(): array
     {
-        return ['attachment_ids' => 'array', 'sources' => 'array'];
+        return ['attachment_ids' => 'array', 'sources' => 'array', 'inference_checkpoint' => 'encrypted:array'];
     }
 }
