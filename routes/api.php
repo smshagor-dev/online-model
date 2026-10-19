@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\AssistantGalleryController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CanvasController;
 use App\Http\Controllers\ChatController;
@@ -13,6 +14,8 @@ use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
+    Route::get('explore/assistants', [AssistantGalleryController::class, 'index'])->middleware('throttle:60,1');
+    Route::get('explore/assistants/{slug}', [AssistantGalleryController::class, 'show'])->middleware('throttle:60,1');
     Route::get('shared/{token}', [WorkspaceController::class, 'shared'])->middleware('throttle:60,1');
     Route::middleware('throttle:auth')->group(function () {
         Route::post('email/change/confirm', [SettingsController::class, 'confirmEmail']);
@@ -30,6 +33,9 @@ Route::prefix('v1')->group(function () {
             Route::delete('me/email', [SettingsController::class, 'cancelEmail']);
             Route::post('settings/data', [SettingsController::class, 'bulk']);
         });
+        Route::post('assistants/{id}/publish', [AssistantGalleryController::class, 'publish']);
+        Route::delete('assistants/{id}/publish', [AssistantGalleryController::class, 'unpublish']);
+        Route::post('explore/assistants/{slug}/copy', [AssistantGalleryController::class, 'copy']);
         Route::get('assistants', [ToolsController::class, 'assistants']);
         Route::post('assistants', [ToolsController::class, 'saveAssistant']);
         Route::put('assistants/{id}', [ToolsController::class, 'saveAssistant']);
@@ -40,6 +46,7 @@ Route::prefix('v1')->group(function () {
         Route::delete('tasks/{id}', [ToolsController::class, 'deleteTask']);
         Route::get('tasks/{id}/runs', [ToolsController::class, 'runs']);
         Route::post('tasks/{id}/runs', [ToolsController::class, 'run'])->middleware('throttle:chat');
+        Route::post('tasks/{id}/runs/{run}/resume', [ToolsController::class, 'resumeRun']);
         Route::delete('tasks/{id}/runs/{run}', [ToolsController::class, 'cancelRun']);
         Route::get('conversations/{id}/branches', [ToolsController::class, 'branches']);
         Route::get('canvases/{id}/versions', [CanvasController::class, 'versions']);
@@ -82,6 +89,7 @@ Route::prefix('v1')->group(function () {
         Route::post('chat/frontend/begin', [FrontendChatController::class, 'begin'])->middleware('throttle:chat');
         Route::post('chat/frontend/status', [FrontendChatController::class, 'status'])->withoutMiddleware('throttle:api');
         Route::post('chat/frontend/tool', [FrontendChatController::class, 'tool'])->withoutMiddleware('throttle:api');
+        Route::post('chat/frontend/memory', [FrontendChatController::class, 'remember'])->withoutMiddleware('throttle:api');
         Route::post('chat/frontend/finish', [FrontendChatController::class, 'finish'])->withoutMiddleware('throttle:api');
         Route::post('chat/stream', StreamChatController::class)->middleware('throttle:chat');
 

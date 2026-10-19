@@ -6,6 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class Conversation extends Model
 {
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
     protected $guarded = ['id'];
 
     protected function casts(): array

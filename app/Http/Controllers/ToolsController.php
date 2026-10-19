@@ -7,16 +7,18 @@ use App\Models\Assistant;
 use App\Models\Conversation;
 use App\Models\ScheduledTask;
 use App\Models\TaskRun;
+use App\Services\TaskCheckpoint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class ToolsController
 {
     public function assistants(Request $r)
     {
-        return Assistant::where('user_id', $r->user()->id)->latest()->get();
+        return Assistant::where('user_id', $r->user()->id)->with('publication')->latest()->get();
     }
 
     public function saveAssistant(Request $r, ?int $id = null)
@@ -83,9 +85,27 @@ class ToolsController
     public function cancelRun(Request $r, int $id, int $run)
     {
         ScheduledTask::where('user_id', $r->user()->id)->findOrFail($id);
-        TaskRun::where('scheduled_task_id', $id)->whereIn('status', ['queued', 'running'])->findOrFail($run)->update(['status' => 'cancelled']);
+        TaskRun::where('scheduled_task_id', $id)->whereIn('status', ['queued', 'running'])->findOrFail($run)->update(['status' => 'cancelled', 'execution_token' => null]);
 
         return response()->noContent();
+    }
+
+    public function resumeRun(Request $r, int $id, int $run)
+    {
+        ScheduledTask::where('user_id', $r->user()->id)->findOrFail($id);
+
+        return Cache::lock('workspace-task:'.$id, 10)->block(2, fn () => DB::transaction(function () use ($id, $run, $r) {
+            $task = ScheduledTask::where('user_id', $r->user()->id)->lockForUpdate()->findOrFail($id);
+            $record = TaskRun::where('scheduled_task_id', $id)->lockForUpdate()->findOrFail($run);
+            abort_unless($record->resumable, 409, 'No interrupted checkpoint is available.');
+            $checkpoint = $record->checkpoint;
+            abort_if(isset($checkpoint['task_signature']) && $checkpoint['task_signature'] !== TaskCheckpoint::signature($task), 409, 'The task prompt, model or kind changed. Start a new run instead of resuming this checkpoint.');
+            abort_if(TaskRun::where('scheduled_task_id', $id)->whereIn('status', ['queued', 'running'])->exists(), 409, 'Another run is active.');
+            $record->update(['status' => 'queued', 'error' => null, 'execution_token' => (string) Str::uuid()]);
+            RunWorkspaceTask::dispatch($record->id)->onQueue('tasks');
+
+            return response()->json($record->fresh(), 202);
+        }));
     }
 
     public function branches(Request $r, int $id)

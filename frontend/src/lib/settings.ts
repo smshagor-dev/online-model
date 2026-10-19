@@ -11,6 +11,7 @@ export type Preferences = {
   about_you: string | null;
   custom_instructions: string | null;
   memory_enabled: boolean;
+  automatic_memory: boolean;
   response_style: string;
   response_length: string;
   response_language: string;

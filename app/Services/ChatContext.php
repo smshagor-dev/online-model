@@ -43,7 +43,7 @@ class ChatContext
             if ($user->memory_enabled) {
                 $memory = Memory::where('user_id', $user->id)->latest()->limit(20)->pluck('content')->implode("\n");
                 if ($memory) {
-                    $system .= "\nUser-managed memory:\n".$memory;
+                    $system .= "\nSaved memory:\n".$memory;
                 }
             }
             if ($conversation?->project_id) {

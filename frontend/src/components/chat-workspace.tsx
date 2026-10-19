@@ -104,6 +104,7 @@ export default function ChatWorkspace() {
   const [webSearch, setWebSearch] = useState(false);
   const [deepResearch, setDeepResearch] = useState(false);
   const [researchProgress, setResearchProgress] = useState("");
+  const [memoryNotice, setMemoryNotice] = useState("");
   const [searchTimeRange, setSearchTimeRange] = useState("");
   const [canvasInitial, setCanvasInitial] = useState<string | null>(null);
   const [mediaOpen, setMediaOpen] = useState(false);
@@ -396,6 +397,7 @@ export default function ChatWorkspace() {
     setAttachments([]);
     setDraft("");
     setError("");
+    setMemoryNotice("");
     setSidebarOpen(false);
     inputRef.current?.focus();
   }
@@ -519,6 +521,7 @@ export default function ChatWorkspace() {
     setError("");
     setBusy(true);
     setResearchProgress("Gathering initial sources");
+    setMemoryNotice("");
     setDraft("");
     setMessages([...history, { role: "user", content: text }]);
     const controller = new AbortController();
@@ -572,6 +575,10 @@ export default function ChatWorkspace() {
               },
             ]);
           }
+          if (event === "memory" && Number(data.saved) > 0)
+            setMemoryNotice(
+              `Saved ${Number(data.saved)} new memory. Manage it in Memory settings.`,
+            );
           if (event === "research") {
             setResearchProgress(String(data.label));
             if (Array.isArray(data.sources))
@@ -1585,6 +1592,11 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                   </span>
                 ))}
               </div>
+            )}
+            {memoryNotice && (
+              <p role="status" className="muted">
+                {memoryNotice}
+              </p>
             )}
             {busy && deepResearch && (
               <p className="muted" role="status">

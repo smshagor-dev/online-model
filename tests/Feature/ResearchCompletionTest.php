@@ -25,6 +25,28 @@ class ResearchCompletionTest extends TestCase
         $this->assertSame('All requested sections supported', $result['conclusion']);
     }
 
+    public function test_pending_saved_search_is_completed_without_repeating_the_planner_call(): void
+    {
+        $searched = false;
+        $this->mock(WebSearch::class)->shouldReceive('search')->once()->andReturnUsing(function () use (&$searched) {
+            $searched = true;
+
+            return [['url' => 'https://example.org/new', 'title' => 'Evidence']];
+        });
+        Http::fake(function () use (&$searched) {
+            $this->assertTrue($searched);
+
+            return Http::response(['choices' => [['message' => ['content' => '{"action":"finish","reason":"Coverage complete"}']]]]);
+        });
+        $saved = [];
+        $result = app(ResearchCompletion::class)->run('Question', [], 'fixture', fn () => null, fn () => false, ['actions' => [], 'pending' => ['action' => 'search', 'query' => 'Pending evidence']], function ($state) use (&$saved) {
+            $saved[] = $state;
+        });
+        Http::assertSentCount(1);
+        $this->assertCount(1, $result['sources']);
+        $this->assertSame('writing', end($saved)['stage']);
+    }
+
     public function test_repeated_action_stops_with_an_explicit_failure(): void
     {
         Http::fake(fn () => Http::response(['choices' => [['message' => ['content' => '{"action":"search","query":"Repeated"}']]]]));

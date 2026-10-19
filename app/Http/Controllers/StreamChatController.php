@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\RememberConversation;
 use App\Models\AiModel;
 use App\Models\Conversation;
 use App\Models\Message;
@@ -191,6 +192,12 @@ class StreamChatController
                 if ($saved) {
                     Message::whereKey($saved->id)->update(['content' => $text, 'status' => $status, 'sources' => $sources]);
                     $c->touch();
+                    if ($status === 'complete' && $r->user()->automatic_memory && $r->user()->memory_enabled) {
+                        try {
+                            RememberConversation::dispatch($userMessage->id, $saved->id, $model->id)->onQueue('tasks');
+                        } catch (Throwable $e) { /* Memory is optional; always release the chat lock. */
+                        }
+                    }
                     Cache::forget('stop-message:'.$saved->id);
                 }
 

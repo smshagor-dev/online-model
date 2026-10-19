@@ -65,6 +65,24 @@ class DownloadTest extends TestCase
         }
     }
 
+    public function test_hugging_face_credentials_do_not_follow_a_cdn_redirect(): void
+    {
+        config(['models.hf_token' => 'private-hf-token']);
+        $m = $this->model(hash('sha256', 'GGUF'));
+        Http::fake(function ($request) {
+            if (str_starts_with($request->url(), 'https://huggingface.co/')) {
+                $this->assertTrue($request->hasHeader('Authorization', 'Bearer private-hf-token'));
+
+                return Http::response('', 302, ['Location' => 'https://cdn-lfs.hf.co/model']);
+            }
+            $this->assertFalse($request->hasHeader('Authorization'));
+
+            return Http::response($request->method() === 'GET' ? 'GGUF' : '', 200);
+        });
+        (new DownloadModel($m->id))->handle();
+        $this->assertSame('ready', $m->fresh()->status);
+    }
+
     public function test_redirect_to_untrusted_host_is_rejected(): void
     {
         $m = $this->model(hash('sha256', 'GGUF'));

@@ -3,11 +3,10 @@
 namespace App\Jobs;
 
 use App\Models\AiModel;
-use GuzzleHttp\Psr7\Uri;
-use GuzzleHttp\Psr7\UriResolver;
+use App\Services\HuggingFaceFile;
+use App\Services\ModelStorage;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Http;
 use Throwable;
 
 class DownloadModel implements ShouldQueue
@@ -57,38 +56,11 @@ class DownloadModel implements ShouldQueue
             if ($model->bytes > config('models.max_bytes')) {
                 throw new \RuntimeException('Size limit exceeded.');
             }
-            $used = array_sum(array_map('filesize', glob($root.'/*.gguf') ?: []));
+            $used = app(ModelStorage::class)->used($root);
             if ($used + $model->bytes > config('models.storage_budget') || disk_free_space($root) < $model->bytes + 104857600) {
                 throw new \RuntimeException('Insufficient model storage.');
             }
-            $url = 'https://huggingface.co/'.$model->repository.'/resolve/'.$model->revision.'/'.implode('/', array_map('rawurlencode', explode('/', $model->filename)));
-            $headers = [];
-            if (config('models.hf_token')) {
-                $headers['Authorization'] = 'Bearer '.config('models.hf_token');
-            }
-            // Follow only HTTPS Hugging Face/CDN redirects; credentials never follow a redirect.
-            for ($hop = 0; $hop < 8; $hop++) {
-                $head = Http::withHeaders($headers)->connectTimeout(15)->timeout(30)->withOptions(['allow_redirects' => false])->head($url);
-                if (! in_array($head->status(), [301, 302, 303, 307, 308], true)) {
-                    break;
-                }
-                $next = (string) UriResolver::resolve(new Uri($url), new Uri($head->header('Location')));
-                $host = parse_url($next, PHP_URL_HOST);
-                $scheme = parse_url($next, PHP_URL_SCHEME);
-                if (! $host || $scheme !== 'https' || ! $this->allowedHost($host) || parse_url($next, PHP_URL_USER) || parse_url($next, PHP_URL_PORT)) {
-                    throw new \RuntimeException('Unsafe download redirect.');
-                }
-                $url = $next;
-                $headers = [];
-            }
-            $response = Http::withHeaders($headers)->connectTimeout(15)->timeout(7000)->withOptions(['allow_redirects' => false, 'sink' => $part, 'progress' => function ($total, $downloaded) use ($model) {
-                if ($downloaded > $model->bytes || $total > $model->bytes) {
-                    throw new \RuntimeException('Download exceeded expected size.');
-                }
-            }])->get($url);
-            if (! $response->successful() || ! is_file($part) || filesize($part) !== $model->bytes || ! hash_equals($model->sha256, hash_file('sha256', $part))) {
-                throw new \RuntimeException('Download integrity verification failed.');
-            }
+            app(HuggingFaceFile::class)->download($model->repository, $model->revision, $model->filename, $model->bytes, $model->sha256, $part);
             if (! rename($part, $final)) {
                 throw new \RuntimeException('Cannot finalize model file.');
             }chmod($final, 0600);
@@ -101,17 +73,6 @@ class DownloadModel implements ShouldQueue
             flock($guard, LOCK_UN);
             fclose($guard);
         }
-    }
-
-    private function allowedHost(string $host): bool
-    {
-        foreach (['huggingface.co', 'hf.co', 'xethub.hf.co', 'cloudfront.net', 'amazonaws.com'] as $suffix) {
-            if ($host === $suffix || str_ends_with($host, '.'.$suffix)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     public function failed(?Throwable $error): void

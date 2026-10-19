@@ -92,3 +92,5 @@ Build `Dockerfile.sandbox`, scan/test the image, and configure `MEDIA_CODE_IMAGE
 The Python/API tests mock model inference and Docker calls. Actual GPU generation, microphone recording and container execution must be checked on their target hosts/browsers before enabling the corresponding capabilities.
 
 Code artifact previews are produced outside the execution container from allowlisted ZIP entries without extracting files. PNG previews are capped at 500 KB and 16 megapixels, CSV preview at 101 rows including its header and 30 columns, text at 20,000 characters, and total serialized preview data at 1.5 MB. Laravel revalidates metadata before storing it. Full files remain in the ZIP; previews are samples. Rebuild/restart the media runtime and migrate Laravel to enable preview metadata for new tasks.
+
+Verified safetensors/config/tokenizer snapshots can also be provisioned from `/admin/model-bundles`. See [admin snapshot setup](../../docs/WORKSPACE_FEATURES.md). Copy the complete ready folder to the GPU host when it is separate from Laravel; the UI does not install or start inference.

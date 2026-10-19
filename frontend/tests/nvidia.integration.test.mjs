@@ -10,6 +10,7 @@ function fixture({
   upstreamStatus = 200,
   truncated = false,
   saveFails = false,
+  automaticMemory = false,
 } = {}) {
   const calls = [];
   const fetcher = async (url, options) => {
@@ -25,6 +26,7 @@ function fixture({
         user_message_id: 2,
         message_id: 3,
         sources: [],
+        automatic_memory: automaticMemory,
       });
     if (url.endsWith("/finish"))
       return Response.json(
@@ -178,4 +180,37 @@ test("cancelled browser request still finalizes backend lease", async () => {
     "cancelled",
   );
   assert.equal(f.calls.filter((x) => x.url.includes("nvidia.com")).length, 0);
+});
+
+test("opted-in NVIDIA memory is extracted from user text only after chat persistence", async () => {
+  const f = fixture({ automaticMemory: true });
+  let memoriesSaved = false;
+  const fetcher = async (url, options) => {
+    const body = JSON.parse(options.body);
+    if (url.includes("nvidia.com") && body.stream === false) {
+      assert.ok(f.calls.some((call) => call.url.endsWith("/finish")));
+      assert.equal(body.messages[1].content, "I prefer Bangla");
+      assert.ok(!JSON.stringify(body).includes("PRIVATE CONTEXT"));
+      return Response.json({
+        choices: [{ message: { content: '["Prefers Bangla answers"]' } }],
+      });
+    }
+    if (url.endsWith("/memory")) {
+      memoriesSaved = true;
+      assert.deepEqual(body.memories, ["Prefers Bangla answers"]);
+      return Response.json({ saved: 1 });
+    }
+    return f.fetcher(url, options);
+  };
+  const result = await nvidiaChat(
+    '{"message":"I prefer Bangla"}',
+    "user-token",
+    "https://backend/api/v1",
+    new AbortController().signal,
+    { fetcher, config },
+  );
+  const text = await result.text();
+  assert.equal(memoriesSaved, true);
+  assert.match(text, /event: memory/);
+  assert.match(text, /"saved":true/);
 });

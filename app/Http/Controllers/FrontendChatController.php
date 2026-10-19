@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Services\AutomaticMemory;
 use App\Services\ChatContext;
 use App\Services\HostedChatActivity;
 use App\Services\WebReader;
@@ -72,9 +73,9 @@ class FrontendChatController
                 });
             }
             $ticket = bin2hex(random_bytes(32));
-            Cache::put('frontend-chat:'.hash('sha256', $ticket), ['user_id' => $r->user()->id, 'message_id' => $assistant?->id, 'conversation_id' => $temporary ? null : $c->id, 'lock_owner' => $lock->owner(), 'done' => false, 'deep_research' => $deep], 600);
+            Cache::put('frontend-chat:'.hash('sha256', $ticket), ['user_id' => $r->user()->id, 'message_id' => $assistant?->id, 'user_message_id' => $question?->id, 'conversation_id' => $temporary ? null : $c->id, 'lock_owner' => $lock->owner(), 'done' => false, 'deep_research' => $deep], 600);
 
-            return ['ticket' => $ticket, 'messages' => $messages, 'conversation_id' => $temporary ? null : $c->id, 'user_message_id' => $question?->id, 'message_id' => $assistant?->id, 'sources' => $sources];
+            return ['ticket' => $ticket, 'messages' => $messages, 'conversation_id' => $temporary ? null : $c->id, 'user_message_id' => $question?->id, 'message_id' => $assistant?->id, 'sources' => $sources, 'automatic_memory' => ! $temporary && $r->user()->automatic_memory && $r->user()->memory_enabled];
         } catch (Throwable $e) {
             $assistant?->update(['status' => 'failed']);
             app(HostedChatActivity::class)->finish($r->user()->id, $lock->owner());
@@ -132,6 +133,17 @@ class FrontendChatController
         } catch (Throwable $e) {
             return ['url' => $d['url'], 'read_status' => 'unavailable'];
         }
+    }
+
+    public function remember(Request $r)
+    {
+        [, $lease] = $this->lease($r);
+        abort_unless($lease['done'] && ($lease['status'] ?? '') === 'complete' && $lease['message_id'], 409);
+        $answer = Message::whereKey($lease['message_id'])->whereHas('conversation', fn ($q) => $q->where('user_id', $r->user()->id))->firstOrFail();
+        abort_unless($answer->status === 'complete', 409);
+        $d = $r->validate(['memories' => 'present|array|max:3', 'memories.*' => 'required|string|max:500']);
+
+        return ['saved' => app(AutomaticMemory::class)->remember($r->user(), $d['memories'])];
     }
 
     public function finish(Request $r)

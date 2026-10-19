@@ -6,6 +6,7 @@ import ResponseMarkdown from "./response-markdown";
 import LibraryPanel from "./unified-library";
 import CodeRunner from "./code-runner";
 import VoicePanel from "./voice-panel";
+import AssistantGallery from "./assistant-gallery";
 type Assistant = {
   id: number;
   name: string;
@@ -13,6 +14,7 @@ type Assistant = {
   instructions: string;
   model_id: number | null;
   attachment_ids: number[] | null;
+  publication?: { slug: string } | null;
 };
 type Task = {
   id: number;
@@ -29,6 +31,7 @@ type Run = {
   status: string;
   result: string | null;
   error: string | null;
+  resumable?: boolean;
   steps: { label: string; status: string }[] | null;
   sources:
     | {
@@ -63,19 +66,26 @@ export default function ToolsWorkbench({
   return (
     <Dialog title="Openmindai workspace" onClose={onClose} wide>
       <div className="workspace-tabs">
-        {["assistants", "tasks", "research", "library", "voice", "code"].map(
-          (t) => (
-            <button
-              key={t}
-              aria-pressed={tab === t}
-              className={tab === t ? "selected" : ""}
-              onClick={() => setTab(t)}
-            >
-              {t[0].toUpperCase() + t.slice(1)}
-            </button>
-          ),
-        )}
+        {[
+          "assistants",
+          "explore",
+          "tasks",
+          "research",
+          "library",
+          "voice",
+          "code",
+        ].map((t) => (
+          <button
+            key={t}
+            aria-pressed={tab === t}
+            className={tab === t ? "selected" : ""}
+            onClick={() => setTab(t)}
+          >
+            {t[0].toUpperCase() + t.slice(1)}
+          </button>
+        ))}
       </div>
+      {tab === "explore" && <AssistantGallery compact />}
       {tab === "assistants" && <AssistantBuilder onUse={onAssistant} />}
       {tab === "research" && (
         <button type="button" onClick={onResearch}>
@@ -155,7 +165,65 @@ function AssistantBuilder({ onUse }: { onUse: (a: Assistant) => void }) {
           <article className="manage-card" key={a.id}>
             <strong>{a.name}</strong>
             <p>{a.description}</p>
+            <details>
+              <summary>Review instructions before publishing</summary>
+              <pre style={{ whiteSpace: "pre-wrap" }}>{a.instructions}</pre>
+              <p>
+                Publishing shares the name, description, these instructions and
+                your display name. Attached files and model settings stay
+                private.
+              </p>
+            </details>
             <div className="button-row">
+              <button
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    confirm(
+                      "Publish these instructions and your display name publicly? Attached files stay private. Review the instructions first.",
+                    )
+                  )
+                    void run(async (signal) => {
+                      const publication = await api<{ slug: string }>(
+                        `assistants/${a.id}/publish`,
+                        "POST",
+                        { public_consent: true },
+                        signal,
+                      );
+                      setItems((old) =>
+                        old.map((item) =>
+                          item.id === a.id ? { ...item, publication } : item,
+                        ),
+                      );
+                    });
+                }}
+              >
+                {a.publication ? "Update public snapshot" : "Publish template"}
+              </button>
+              {a.publication && (
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    void run(async (signal) => {
+                      await api(
+                        `assistants/${a.id}/publish`,
+                        "DELETE",
+                        undefined,
+                        signal,
+                      );
+                      setItems((old) =>
+                        old.map((item) =>
+                          item.id === a.id
+                            ? { ...item, publication: null }
+                            : item,
+                        ),
+                      );
+                    })
+                  }
+                >
+                  Unpublish
+                </button>
+              )}
               <button disabled={busy} onClick={() => onUse(a)}>
                 Start chat
               </button>
@@ -577,6 +645,24 @@ function TaskPlanner({
                 ))}
               </ol>
               {r.error && <p role="alert">{r.error}</p>}
+              {r.resumable && (
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    void run(async (signal) => {
+                      await api(
+                        `tasks/${selected}/runs/${r.id}/resume`,
+                        "POST",
+                        {},
+                        signal,
+                      );
+                      setRevision((value) => value + 1);
+                    })
+                  }
+                >
+                  Resume saved progress
+                </button>
+              )}
               {r.result && (
                 <>
                   <ResponseMarkdown content={r.result} />

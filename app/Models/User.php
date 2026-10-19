@@ -10,7 +10,7 @@ class User extends Authenticatable
 {
     use HasApiTokens, Notifiable;
 
-    protected $attributes = ['is_active' => true, 'is_admin' => false, 'memory_enabled' => false, 'theme' => 'dark', 'personalization_enabled' => true, 'response_style' => 'default', 'response_length' => 'default', 'response_language' => 'auto', 'accent_color' => 'default', 'text_size' => 'default', 'reduced_motion' => false, 'send_on_enter' => true, 'completion_notifications' => false];
+    protected $attributes = ['is_active' => true, 'is_admin' => false, 'automatic_memory' => false, 'memory_enabled' => false, 'theme' => 'dark', 'personalization_enabled' => true, 'response_style' => 'default', 'response_length' => 'default', 'response_language' => 'auto', 'accent_color' => 'default', 'text_size' => 'default', 'reduced_motion' => false, 'send_on_enter' => true, 'completion_notifications' => false];
 
     protected $fillable = ['name', 'email', 'password'];
 
@@ -18,6 +18,6 @@ class User extends Authenticatable
 
     protected function casts(): array
     {
-        return ['personalization_enabled' => 'boolean', 'reduced_motion' => 'boolean', 'send_on_enter' => 'boolean', 'completion_notifications' => 'boolean', 'email_change_expires_at' => 'datetime', 'password' => 'hashed', 'is_admin' => 'boolean', 'memory_enabled' => 'boolean', 'is_active' => 'boolean', 'email_verified_at' => 'datetime', 'two_factor_confirmed_at' => 'datetime', 'two_factor_secret' => 'encrypted', 'two_factor_recovery_codes' => 'encrypted:array'];
+        return ['personalization_enabled' => 'boolean', 'reduced_motion' => 'boolean', 'send_on_enter' => 'boolean', 'completion_notifications' => 'boolean', 'email_change_expires_at' => 'datetime', 'password' => 'hashed', 'is_admin' => 'boolean', 'automatic_memory' => 'boolean', 'memory_enabled' => 'boolean', 'is_active' => 'boolean', 'email_verified_at' => 'datetime', 'two_factor_confirmed_at' => 'datetime', 'two_factor_secret' => 'encrypted', 'two_factor_recovery_codes' => 'encrypted:array'];
     }
 }

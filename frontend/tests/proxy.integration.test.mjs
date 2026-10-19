@@ -95,6 +95,19 @@ before(async () => {
         return res.end(
           JSON.stringify({ data: [], current_page: 1, last_page: 1 }),
         );
+      if (req.url === "/api/v1/tasks/7/runs/2/resume") {
+        res.statusCode = 202;
+        return res.end(JSON.stringify({ id: 2, status: "queued" }));
+      }
+      if (req.url.startsWith("/api/v1/explore/assistants")) {
+        if (req.url.endsWith("/copy")) {
+          res.statusCode = 201;
+          return res.end(JSON.stringify({ id: 4, name: "Tutor" }));
+        }
+        return res.end(
+          JSON.stringify({ data: [], current_page: 1, last_page: 1 }),
+        );
+      }
       if (req.url === "/api/v1/canvases/3/versions")
         return res.end(JSON.stringify([{ version: 1 }]));
       if (req.url === "/api/v1/me")
@@ -390,4 +403,63 @@ test("workspace tools and canvas history use only allowlisted authenticated rout
       .status,
     404,
   );
+});
+
+test("task resume is forwarded securely while private memory bridge stays inaccessible", async () => {
+  const auth = await login();
+  const cookie = auth.headers.get("set-cookie").split(";")[0];
+  const r = await request("tasks/7/runs/2/resume", {
+    method: "POST",
+    headers: { ...headers(), Cookie: cookie },
+    body: "{}",
+  });
+  assert.equal(r.status, 202);
+  assert.equal(lastRequest.authorization, "Bearer fixture-secret-token");
+  assert.equal(
+    (
+      await request("chat/frontend/memory", {
+        method: "POST",
+        headers: { ...headers(), Cookie: cookie },
+        body: "{}",
+      })
+    ).status,
+    404,
+  );
+});
+
+test("public assistant browsing omits tokens and copying requires authentication", async () => {
+  const slug = "11111111-1111-4111-8111-111111111111";
+  const auth = await login();
+  const cookie = auth.headers.get("set-cookie").split(";")[0];
+  assert.equal(
+    (
+      await request("explore/assistants?q=Tutor", {
+        headers: { Cookie: cookie },
+      })
+    ).status,
+    200,
+  );
+  assert.equal(lastRequest.authorization, undefined);
+  assert.equal((await request(`explore/assistants/${slug}`)).status, 200);
+  assert.equal(
+    (
+      await request(`explore/assistants/${slug}/copy`, {
+        method: "POST",
+        headers: headers(),
+        body: "{}",
+      })
+    ).status,
+    401,
+  );
+  assert.equal(
+    (
+      await request(`explore/assistants/${slug}/copy`, {
+        method: "POST",
+        headers: { ...headers(), Cookie: cookie },
+        body: "{}",
+      })
+    ).status,
+    201,
+  );
+  assert.equal(lastRequest.authorization, "Bearer fixture-secret-token");
 });

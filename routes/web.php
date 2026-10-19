@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AssistantGalleryController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ModelBundleController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect('/admin'));
@@ -12,10 +14,16 @@ Route::post('/admin/login', [AdminController::class, 'login'])->middleware('thro
 Route::prefix('admin')->middleware(['auth', 'active', 'admin'])->group(function () {
     Route::get('/', [AdminController::class, 'dashboard']);
     Route::post('logout', [AdminController::class, 'logout']);
+    Route::get('assistants', [AssistantGalleryController::class, 'moderation']);
+    Route::patch('assistants/{publication}', [AssistantGalleryController::class, 'moderate']);
     Route::get('users', [AdminController::class, 'users']);
     Route::get('users/{user}', [AdminController::class, 'user']);
     Route::patch('users/{user}', [AdminController::class, 'updateUser']);
     Route::delete('users/{user}/tokens', [AdminController::class, 'revoke']);
+    Route::get('model-bundles', [ModelBundleController::class, 'index']);
+    Route::get('model-bundles/inspect', [ModelBundleController::class, 'inspect'])->middleware('throttle:hub');
+    Route::post('model-bundles', [ModelBundleController::class, 'import'])->middleware('throttle:hub');
+    Route::post('model-bundles/{bundle}/download', [ModelBundleController::class, 'download']);
     Route::get('models', [AdminController::class, 'models']);
     Route::get('models/search', [AdminController::class, 'search'])->middleware('throttle:hub');
     Route::get('models/inspect', [AdminController::class, 'inspect'])->middleware('throttle:hub');

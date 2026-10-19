@@ -56,6 +56,7 @@ export default function SettingsPreferences({
               custom_instructions: prefs.custom_instructions,
               personalization_enabled: prefs.personalization_enabled,
               memory_enabled: prefs.memory_enabled,
+              automatic_memory: prefs.automatic_memory,
               response_style: prefs.response_style,
               response_length: prefs.response_length,
               response_language: prefs.response_language,
@@ -283,6 +284,21 @@ export default function SettingsPreferences({
                 />
                 Use my saved memories
               </label>
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={prefs.automatic_memory}
+                  disabled={!prefs.memory_enabled}
+                  onChange={(e) => field("automatic_memory", e.target.checked)}
+                />
+                Automatically remember preferences from completed chats
+              </label>
+              <p className="muted">
+                Off by default. When enabled, the model may save facts from your
+                messages for future chats. Review or delete saved memories in
+                Memory settings. Temporary chats are excluded.
+              </p>
+
               <small className="muted">
                 Memory is controlled separately. Temporary chats ignore both
                 profile customization and memories. Language quality depends on
