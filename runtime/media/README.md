@@ -46,6 +46,7 @@ Laravel `.env`:
 MEDIA_RUNTIME_URL=http://PRIVATE_RUNTIME_HOST:8090
 MEDIA_RUNTIME_KEY=SAME_RANDOM_SECRET
 MEDIA_ENABLED_KINDS=vision,document
+IMAGE_DAILY_LIMIT=20
 MEDIA_DAILY_LIMIT=20
 MEDIA_USER_STORAGE_BYTES=200000000
 ```
@@ -63,7 +64,7 @@ The dedicated `media` database connection uses a 1000-second retry window. Run o
 
 ## Storage and behavior
 
-Authenticated API: `GET/POST /api/v1/media`, `GET/DELETE /media/{id}`, `GET /media/{id}/output`. JSON creation accepts `kind`, `prompt` and base64 `input` for vision/audio/document. The web frontend uses its HttpOnly-session proxy; runtime credentials never reach the browser. Private input/output files are stored under Laravel `storage/app/private/media`, never the public disk; task metadata/status and extracted text are stored in the DB. Uploads are limited to 8 MB, image inputs to 16 megapixels, output files to 20 MB, and text to 100 KB. Two pending tasks per user and a daily creation limit apply. Storage admission reserves 20 MB per pending task. Retrying means creating a new task; failed attempts count toward the daily allowance.
+Authenticated API: `GET/POST /api/v1/media`, `GET/DELETE /media/{id}`, `GET /media/{id}/output`. JSON creation accepts `kind`, `prompt` and base64 `input` for vision/audio/document. The web frontend uses its HttpOnly-session proxy; runtime credentials never reach the browser. Private input/output files are stored under Laravel `storage/app/private/media`, never the public disk; task metadata/status and extracted text are stored in the DB. Uploads are limited to 8 MB, image inputs to 16 megapixels, output files to 20 MB, and text to 100 KB. Two pending tasks per user apply. Image creation has its own daily quota (`IMAGE_DAILY_LIMIT`, default 20); other media share `MEDIA_DAILY_LIMIT` (default 20). Daily usage is persisted independently of results, so deleting a task does not refund requests. Limits use the Laravel server calendar day; accepted jobs can finish after the quota is reached. Run `php artisan migrate --force` before deploying the new quota table. Storage admission reserves 20 MB per pending task. Submitting a new task, including a manual retry after failure, consumes a new request. Internal processing steps or redelivery of the same job do not create an additional request; failed accepted jobs still count. The runtime remains self-hosted.
 
 Inputs are removed after processing/failure. Results remain until deleted. Account deletion removes private media files. Deleting a running task discards its eventual output; it does **not** immediately interrupt GPU execution. Temporary chat does not apply to separately saved media tasks. Saved chat exports contain task metadata and text, not binary media; download binary results individually before deleting your account. PDF/DOCX text can be sent to chat with “Use result in chat”; scanned PDFs have no OCR. Media studio is a separate workspace, not continuous realtime audiovisual chat.
 

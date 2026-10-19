@@ -48,9 +48,16 @@ class MediaController
             abort_unless($size && $size[0] * $size[1] <= 16000000, 422, 'Image exceeds 16 megapixels or is invalid.');
         }
 
-        return Cache::lock('media-user:'.$r->user()->id, 15)->block(3, function () use ($r, $d, $raw, $mime) {
+        return Cache::lock('media-user:'.$r->user()->id, 15)->block(3, fn () => DB::transaction(function () use ($r, $d, $raw, $mime) {
             $query = MediaTask::where('user_id', $r->user()->id);
-            abort_if((clone $query)->whereDate('created_at', today())->count() >= config('media.daily_limit'), 429, 'Daily media limit reached.');
+            $image = $d['kind'] === 'image';
+            $category = $image ? 'image' : 'media';
+            $day = today()->toDateString();
+            $legacy = (clone $query)->whereDate('created_at', $day)->where('kind', $image ? '=' : '!=', 'image')->count();
+            DB::table('media_daily_usage')->insertOrIgnore(['user_id' => $r->user()->id, 'day' => $day, 'kind' => $category, 'requests' => $legacy]);
+            $usage = DB::table('media_daily_usage')->where('user_id', $r->user()->id)->where('day', $day)->where('kind', $category);
+            $used = (clone $usage)->lockForUpdate()->first();
+            abort_if($used->requests >= config($image ? 'media.image_daily_limit' : 'media.daily_limit'), 429, $image ? 'Daily image request limit reached.' : 'Daily media request limit reached.');
             abort_if((clone $query)->whereIn('status', ['queued', 'running'])->count() >= 2, 429, 'Wait for your active tasks.');
             abort_if((clone $query)->sum('bytes') + (clone $query)->whereIn('status', ['queued', 'running'])->count() * 25000000 + strlen($raw ?? '') + 25000000 > config('media.storage_bytes'), 422, 'Media storage quota reached. Delete older results.');
             $path = $raw ? 'media/'.$r->user()->id.'/'.Str::uuid().'.input' : null;
@@ -59,6 +66,7 @@ class MediaController
             }
             try {
                 $task = MediaTask::create(['user_id' => $r->user()->id, 'kind' => $d['kind'], 'prompt' => $d['prompt'], 'input_path' => $path, 'input_mime' => $mime, 'bytes' => strlen($raw ?? '')]);
+                $usage->increment('requests');
                 RunMediaTask::dispatch($task->id)->onConnection('media')->onQueue('media');
 
                 return response()->json($task->fresh(), 202);
@@ -68,7 +76,7 @@ class MediaController
                 }
                 throw $e;
             }
-        });
+        }));
     }
 
     public function output(Request $r, int $id)

@@ -120,6 +120,37 @@ class MediaTest extends TestCase
         $this->assertSame([], Storage::disk('local')->allFiles());
     }
 
+    public function test_image_daily_limit_counts_one_job_and_does_not_interrupt_accepted_work(): void
+    {
+        $user = $this->setupEngine();
+        config(['media.image_daily_limit' => 1]);
+        $id = $this->postJson('/api/v1/media', ['kind' => 'image', 'prompt' => 'Sunrise'])->assertStatus(202)->json('id');
+        $this->postJson('/api/v1/media', ['kind' => 'image', 'prompt' => 'Another'])->assertStatus(429);
+        Http::fake(['*' => Http::response(['data' => base64_encode($this->png()), 'mime' => 'image/png'])]);
+        (new RunMediaTask($id))->handle();
+        (new RunMediaTask($id))->handle();
+        Http::assertSentCount(1);
+        $this->getJson('/api/v1/media/'.$id)->assertOk()->assertJsonPath('status', 'complete');
+        $this->assertDatabaseHas('media_daily_usage', ['user_id' => $user->id, 'kind' => 'image', 'requests' => 1]);
+        $this->deleteJson('/api/v1/media/'.$id)->assertNoContent();
+        $this->postJson('/api/v1/media', ['kind' => 'image', 'prompt' => 'Deleted result cannot refund quota'])->assertStatus(429);
+        $this->travel(1)->days();
+        $this->postJson('/api/v1/media', ['kind' => 'image', 'prompt' => 'Next day'])->assertStatus(202);
+    }
+
+    public function test_image_and_other_media_have_separate_user_daily_quotas(): void
+    {
+        $this->setupEngine();
+        config(['media.image_daily_limit' => 1, 'media.daily_limit' => 1]);
+        $this->postJson('/api/v1/media', ['kind' => 'speech', 'prompt' => 'Hello'])->assertStatus(202);
+        $this->postJson('/api/v1/media', ['kind' => 'image', 'prompt' => 'Landscape'])->assertStatus(202);
+        MediaTask::query()->update(['status' => 'complete']);
+        $this->postJson('/api/v1/media', ['kind' => 'image', 'prompt' => 'Over image quota'])->assertStatus(429);
+        $this->postJson('/api/v1/media', ['kind' => 'speech', 'prompt' => 'Over media quota'])->assertStatus(429);
+        Sanctum::actingAs($this->user());
+        $this->postJson('/api/v1/media', ['kind' => 'image', 'prompt' => 'Other user'])->assertStatus(202);
+    }
+
     public function test_pending_task_limit_and_quota_are_enforced(): void
     {
         $this->setupEngine();
