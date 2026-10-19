@@ -11,12 +11,12 @@ app
     http
       .createServer((request, response) => handle(request, response))
       .listen(port, hostname, () =>
-        console.log(`Online Model listening on port ${port}`),
+        console.log(`Openmindai listening on port ${port}`),
       );
   })
   .catch(() => {
     console.error(
-      "Unable to start Online Model. Check the build and environment.",
+      "Unable to start Openmindai. Check the build and environment.",
     );
     process.exit(1);
   });

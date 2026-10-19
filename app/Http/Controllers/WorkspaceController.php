@@ -1,0 +1,198 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Attachment;
+use App\Models\Canvas;
+use App\Models\Conversation;
+use App\Models\ConversationShare;
+use App\Models\Memory;
+use App\Models\Project;
+use App\Services\WebSearch;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+
+class WorkspaceController
+{
+    public function search(Request $r)
+    {
+        $d = $r->validate(['query' => 'required|string|max:500']);
+
+        return ['results' => app(WebSearch::class)->search($d['query'])];
+    }
+
+    public function capabilities()
+    {
+        return ['streaming' => true, 'projects' => true, 'memory' => true, 'attachments' => ['text', 'markdown', 'csv', 'json', 'source-code'], 'image_generation' => false, 'voice_transcription' => false, 'web_search' => (bool) config('models.search_url'), 'code_execution' => false];
+    }
+
+    public function preferences(Request $r)
+    {
+        return $r->user()->only('custom_instructions', 'memory_enabled', 'theme');
+    }
+
+    public function savePreferences(Request $r)
+    {
+        $d = $r->validate(['custom_instructions' => 'nullable|string|max:8000', 'memory_enabled' => 'sometimes|boolean', 'theme' => 'sometimes|in:dark,light,system']);
+        $r->user()->forceFill($d)->save();
+
+        return $this->preferences($r);
+    }
+
+    public function projects(Request $r)
+    {
+        return Project::where('user_id', $r->user()->id)->latest()->get();
+    }
+
+    public function saveProject(Request $r, ?int $id = null)
+    {
+        $d = $r->validate(['name' => 'required|string|max:120', 'instructions' => 'nullable|string|max:8000']);
+        $p = $id ? Project::where('user_id', $r->user()->id)->findOrFail($id) : new Project(['user_id' => $r->user()->id]);
+        $p->fill($d)->save();
+
+        return $p;
+    }
+
+    public function deleteProject(Request $r, int $id)
+    {
+        Project::where('user_id', $r->user()->id)->findOrFail($id)->delete();
+
+        return response()->noContent();
+    }
+
+    public function memories(Request $r)
+    {
+        return Memory::where('user_id', $r->user()->id)->latest()->get();
+    }
+
+    public function saveMemory(Request $r, ?int $id = null)
+    {
+        $d = $r->validate(['content' => 'required|string|max:2000']);
+        abort_if(! $id && Memory::where('user_id', $r->user()->id)->count() >= 100, 422, 'Memory limit reached.');
+        $m = $id ? Memory::where('user_id', $r->user()->id)->findOrFail($id) : new Memory(['user_id' => $r->user()->id]);
+        $m->fill($d)->save();
+
+        return $m;
+    }
+
+    public function deleteMemory(Request $r, int $id)
+    {
+        Memory::where('user_id', $r->user()->id)->findOrFail($id)->delete();
+
+        return response()->noContent();
+    }
+
+    public function updateConversation(Request $r, int $id)
+    {
+        $c = Conversation::where('user_id', $r->user()->id)->findOrFail($id);
+        $d = $r->validate(['title' => 'sometimes|required|string|max:120', 'pinned' => 'sometimes|boolean', 'archived' => 'sometimes|boolean', 'project_id' => 'sometimes|nullable|integer']);
+        if (isset($d['project_id'])) {
+            Project::where('user_id', $r->user()->id)->findOrFail($d['project_id']);
+        }if (array_key_exists('archived', $d)) {
+            $d['archived_at'] = $d['archived'] ? now() : null;
+            unset($d['archived']);
+        }$c->update($d);
+
+        return $c;
+    }
+
+    public function feedback(Request $r, int $id, int $message)
+    {
+        $c = Conversation::where('user_id', $r->user()->id)->findOrFail($id);
+        $m = $c->messages()->where('role', 'assistant')->findOrFail($message);
+        $d = $r->validate(['feedback' => 'nullable|in:up,down']);
+        $m->update($d);
+
+        return $m;
+    }
+
+    public function branch(Request $r, int $id)
+    {
+        $source = Conversation::where('user_id', $r->user()->id)->findOrFail($id);
+        $d = $r->validate(['message_id' => 'required|integer']);
+        $target = $source->messages()->where('role', 'user')->findOrFail($d['message_id']);
+
+        return DB::transaction(function () use ($source, $target, $r) {
+            $copy = Conversation::create(['user_id' => $r->user()->id, 'title' => $source->title.' (branch)', 'project_id' => $source->project_id, 'parent_id' => $source->id]);
+            foreach ($source->messages()->where('id', '<', $target->id)->where('status', 'complete')->orderBy('id')->cursor() as $m) {
+                $copy->messages()->create(['role' => $m->role, 'content' => $m->content, 'attachment_ids' => $m->attachment_ids]);
+            }
+
+            return ['conversation_id' => $copy->id, 'message' => $target->content, 'attachment_ids' => $target->attachment_ids ?? []];
+        });
+    }
+
+    public function attach(Request $r)
+    {
+        $d = $r->validate(['name' => 'required|string|max:160', 'content' => 'required|string|max:50000']);
+        abort_unless(preg_match('/\.(txt|md|csv|json|py|js|jsx|ts|tsx|php|rs|go|java|c|cpp|h|html|css|sql|yaml|yml|xml|sh|log)$/i', $d['name']), 422, 'Upload a text, code, CSV, JSON or Markdown file.');
+        abort_if(str_contains($d['content'], "\0") || strlen($d['content']) > 100000, 422, 'Invalid text file or file too large.');
+        abort_if(Attachment::where('user_id', $r->user()->id)->sum('bytes') + strlen($d['content']) > 10000000, 422, 'Attachment storage quota reached.');
+
+        return Attachment::create(['user_id' => $r->user()->id, 'name' => basename($d['name']), 'content' => $d['content'], 'bytes' => strlen($d['content']), 'mime' => 'text/plain']);
+    }
+
+    public function attachment(Request $r, int $id)
+    {
+        return Attachment::where('user_id', $r->user()->id)->findOrFail($id)->makeVisible('content');
+    }
+
+    public function attachments(Request $r)
+    {
+        return Attachment::where('user_id', $r->user()->id)->latest()->paginate(30);
+    }
+
+    public function deleteAttachment(Request $r, int $id)
+    {
+        Attachment::where('user_id', $r->user()->id)->findOrFail($id)->delete();
+
+        return response()->noContent();
+    }
+
+    public function share(Request $r, int $id)
+    {
+        $c = Conversation::where('user_id', $r->user()->id)->findOrFail($id);
+        abort_if($c->messages()->count() > 500, 422, 'Share a smaller conversation.');
+        $snapshot = ['title' => $c->title, 'messages' => $c->messages()->where('status', 'complete')->orderBy('id')->get(['role', 'content'])->all()];
+        abort_if(strlen(json_encode($snapshot)) > 3000000, 422, 'Conversation is too large to share.');
+        $token = bin2hex(random_bytes(32));
+        $share = ConversationShare::create(['user_id' => $r->user()->id, 'conversation_id' => $id, 'token_hash' => hash('sha256', $token), 'snapshot' => $snapshot, 'expires_at' => now()->addDays(30)]);
+
+        return ['id' => $share->id, 'token' => $token, 'expires_at' => $share->expires_at];
+    }
+
+    public function shares(Request $r)
+    {
+        return ConversationShare::where('user_id', $r->user()->id)->latest()->get(['id', 'conversation_id', 'created_at', 'expires_at']);
+    }
+
+    public function revokeShare(Request $r, int $id)
+    {
+        ConversationShare::where('user_id', $r->user()->id)->findOrFail($id)->delete();
+
+        return response()->noContent();
+    }
+
+    public function shared(string $token)
+    {
+        abort_unless(preg_match('/^[a-f0-9]{64}$/D', $token), 404);
+        $share = ConversationShare::where('token_hash', hash('sha256', $token))->where('expires_at', '>', now())->firstOrFail();
+
+        return $share->snapshot;
+    }
+
+    public function export(Request $r)
+    {
+        return ['canvases' => Canvas::where('user_id', $r->user()->id)->get(), 'exported_at' => now()->toIso8601String(), 'user' => $r->user()->only('name', 'email', 'custom_instructions', 'memory_enabled'), 'projects' => Project::where('user_id', $r->user()->id)->get(), 'memories' => Memory::where('user_id', $r->user()->id)->get(), 'conversations' => Conversation::where('user_id', $r->user()->id)->with('messages')->get(), 'attachments' => Attachment::where('user_id', $r->user()->id)->get()->makeVisible('content')];
+    }
+
+    public function stop(Request $r, int $id, int $message)
+    {
+        $c = Conversation::where('user_id', $r->user()->id)->findOrFail($id);
+        $m = $c->messages()->where('role', 'assistant')->where('status', 'generating')->findOrFail($message);
+        Cache::put('stop-message:'.$m->id, true, 180);
+
+        return ['message' => 'Stop requested.'];
+    }
+}

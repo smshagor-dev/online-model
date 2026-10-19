@@ -21,3 +21,10 @@ Before production use, perform registration → delivered verification email →
 - An additional local Next.js → real Laravel → SQLite flow passed: login, model listing, chat, two persisted messages, logout/login, restored history, deletion and logout. Inference used a local HTTP fixture, not downloaded model weights.
 - Frontend production dependency audit reported zero vulnerabilities.
 - No interactive browser/visual QA or real hosting deployment was performed for this frontend. HTTP rendering and API tests do not establish mobile visual correctness or real GPU inference performance.
+
+
+## Expanded Openmindai workspace verification
+
+37 Laravel tests passed (125 assertions), including streaming persistence/errors/stop, truncated-stream persistence and recovery after a failed turn, temporary-chat isolation, projects/memory injection, message-text search and archive, branching, file ownership and later-turn context, share snapshot/revocation, feedback, canvas optimistic concurrency and optional self-hosted search sanitization. Four database migrations extend existing installations without removing their chats.
+
+14 production Next.js HTTP integration tests passed, including SSE passthrough, anonymous share reads and the supplied brand asset. The production build and TypeScript compilation passed. An additional real Next.js → Laravel → SQLite SSE fixture flow confirmed streamed deltas, final stored messages, restored history after signing in again, deletion and logout. The inference fixture was local test code, not an actual downloaded model. Browser visual QA, actual runtime cancellation latency and live hosting remain unverified.

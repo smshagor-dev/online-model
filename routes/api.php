@@ -2,10 +2,14 @@
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CanvasController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\StreamChatController;
+use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
+    Route::get('shared/{token}', [WorkspaceController::class, 'shared'])->middleware('throttle:60,1');
     Route::middleware('throttle:auth')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
         Route::post('login', [AuthController::class, 'login']);
@@ -14,6 +18,38 @@ Route::prefix('v1')->group(function () {
         Route::post('email/resend', [AuthController::class, 'resend']);
     });
     Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
+        Route::get('canvases', [CanvasController::class, 'index']);
+        Route::get('canvases/{id}', [CanvasController::class, 'show']);
+        Route::post('canvases', [CanvasController::class, 'create']);
+        Route::put('canvases/{id}', [CanvasController::class, 'update']);
+        Route::delete('canvases/{id}', [CanvasController::class, 'delete']);
+        $workspace = WorkspaceController::class;
+        Route::post('web-search', [$workspace, 'search'])->middleware('throttle:chat');
+        Route::get('capabilities', [$workspace, 'capabilities']);
+        Route::get('preferences', [$workspace, 'preferences']);
+        Route::patch('preferences', [$workspace, 'savePreferences']);
+        Route::get('projects', [$workspace, 'projects']);
+        Route::post('projects', [$workspace, 'saveProject']);
+        Route::put('projects/{id}', [$workspace, 'saveProject']);
+        Route::delete('projects/{id}', [$workspace, 'deleteProject']);
+        Route::get('memories', [$workspace, 'memories']);
+        Route::post('memories', [$workspace, 'saveMemory']);
+        Route::put('memories/{id}', [$workspace, 'saveMemory']);
+        Route::delete('memories/{id}', [$workspace, 'deleteMemory']);
+        Route::get('attachments/{id}', [$workspace, 'attachment']);
+        Route::get('attachments', [$workspace, 'attachments']);
+        Route::post('attachments', [$workspace, 'attach'])->middleware('throttle:sensitive');
+        Route::delete('attachments/{id}', [$workspace, 'deleteAttachment']);
+        Route::patch('conversations/{id}', [$workspace, 'updateConversation']);
+        Route::post('conversations/{id}/branch', [$workspace, 'branch']);
+        Route::post('conversations/{id}/share', [$workspace, 'share'])->middleware('throttle:sensitive');
+        Route::get('shares', [$workspace, 'shares']);
+        Route::delete('shares/{id}', [$workspace, 'revokeShare']);
+        Route::get('export', [$workspace, 'export'])->middleware('throttle:sensitive');
+        Route::put('conversations/{id}/messages/{message}/feedback', [$workspace, 'feedback']);
+        Route::post('conversations/{id}/messages/{message}/stop', [$workspace, 'stop']);
+        Route::post('chat/stream', StreamChatController::class)->middleware('throttle:chat');
+
         Route::post('logout', [AuthController::class, 'logout']);
         Route::post('logout-all', [AccountController::class, 'logoutAll']);
         Route::get('me', [AccountController::class, 'show']);
@@ -32,6 +68,6 @@ Route::prefix('v1')->group(function () {
         Route::post('chat', [ChatController::class, 'send'])->middleware('throttle:chat');
         Route::get('conversations', [ChatController::class, 'index']);
         Route::get('conversations/{id}', [ChatController::class, 'show']);
-        Route::delete('conversations/{id}',[ChatController::class, 'delete']);
+        Route::delete('conversations/{id}', [ChatController::class, 'delete']);
     });
 });

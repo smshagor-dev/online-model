@@ -51,10 +51,78 @@ export type Model = {
   family: string;
   license: string;
 };
-export type Conversation = { id: number; title: string; updated_at: string };
+export type Conversation = {
+  id: number;
+  title: string;
+  updated_at: string;
+  pinned?: boolean;
+  archived_at?: string | null;
+  project_id?: number | null;
+};
 export type Message = {
   id?: number;
+  status?: string;
+  attachment_ids?: number[];
+  sources?: { title: string; url: string; snippet?: string }[];
+  feedback?: "up" | "down" | null;
   role: "user" | "assistant";
   content: string;
 };
 export type Page<T> = { data: T[]; current_page: number; last_page: number };
+
+export async function streamChat(
+  body: unknown,
+  onEvent: (event: string, data: Record<string, unknown>) => void,
+  signal?: AbortSignal,
+) {
+  const response = await fetch("/api/backend/chat/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new ApiError(
+      data.message || "Unable to start chat.",
+      response.status,
+    );
+  }
+  if (!response.body) throw new Error("Streaming is unavailable.");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let doneEvent = false;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let index;
+      while ((index = buffer.indexOf("\n\n")) >= 0) {
+        const frame = buffer.slice(0, index);
+        buffer = buffer.slice(index + 2);
+        const event = frame
+          .split("\n")
+          .find((line) => line.startsWith("event:"))
+          ?.slice(6)
+          .trim();
+        const payload = frame
+          .split("\n")
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trim())
+          .join("\n");
+        if (event && payload) {
+          onEvent(event, JSON.parse(payload));
+          if (event === "done") doneEvent = true;
+        }
+      }
+    }
+    if (!doneEvent)
+      throw new Error(
+        "The stream disconnected. Check saved history for the partial response.",
+      );
+  } finally {
+    reader.releaseLock();
+  }
+}

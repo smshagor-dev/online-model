@@ -32,7 +32,7 @@ export default function AuthDialog({
       if (mode === "login") {
         const result = await api<{ user: User }>("login", "POST", {
           ...data,
-          device_name: "Online Model Web",
+          device_name: "Openmindai Web",
         });
         onLogin(result.user);
       } else if (mode === "register") {

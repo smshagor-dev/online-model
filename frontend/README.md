@@ -1,6 +1,6 @@
-# Online Model Web
+# Openmindai Web
 
-Next.js 16.4.2 / React 19.3.1 / TypeScript. A responsive chat workspace inspired by the familiar ChatGPT layout, with Online Model branding.
+Next.js 16.4.2 / React 19.3.1 / TypeScript. A responsive chat workspace inspired by the familiar ChatGPT layout, with Openmindai branding.
 
 ## Run locally
 
@@ -27,7 +27,7 @@ For matching password-reset pages, set Laravel's separate `FRONTEND_URL` environ
 - HttpOnly cookie authentication through a Next.js backend-for-frontend; bearer tokens never enter browser JavaScript or localStorage.
 - First-party bundled fonts, lazily loaded account/Markdown UI and clear empty/error/loading states.
 
-Only enabled models from the existing Hugging Face backend appear. No model-provider fallback, attachment upload, speech, fake model replies or simulated token streaming is included. The Laravel chat endpoint is non-streaming; the interface waits for its completed response. Failed requests restore the draft; a transport timeout may still complete on the backend, so inspect history before retrying.
+Only enabled models from the existing Hugging Face backend appear. The frontend uses genuine inference SSE, with partial/failure status saved in history. Text/code attachments and on-device read-aloud are supported. Image/audio processing, realtime voice, model-provider fallback and code execution are absent. See the feature-coverage document before assuming ChatGPT feature parity.
 
 ## Production
 
@@ -62,3 +62,9 @@ npm audit --omit=dev
 ```
 
 The integration suite starts a production Next.js process and an isolated fake Laravel upstream, verifies rendered HTML and tests cookie security, origin enforcement, API forwarding, route restrictions, pagination, error handling, logout and oversized JSON rejection. It does not launch a browser or perform real model inference.
+
+## Expanded workspace
+
+Openmindai now uses real SSE streaming and database-backed projects, explicit memory/custom instructions, full-history search, pinned/archived chats, editable/regenerated branches, share snapshots, text/code file library, feedback, canvas and data export. See [feature coverage](../docs/FEATURE_COVERAGE.md) for supported and absent capabilities. Existing deployments must run the new Laravel migrations and rebuild this frontend. The frontend auth cookie was renamed to `openmindai_token`; sign in again after upgrading.
+
+Set Laravel `APP_NAME=Openmindai`. Optional `SEARXNG_SEARCH_URL` must point to your own SearXNG `/search` endpoint with JSON output enabled. The web-search control appears only when that backend capability is configured. There is no commercial AI fallback. Production SSE needs proxy buffering disabled and concurrent PHP workers for stop requests. On Unix, a local PHP development server can use `PHP_CLI_SERVER_WORKERS=4`; a single-worker server cannot process a cancellation request until its stream finishes.

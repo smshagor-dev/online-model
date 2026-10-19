@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-const cookieName = "online_model_token";
+const cookieName = "openmindai_token";
 const publicPaths = new Set([
   "login",
   "register",
@@ -12,11 +12,12 @@ const publicPaths = new Set([
   "email/resend",
 ]);
 const routes: Record<string, RegExp> = {
-  GET: /^(me|models|tokens|conversations(?:\/\d+)?)$/,
-  POST: /^(login|register|forgot-password|reset-password|email\/resend|logout|logout-all|chat|2fa\/(setup|confirm|recovery-codes))$/,
-  PATCH: /^me$/,
-  PUT: /^me\/password$/,
-  DELETE: /^(me|2fa|tokens\/\d+|conversations\/\d+)$/,
+  GET: /^(me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
+  POST: /^(login|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/stream)?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
+  PATCH: /^(me|preferences|conversations\/\d+)$/,
+  PUT: /^(me\/password|projects\/\d+|canvases\/\d+|memories\/\d+|conversations\/\d+\/messages\/\d+\/feedback)$/,
+  DELETE:
+    /^(me|2fa|tokens\/\d+|conversations\/\d+|projects\/\d+|canvases\/\d+|memories\/\d+|attachments\/\d+|shares\/\d+)$/,
 };
 async function proxy(
   request: NextRequest,
@@ -42,7 +43,7 @@ async function proxy(
   }
   const jar = await cookies();
   const token = jar.get(cookieName)?.value;
-  if (!token && !publicPaths.has(endpoint))
+  if (!token && !publicPaths.has(endpoint) && !endpoint.startsWith("shared/"))
     return NextResponse.json({ message: "Please sign in." }, { status: 401 });
   const base = process.env.LARAVEL_API_URL;
   if (!base)
@@ -82,6 +83,10 @@ async function proxy(
     // Only a numeric page parameter reaches Laravel; clients cannot choose an upstream URL.
     const page = request.nextUrl.searchParams.get("page");
     if (page && /^\d{1,6}$/.test(page)) url.searchParams.set("page", page);
+    for (const key of ["q", "project_id", "archived"]) {
+      const value = request.nextUrl.searchParams.get(key);
+      if (value && value.length <= 100) url.searchParams.set(key, value);
+    }
     const upstream = await fetch(url, {
       method: request.method,
       body,
@@ -94,12 +99,29 @@ async function proxy(
         request.headers.get("x-forwarded-for")
           ? { "X-Forwarded-For": request.headers.get("x-forwarded-for")! }
           : {}),
-        ...(token && !publicPaths.has(endpoint)
+        ...(token &&
+        !publicPaths.has(endpoint) &&
+        !endpoint.startsWith("shared/")
           ? { Authorization: `Bearer ${token}` }
           : {}),
       },
-      signal: AbortSignal.timeout(endpoint === "chat" ? 135_000 : 30_000),
+      signal: AbortSignal.timeout(
+        endpoint.startsWith("chat") ? 150_000 : 30_000,
+      ),
     });
+    if (
+      upstream.ok &&
+      upstream.headers.get("content-type")?.includes("text/event-stream")
+    ) {
+      return new NextResponse(upstream.body, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    }
     const text = await upstream.text();
     let data: Record<string, unknown> = {};
     if (text) {

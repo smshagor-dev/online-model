@@ -1,4 +1,4 @@
-# Online Model
+# Openmindai
 
 Laravel 12 / PHP 8.2 backend for Hugging Face model storage and self-hosted chat. No commercial model-provider integrations are included.
 
@@ -6,8 +6,14 @@ Laravel 12 / PHP 8.2 backend for Hugging Face model storage and self-hosted chat
 
 The `frontend/` folder contains the Next.js 16.4.2 chat application. See [frontend setup](frontend/README.md) for local development, secure Laravel integration and Node/cPanel deployment.
 
+See the [current feature coverage](docs/FEATURE_COVERAGE.md) for the expanded Openmindai workspace and the features that are not implemented.
+
 ## Features
 
+- Openmindai branding and supplied logo across web and administration.
+- SSE streaming, stop, temporary chat, branches for editing/regeneration and partial-response persistence.
+- Projects, explicit memories, custom instructions, canvas, text/code file library and optional own-server web search.
+- Server-side history search, rename/pin/archive, snapshot sharing/revocation, feedback and data export.
 - Versioned REST API, Sanctum bearer tokens with 30-day expiry and device revocation.
 - Registration, email verification, password reset, profile updates and account deletion.
 - Authenticator TOTP setup/confirmation, replay protection and hashed single-use recovery codes.

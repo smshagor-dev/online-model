@@ -10,7 +10,7 @@ class User extends Authenticatable
 {
     use HasApiTokens, Notifiable;
 
-    protected $attributes = ['is_active' => true, 'is_admin' => false];
+    protected $attributes = ['is_active' => true, 'is_admin' => false, 'memory_enabled' => false, 'theme' => 'dark'];
 
     protected $fillable = ['name', 'email', 'password'];
 
@@ -18,6 +18,6 @@ class User extends Authenticatable
 
     protected function casts(): array
     {
-        return ['password' => 'hashed', 'is_admin' => 'boolean', 'is_active' => 'boolean', 'email_verified_at' => 'datetime', 'two_factor_confirmed_at' => 'datetime', 'two_factor_secret' => 'encrypted', 'two_factor_recovery_codes' => 'encrypted:array'];
+        return ['password' => 'hashed', 'is_admin' => 'boolean', 'memory_enabled' => 'boolean', 'is_active' => 'boolean', 'email_verified_at' => 'datetime', 'two_factor_confirmed_at' => 'datetime', 'two_factor_secret' => 'encrypted', 'two_factor_recovery_codes' => 'encrypted:array'];
     }
 }

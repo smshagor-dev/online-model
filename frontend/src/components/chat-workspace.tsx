@@ -2,6 +2,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
+  Paperclip,
+  FolderOpen,
+  Archive,
+  Pin,
+  Square,
+  RotateCcw,
+  Pencil,
+  ThumbsUp,
+  ThumbsDown,
+  Volume2,
   BookOpen,
   Check,
   ChevronDown,
@@ -24,12 +34,17 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import Dialog from "./dialog";
 const AuthDialog = dynamic(() => import("./auth-dialog"));
 const AccountDialog = dynamic(() => import("./account-dialog"));
+const CanvasDialog = dynamic(() => import("./canvas-dialog"));
+const WorkspaceDialog = dynamic(() => import("./workspace-dialog"));
+const ConversationDialog = dynamic(() => import("./conversation-dialog"));
 const ResponseMarkdown = dynamic(() => import("./response-markdown"));
 import {
   api,
+  streamChat,
   ApiError,
   type Conversation,
   type Message,
@@ -65,7 +80,35 @@ const suggestions = [
   },
 ];
 export default function ChatWorkspace() {
+  const [searchAvailable, setSearchAvailable] = useState(false);
+  const [webSearch, setWebSearch] = useState(false);
+  const [canvasInitial, setCanvasInitial] = useState<string | null>(null);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [toolsChat, setToolsChat] = useState<Conversation | null>(null);
+  const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
+  const [projectId, setProjectId] = useState<number | null>(null);
+  const [archived, setArchived] = useState(false);
+  const [temporary, setTemporary] = useState(false);
+  const [attachments, setAttachments] = useState<
+    { id: number; name: string }[]
+  >([]);
+  const [uploading, setUploading] = useState(false);
+  const [readAloud, setReadAloud] = useState(false);
+  const filtersRef = useRef({
+    search: "",
+    projectId: null as number | null,
+    archived: false,
+  });
+  const generationRef = useRef<AbortController | null>(null);
+  const activeStream = useRef<{
+    conversation_id: number | null;
+    message_id: number | null;
+  } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [user, setUser] = useState<User | null>(null);
+  const identityRef = useRef<number | null>(null);
+  identityRef.current = user?.id ?? null;
+  const uploadRequest = useRef<AbortController | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [models, setModels] = useState<Model[]>([]);
   const [modelId, setModelId] = useState<number | null>(null);
@@ -102,6 +145,11 @@ export default function ChatWorkspace() {
   const clearSession = useCallback(() => {
     chatRequest.current?.abort();
     historyRequest.current?.abort();
+    generationRef.current?.abort();
+    uploadRequest.current?.abort();
+    setWorkspaceOpen(false);
+    setCanvasInitial(null);
+    setToolsChat(null);
     setUser(null);
     setModels([]);
     setModelId(null);
@@ -111,6 +159,13 @@ export default function ChatWorkspace() {
     setAccountOpen(false);
     setAccountMenu(false);
     setDraft("");
+    setTemporary(false);
+    setAttachments([]);
+    setProjects([]);
+    setProjectId(null);
+    setArchived(false);
+    setSearch("");
+    setWebSearch(false);
   }, []);
   const report = useCallback(
     (e: unknown) => {
@@ -125,7 +180,7 @@ export default function ChatWorkspace() {
     const controller = new AbortController();
     historyRequest.current = controller;
     const result = await api<Page<Conversation>>(
-      `conversations?page=${page}`,
+      `conversations?page=${page}&q=${encodeURIComponent(filtersRef.current.search)}&archived=${filtersRef.current.archived ? 1 : 0}${filtersRef.current.projectId ? `&project_id=${filtersRef.current.projectId}` : ""}`,
       "GET",
       undefined,
       controller.signal,
@@ -166,7 +221,37 @@ export default function ChatWorkspace() {
         );
       })
       .catch(report);
-    void refreshHistory().catch(report);
+    void api<{ web_search: boolean }>(
+      "capabilities",
+      "GET",
+      undefined,
+      controller.signal,
+    )
+      .then((c) => setSearchAvailable(c.web_search))
+      .catch(report);
+    void api<{ id: number; name: string }[]>(
+      "projects",
+      "GET",
+      undefined,
+      controller.signal,
+    )
+      .then(setProjects)
+      .catch(report);
+    void api<{ theme: string }>(
+      "preferences",
+      "GET",
+      undefined,
+      controller.signal,
+    )
+      .then((p) => {
+        document.documentElement.dataset.theme =
+          p.theme === "system"
+            ? matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark"
+            : p.theme;
+      })
+      .catch(report);
     return () => {
       controller.abort();
       historyRequest.current?.abort();
@@ -202,6 +287,8 @@ export default function ChatWorkspace() {
   }, []);
   useEffect(
     () => () => {
+      generationRef.current?.abort();
+      if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
       chatRequest.current?.abort();
       historyRequest.current?.abort();
     },
@@ -240,10 +327,17 @@ export default function ChatWorkspace() {
       behavior: "smooth",
     });
   }, []);
+  useEffect(() => {
+    filtersRef.current = { search, projectId, archived };
+    if (!user) return;
+    const timer = setTimeout(() => void refreshHistory().catch(report), 250);
+    return () => clearTimeout(timer);
+  }, [search, projectId, archived, user?.id, refreshHistory, report]);
+  useEffect(() => {
+    setReadAloud(typeof speechSynthesis !== "undefined");
+  }, []);
   const selectedModel = models.find((model) => model.id === modelId);
-  const filteredHistory = conversations.filter((item) =>
-    item.title.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filteredHistory = conversations;
   function newChat() {
     if (busy) return;
     chatRequest.current?.abort();
@@ -251,6 +345,7 @@ export default function ChatWorkspace() {
     setConversationId(null);
     setMessages([]);
     setMessagePage(1);
+    setAttachments([]);
     setDraft("");
     setError("");
     setSidebarOpen(false);
@@ -262,6 +357,8 @@ export default function ChatWorkspace() {
     const controller = new AbortController();
     chatRequest.current = controller;
     setLoadingChat(true);
+    setTemporary(false);
+    setAttachments([]);
     setError("");
     setSidebarOpen(false);
     try {
@@ -310,46 +407,226 @@ export default function ChatWorkspace() {
       if (!controller.signal.aborted) setLoadingChat(false);
     }
   }
-  async function send(event?: React.FormEvent) {
+  async function send(
+    event?: React.FormEvent,
+    override?: {
+      text: string;
+      conversationId: number | null;
+      history: Message[];
+      attachmentIds?: number[];
+    },
+  ) {
     event?.preventDefault();
-    if (!draft.trim() || busy || loadingChat || initializing) return;
+    const text = (override?.text ?? draft).trim();
+    if (!text || busy || loadingChat || initializing) return;
     if (!user) {
       setAuthOpen(true);
       return;
     }
     if (!modelId) {
       setError(
-        "No model is available yet. Your administrator needs to download and enable one.",
+        "No model is available yet. Ask your administrator to enable one.",
       );
       return;
     }
-    const text = draft.trim();
-    const oldMessages = messages;
+    const history = override?.history ?? messages;
+    const id = override ? override.conversationId : conversationId;
     setError("");
     setBusy(true);
     setDraft("");
-    setMessages([...messages, { role: "user", content: text }]);
+    setMessages([...history, { role: "user", content: text }]);
+    const controller = new AbortController();
+    generationRef.current = controller;
+    activeStream.current = null;
+    let receivedMeta = false;
     try {
-      const result = await api<{ conversation_id: number; message: Message }>(
-        "chat",
-        "POST",
+      await streamChat(
         {
           model_id: modelId,
           message: text,
-          ...(conversationId ? { conversation_id: conversationId } : {}),
+          ...(id ? { conversation_id: id } : {}),
+          ...(projectId ? { project_id: projectId } : {}),
+          temporary,
+          web_search: webSearch,
+          attachment_ids:
+            override?.attachmentIds ?? attachments.map((a) => a.id),
+          ...(temporary
+            ? {
+                history: history.slice(-20).map((m) => ({
+                  role: m.role,
+                  content: m.content.slice(0, 16000),
+                })),
+              }
+            : {}),
         },
+        (event, data) => {
+          if (event === "meta") {
+            receivedMeta = true;
+            const cid = data.conversation_id as number | null;
+            setConversationId(cid);
+            activeStream.current = {
+              conversation_id: cid,
+              message_id: data.message_id as number | null,
+            };
+            setMessages((previous) => [
+              ...previous.slice(0, -1),
+              {
+                ...previous[previous.length - 1],
+                id: data.user_message_id as number | undefined,
+              },
+              {
+                id: data.message_id as number | undefined,
+                role: "assistant",
+                content: "",
+                status: "generating",
+                sources: data.sources as Message["sources"],
+              },
+            ]);
+          }
+          if (event === "delta")
+            setMessages((previous) =>
+              previous.map((m, i) =>
+                i === previous.length - 1
+                  ? { ...m, content: m.content + String(data.content) }
+                  : m,
+              ),
+            );
+          if (event === "error") setError(String(data.message));
+          if (event === "done")
+            setMessages((previous) =>
+              previous.map((m, i) =>
+                i === previous.length - 1
+                  ? { ...m, status: String(data.status) }
+                  : m,
+              ),
+            );
+        },
+        controller.signal,
       );
-      setConversationId(result.conversation_id);
-      setMessages((previous) => [...previous, result.message]);
-      void refreshHistory().catch(report);
+      setAttachments([]);
+      if (!temporary) void refreshHistory().catch(report);
     } catch (e) {
-      setMessages(oldMessages);
-      setDraft(text);
-      report(e);
+      if ((e as Error).name === "AbortError") {
+        setMessages((previous) =>
+          previous.map((m, i) =>
+            i === previous.length - 1 ? { ...m, status: "cancelled" } : m,
+          ),
+        );
+      } else {
+        if (!receivedMeta) {
+          setMessages(history);
+          setDraft(text);
+        }
+        report(e);
+      }
     } finally {
       setBusy(false);
+      generationRef.current = null;
+      activeStream.current = null;
       inputRef.current?.focus();
     }
+  }
+  async function stop() {
+    const active = activeStream.current;
+    if (active?.conversation_id && active.message_id) {
+      try {
+        await api(
+          `conversations/${active.conversation_id}/messages/${active.message_id}/stop`,
+          "POST",
+        );
+      } catch (e) {
+        report(e);
+      }
+    } else generationRef.current?.abort();
+  }
+  async function branch(index: number, edit = false) {
+    if (busy || !conversationId) return;
+    const target = messages[index];
+    if (!target?.id) return;
+    const content = edit
+      ? prompt("Edit your message", target.content)
+      : target.content;
+    if (!content?.trim()) return;
+    try {
+      const result = await api<{
+        conversation_id: number;
+        message: string;
+        attachment_ids: number[];
+      }>(`conversations/${conversationId}/branch`, "POST", {
+        message_id: target.id,
+      });
+      setConversationId(result.conversation_id);
+      await send(undefined, {
+        text: content,
+        conversationId: result.conversation_id,
+        history: messages.slice(0, index),
+        attachmentIds: result.attachment_ids,
+      });
+    } catch (e) {
+      report(e);
+    }
+  }
+  async function feedback(index: number, value: "up" | "down") {
+    if (!conversationId || !messages[index].id) return;
+    try {
+      await api(
+        `conversations/${conversationId}/messages/${messages[index].id}/feedback`,
+        "PUT",
+        { feedback: messages[index].feedback === value ? null : value },
+      );
+      setMessages((previous) =>
+        previous.map((m, i) =>
+          i === index
+            ? { ...m, feedback: m.feedback === value ? null : value }
+            : m,
+        ),
+      );
+    } catch (e) {
+      report(e);
+    }
+  }
+  async function upload(file: File) {
+    if (!user) {
+      setAuthOpen(true);
+      return;
+    }
+    if (file.size > 100000 || attachments.length >= 5) {
+      setError("Attach up to five text/code files, at most 100 KB each.");
+      return;
+    }
+    const owner = user.id;
+    const controller = new AbortController();
+    uploadRequest.current = controller;
+    setUploading(true);
+    try {
+      const content = await file.text();
+      if (controller.signal.aborted || identityRef.current !== owner) return;
+      const data = await api<{ id: number; name: string }>(
+        "attachments",
+        "POST",
+        { name: file.name, content },
+        controller.signal,
+      );
+      if (identityRef.current === owner)
+        setAttachments((previous) => [...previous, data]);
+    } catch (e) {
+      report(e);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+  function speak(text: string) {
+    if (typeof speechSynthesis === "undefined") return;
+    const voice = speechSynthesis.getVoices().find((v) => v.localService);
+    if (!voice) {
+      setError("No on-device speech voice is installed.");
+      return;
+    }
+    speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.voice = voice;
+    speechSynthesis.speak(utterance);
   }
   async function deleteConversation(id: number) {
     setDeleteBusy(true);
@@ -404,7 +681,12 @@ export default function ChatWorkspace() {
             onClick={newChat}
             disabled={busy}
           >
-            <Sparkles size={23} strokeWidth={1.7} />
+            <Image
+              src="/openmindai-logo.png"
+              alt="Openmindai"
+              width={30}
+              height={30}
+            />
           </button>
           <button
             className="icon-button sidebar-toggle"
@@ -436,7 +718,8 @@ export default function ChatWorkspace() {
             <Search size={15} />
             <input
               aria-label="Search saved chats"
-              placeholder="Search loaded chats"
+              placeholder="Search all saved chats"
+              maxLength={100}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               autoFocus
@@ -449,6 +732,49 @@ export default function ChatWorkspace() {
               <X size={14} />
             </button>
           </div>
+        )}
+        {user && (
+          <div className="sidebar-organize">
+            <button
+              className="sidebar-action"
+              onClick={() => setWorkspaceOpen(true)}
+            >
+              <FolderOpen size={18} />
+              Projects & memory
+            </button>
+            <select
+              aria-label="Filter by project"
+              value={projectId ?? ""}
+              onChange={(e) => {
+                setProjectId(e.target.value ? Number(e.target.value) : null);
+                newChat();
+              }}
+            >
+              <option value="">All projects</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <button
+              className="text-button"
+              onClick={() => setArchived(!archived)}
+            >
+              <Archive size={14} />
+              {archived ? "Back to active chats" : "Archived chats"}
+            </button>
+          </div>
+        )}
+        {user && (
+          <button
+            className="sidebar-action"
+            disabled={busy}
+            onClick={() => setCanvasInitial("")}
+          >
+            <PenLine size={18} />
+            Canvas
+          </button>
         )}
         <div className="history-list">
           <span className="section-label">Your chats</span>
@@ -485,6 +811,14 @@ export default function ChatWorkspace() {
                   title={chat.title}
                 >
                   {chat.title}
+                </button>
+                <button
+                  className="history-delete icon-button"
+                  disabled={busy}
+                  onClick={() => setToolsChat(chat)}
+                  aria-label={`Manage ${chat.title}`}
+                >
+                  <MoreHorizontal size={14} />
                 </button>
                 <button
                   className="history-delete icon-button"
@@ -592,7 +926,7 @@ export default function ChatWorkspace() {
                 aria-expanded={modelOpen}
                 disabled={busy}
               >
-                <span>Online Model</span>
+                <span>Openmindai</span>
                 <ChevronDown size={17} />
               </button>
               {selectedModel && (
@@ -641,6 +975,38 @@ export default function ChatWorkspace() {
             </div>
           </div>
           <div className="topbar-right">
+            {user && (
+              <>
+                <button
+                  className={`temporary-toggle ${temporary ? "enabled" : ""}`}
+                  disabled={busy}
+                  onClick={() => {
+                    newChat();
+                    setTemporary(!temporary);
+                  }}
+                  title="Temporary chats aren't saved and don't use memory"
+                >
+                  {temporary ? "Temporary on" : "Temporary"}
+                </button>
+                {conversationId && (
+                  <button
+                    className="icon-button"
+                    aria-label="Conversation settings and sharing"
+                    onClick={() =>
+                      setToolsChat(
+                        conversations.find((c) => c.id === conversationId) || {
+                          id: conversationId,
+                          title: "Conversation",
+                          updated_at: "",
+                        },
+                      )
+                    }
+                  >
+                    <MoreHorizontal size={19} />
+                  </button>
+                )}
+              </>
+            )}
             <span className="private-label">
               <span className="status-dot" />
               Your models. Your space.
@@ -669,7 +1035,12 @@ export default function ChatWorkspace() {
           {messages.length === 0 && !loadingChat ? (
             <section className="welcome">
               <div className="welcome-mark">
-                <Sparkles size={28} strokeWidth={1.4} />
+                <Image
+                  src="/openmindai-logo.png"
+                  alt="Openmindai"
+                  width={46}
+                  height={46}
+                />
               </div>
               <p className="eyebrow">A LITTLE CURIOSITY GOES A LONG WAY</p>
               <h1>What’s on your mind?</h1>
@@ -718,12 +1089,29 @@ export default function ChatWorkspace() {
                 >
                   {message.role === "assistant" && (
                     <span className="assistant-avatar">
-                      <Sparkles size={19} />
+                      <Image
+                        src="/openmindai-logo.png"
+                        alt=""
+                        width={23}
+                        height={23}
+                      />
                     </span>
                   )}
                   <div className="message-body">
                     {message.role === "user" ? (
-                      <div className="user-bubble">{message.content}</div>
+                      <div className="user-bubble">
+                        {message.content}
+                        {message.id && (
+                          <button
+                            className="icon-button edit-message"
+                            disabled={busy}
+                            onClick={() => void branch(index, true)}
+                            aria-label="Edit message"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <>
                         <ResponseMarkdown
@@ -734,7 +1122,74 @@ export default function ChatWorkspace() {
                               : undefined
                           }
                         />
+                        {message.status &&
+                          message.status !== "complete" &&
+                          message.status !== "generating" && (
+                            <small className="muted">
+                              {message.status === "cancelled"
+                                ? "Stopped"
+                                : "Response interrupted"}
+                            </small>
+                          )}
+                        {!!message.sources?.length && (
+                          <div className="source-links">
+                            {message.sources.map((source) => (
+                              <a
+                                key={source.url}
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {source.title}
+                              </a>
+                            ))}
+                          </div>
+                        )}
                         <div className="message-actions">
+                          {message.id && (
+                            <>
+                              <button
+                                className={`icon-button ${message.feedback === "up" ? "feedback-selected" : ""}`}
+                                aria-label="Good response"
+                                onClick={() => void feedback(index, "up")}
+                              >
+                                <ThumbsUp size={14} />
+                              </button>
+                              <button
+                                className={`icon-button ${message.feedback === "down" ? "feedback-selected" : ""}`}
+                                aria-label="Bad response"
+                                onClick={() => void feedback(index, "down")}
+                              >
+                                <ThumbsDown size={14} />
+                              </button>
+                            </>
+                          )}
+                          {index > 0 && messages[index - 1].id && (
+                            <button
+                              className="icon-button"
+                              aria-label="Regenerate in a new branch"
+                              disabled={busy}
+                              onClick={() => void branch(index - 1)}
+                            >
+                              <RotateCcw size={14} />
+                            </button>
+                          )}
+                          {readAloud && (
+                            <button
+                              className="icon-button"
+                              aria-label="Read aloud using an on-device voice"
+                              onClick={() => speak(message.content)}
+                            >
+                              <Volume2 size={14} />
+                            </button>
+                          )}
+                          <button
+                            className="icon-button"
+                            aria-label="Open in canvas"
+                            onClick={() => setCanvasInitial(message.content)}
+                          >
+                            <PenLine size={14} />
+                          </button>
                           <button
                             className="icon-button"
                             onClick={() => void copy(message.content, index)}
@@ -752,10 +1207,15 @@ export default function ChatWorkspace() {
                   </div>
                 </article>
               ))}
-              {busy && (
+              {busy && messages[messages.length - 1]?.content === "" && (
                 <div className="thinking" role="status">
                   <span className="assistant-avatar">
-                    <Sparkles size={19} />
+                    <Image
+                      src="/openmindai-logo.png"
+                      alt=""
+                      width={23}
+                      height={23}
+                    />
                   </span>
                   <span className="thinking-dots">
                     <i />
@@ -816,7 +1276,62 @@ export default function ChatWorkspace() {
                 }
               }}
             />
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".txt,.md,.csv,.json,.py,.js,.jsx,.ts,.tsx,.php,.rs,.go,.java,.c,.cpp,.h,.html,.css,.sql,.yaml,.yml,.xml,.sh,.log"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void upload(file);
+              }}
+            />
+            {attachments.length > 0 && (
+              <div className="attachment-chips">
+                {attachments.map((a) => (
+                  <span key={a.id}>
+                    <Paperclip size={12} />
+                    {a.name}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${a.name}`}
+                      onClick={() =>
+                        setAttachments((previous) =>
+                          previous.filter((f) => f.id !== a.id),
+                        )
+                      }
+                    >
+                      <X size={13} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="composer-toolbar">
+              {searchAvailable && (
+                <button
+                  type="button"
+                  className={`temporary-toggle ${webSearch ? "enabled" : ""}`}
+                  disabled={busy}
+                  onClick={() => setWebSearch(!webSearch)}
+                >
+                  <Search size={13} />
+                  {webSearch ? "Web search on" : "Web search"}
+                </button>
+              )}
+              <button
+                type="button"
+                className="icon-button"
+                disabled={busy || uploading}
+                aria-label="Attach a text or code file"
+                onClick={() => fileRef.current?.click()}
+              >
+                {uploading ? (
+                  <LoaderCircle size={17} className="spin" />
+                ) : (
+                  <Paperclip size={17} />
+                )}
+              </button>
               <span className="composer-hint">
                 <Sparkles size={15} />
                 {selectedModel?.family || "Your AI, at your pace"}
@@ -825,24 +1340,35 @@ export default function ChatWorkspace() {
                 {draft.length > 14000 && (
                   <small>{draft.length.toLocaleString()}/16,000</small>
                 )}
-                <button
-                  className="send-button"
-                  type="submit"
-                  aria-label="Send message"
-                  disabled={
-                    !draft.trim() ||
-                    busy ||
-                    loadingChat ||
-                    initializing ||
-                    (!!user && !modelId)
-                  }
-                >
-                  {busy ? (
-                    <LoaderCircle size={19} className="spin" />
-                  ) : (
-                    <ArrowUp size={20} strokeWidth={2.5} />
-                  )}
-                </button>
+                {busy ? (
+                  <button
+                    type="button"
+                    className="send-button"
+                    aria-label="Stop generating"
+                    onClick={() => void stop()}
+                  >
+                    <Square size={14} fill="currentColor" />
+                  </button>
+                ) : (
+                  <button
+                    className="send-button"
+                    type="submit"
+                    aria-label="Send message"
+                    disabled={
+                      !draft.trim() ||
+                      busy ||
+                      loadingChat ||
+                      initializing ||
+                      (!!user && !modelId)
+                    }
+                  >
+                    {busy ? (
+                      <LoaderCircle size={19} className="spin" />
+                    ) : (
+                      <ArrowUp size={20} strokeWidth={2.5} />
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </form>
@@ -852,6 +1378,43 @@ export default function ChatWorkspace() {
           </p>
         </div>
       </main>
+      {canvasInitial !== null && (
+        <CanvasDialog
+          initial={canvasInitial}
+          onClose={() => setCanvasInitial(null)}
+          onUse={(a) =>
+            setAttachments((previous) =>
+              [...previous.filter((f) => f.id !== a.id), a].slice(-5),
+            )
+          }
+        />
+      )}
+      {workspaceOpen && (
+        <WorkspaceDialog
+          onAttachment={(a) =>
+            setAttachments((previous) =>
+              [...previous.filter((f) => f.id !== a.id), a].slice(-5),
+            )
+          }
+          onClose={() => setWorkspaceOpen(false)}
+          onProject={(id) => {
+            setProjectId(id);
+            newChat();
+          }}
+          onChanged={() => {
+            void api<{ id: number; name: string }[]>("projects")
+              .then(setProjects)
+              .catch(report);
+          }}
+        />
+      )}
+      {toolsChat && (
+        <ConversationDialog
+          chat={toolsChat}
+          onClose={() => setToolsChat(null)}
+          onChanged={() => void refreshHistory().catch(report)}
+        />
+      )}
       {authOpen && (
         <AuthDialog
           onClose={() => setAuthOpen(false)}

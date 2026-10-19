@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\ConversationShare;
+use App\Models\Message;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -27,3 +29,6 @@ Artisan::command('admin:create {email} {name}', function () {
     $this->info('Administrator created. Enable 2FA using the account API.');
 })->purpose('Create an administrator without a default password');
 Schedule::command('sanctum:prune-expired --hours=24')->daily();
+
+Schedule::call(fn () => Message::where('status', 'generating')->where('updated_at', '<', now()->subMinutes(10))->update(['status' => 'failed']))->everyMinute();
+Schedule::call(fn () => ConversationShare::where('expires_at', '<', now())->delete())->daily();

@@ -35,6 +35,16 @@ before(async () => {
         return res.end(
           JSON.stringify({ data: [], current_page: 2, last_page: 2 }),
         );
+      if (req.url === "/api/v1/chat/stream") {
+        res.setHeader("Content-Type", "text/event-stream");
+        return res.end(
+          'event: meta\ndata: {"conversation_id":7,"message_id":8}\n\nevent: delta\ndata: {"content":"Streamed fixture"}\n\nevent: done\ndata: {"status":"complete"}\n\n',
+        );
+      }
+      if (req.url?.startsWith("/api/v1/shared/"))
+        return res.end(
+          JSON.stringify({ title: "Public snapshot", messages: [] }),
+        );
       if (req.url === "/api/v1/chat")
         return res.end(
           JSON.stringify({
@@ -160,7 +170,7 @@ test("cookie authenticates upstream, and chat response contract is preserved", a
 });
 test("only numeric pagination reaches the upstream", async () => {
   await request("conversations?page=2&url=https://evil.example", {
-    headers: { Cookie: "online_model_token=fixture-secret-token" },
+    headers: { Cookie: "openmindai_token=fixture-secret-token" },
   });
   assert.equal(lastRequest.url, "/api/v1/conversations?page=2");
 });
@@ -179,14 +189,14 @@ test("arbitrary upstream paths and non-JSON mutations are blocked", async () => 
 });
 test("rate limit status and retry header are preserved", async () => {
   const r = await request("models", {
-    headers: { Cookie: "online_model_token=fixture-secret-token" },
+    headers: { Cookie: "openmindai_token=fixture-secret-token" },
   });
   assert.equal(r.status, 429);
   assert.equal(r.headers.get("retry-after"), "25");
 });
 test("invalid upstream HTML is not exposed", async () => {
   const r = await request("tokens", {
-    headers: { Cookie: "online_model_token=fixture-secret-token" },
+    headers: { Cookie: "openmindai_token=fixture-secret-token" },
   });
   assert.equal(r.status, 502);
   assert.ok(!(await r.text()).includes("<html>"));
@@ -196,12 +206,12 @@ test("logout removes the browser cookie", async () => {
     method: "POST",
     headers: {
       ...headers(),
-      Cookie: "online_model_token=fixture-secret-token",
+      Cookie: "openmindai_token=fixture-secret-token",
     },
     body: "{}",
   });
   assert.equal(r.status, 204);
-  assert.match(r.headers.get("set-cookie"), /online_model_token=;/);
+  assert.match(r.headers.get("set-cookie"), /openmindai_token=;/);
 });
 
 test("oversized JSON is rejected before forwarding", async () => {
@@ -211,4 +221,28 @@ test("oversized JSON is rejected before forwarding", async () => {
     body: JSON.stringify({ email: "x".repeat(100_001) }),
   });
   assert.equal(r.status, 413);
+});
+
+test("SSE events pass through without being converted into JSON", async () => {
+  const r = await request("chat/stream", {
+    method: "POST",
+    headers: { ...headers(), Cookie: "openmindai_token=fixture-secret-token" },
+    body: JSON.stringify({ model_id: 1, message: "Hello" }),
+  });
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get("content-type"), /text\/event-stream/);
+  const text = await r.text();
+  assert.ok(text.includes("event: delta"));
+  assert.ok(text.includes("Streamed fixture"));
+});
+test("shared snapshots can be read without sending a bearer token", async () => {
+  const r = await request("shared/" + "a".repeat(64));
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).title, "Public snapshot");
+  assert.equal(lastRequest.authorization, undefined);
+});
+test("brand asset is served from this application", async () => {
+  const r = await fetch(origin + "/openmindai-logo.png");
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get("content-type"), /image\/png/);
 });
