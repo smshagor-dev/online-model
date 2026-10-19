@@ -1,0 +1,2 @@
+@extends('admin.layout')
+@section('content')<h1>Search: {{$query}}</h1><p>GGUF repositories from Hugging Face, sorted by downloads. Compatibility and license depend on each model.</p>@forelse($results as $repo)<div class="card"><h2>{{$repo['id']}}</h2><p>{{number_format($repo['downloads'] ?? 0)}} downloads · {{$repo['likes'] ?? 0}} likes</p><a href="/admin/models/inspect?repository={{urlencode($repo['id'])}}">Browse model files →</a></div>@empty<p>No matching GGUF repositories.</p>@endforelse @endsection

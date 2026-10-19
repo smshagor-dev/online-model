@@ -1,0 +1,2 @@
+@extends('admin.layout')
+@section('content')<form class="panel" method="post" action="/admin/login" style="max-width:440px;margin:70px auto">@csrf<h1>Administrator sign in</h1><p>Manage your users and self-hosted models.</p><label>Email<input name="email" type="email" required autocomplete="username"></label><label>Password<input name="password" type="password" required autocomplete="current-password"></label><label>Authenticator or recovery code<input name="code" autocomplete="one-time-code"></label><button>Sign in</button></form>@endsection

@@ -1,0 +1,23 @@
+name: Backend validation
+on: [push, pull_request]
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.2', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, pdo_sqlite, curl, xml
+          coverage: none
+      - run: composer validate --strict
+      - run: composer install --no-interaction --prefer-dist
+      - run: find app bootstrap config database routes tests -name '*.php' -print0 | xargs -0 -n1 php -l
+      - run: cp .env.example .env
+      - run: vendor/bin/pint --test
+      - run: php artisan test
+      - run: php artisan route:cache && php artisan view:cache && php artisan config:cache
+      - run: composer audit

@@ -1,3 +1,67 @@
-# online-model
+# Online Model
 
-Laravel 12 API and administration backend. Implementation in progress.
+Laravel 12 / PHP 8.2 backend for Hugging Face model storage and self-hosted chat. No commercial model-provider integrations are included.
+
+## Features
+
+- Versioned REST API, Sanctum bearer tokens with 30-day expiry and device revocation.
+- Registration, email verification, password reset, profile updates and account deletion.
+- Authenticator TOTP setup/confirmation, replay protection and hashed single-use recovery codes.
+- Login, sensitive-action, chat-per-minute and daily request limits; one concurrent chat per user.
+- Private conversation history, bounded context, upstream timeouts and atomic history writes.
+- Session-based administrator panel: dashboard, user search/detail, suspension and device revocation.
+- Hugging Face GGUF discovery by family, repository file browser and license acknowledgement.
+- Queued downloads pinned to a commit, expected byte size and SHA-256; private disk storage, quota limits and failed-download cleanup.
+- Self-hosted llama.cpp-compatible inference endpoint, with explicit model ID mapping.
+
+Only downloadable Hugging Face weights are supported. Nemotron, Qwen3, Llama, Mistral, Gemma and DeepSeek are discoverable families, subject to repository availability, licenses and GGUF/runtime compatibility. Proprietary ChatGPT and Gemini weights are not included. Gemma is a separate downloadable model family.
+
+## Install
+
+Requires PHP 8.2+ (64-bit), Composer 2, cURL, mbstring, OpenSSL, XML, PDO MySQL or SQLite, writable private storage and a queue worker. Enable `pcntl` for worker timeouts where hosting supports it.
+
+```bash
+composer install --no-dev --prefer-dist --optimize-autoloader
+cp .env.example .env
+php artisan key:generate
+# Configure database, SMTP, APP_URL and your own inference endpoint in .env.
+php artisan migrate --force
+php artisan admin:create admin@example.com "Administrator"
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+Open `/admin/login`. The admin command asks for a password interactively; there is no default credential. Enable administrator 2FA through the account API after signing in with a bearer token.
+
+For local development, use SQLite, `APP_ENV=local`, `SESSION_SECURE_COOKIE=false`, and `php artisan serve`. Keep secure cookies enabled on HTTPS deployments.
+
+## Download and serve a model
+
+1. In Admin → Models, search a model family or paste a Hugging Face repository ID.
+2. Browse GGUF files, review the model card/license, and import a file that fits your storage/RAM/VRAM limits.
+3. Click **Download model**. Run the queue worker; refresh the page to see status. A file is ready only after size and checksum verification.
+4. Mount/copy `storage/app/models/{id}.gguf` to your own inference machine. For a split GGUF, all shards must be imported/downloaded and transferred before loading it. Other architectures and safetensors are not supported by this GGUF workflow.
+5. Start a compatible runtime, for example:
+
+```bash
+llama-server -m /private/models/1.gguf --alias local-model --host 127.0.0.1 --port 8080
+```
+
+6. Set `INFERENCE_URL=http://127.0.0.1:8080/v1`. Map the downloaded model to runtime ID `local-model` in Admin → Models, then enable it.
+
+For a separate inference host, use a private network or HTTPS with `INFERENCE_KEY`, and configure the runtime with the matching access key. The example above binds to localhost. Runtime provisioning, hardware and transferring files to a separate host are deployment responsibilities. Downloading weights does not start inference or load models automatically. One endpoint is configured; its runtime determines whether multiple models can be loaded/routed concurrently.
+
+See [cPanel deployment](docs/CPANEL.md), [API reference](docs/API.md), and [validation](docs/VALIDATION.md).
+
+## Development checks
+
+```bash
+composer install
+composer validate --strict
+vendor/bin/pint --test
+php artisan test
+composer audit
+```
+
+The lockfile resolves dependencies against PHP 8.2. CI tests PHP 8.2 and 8.3. Do not commit `.env`, tokens, downloaded weights, user data, or `vendor/`.

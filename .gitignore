@@ -1,0 +1,8 @@
+/vendor/
+/node_modules/
+/.env
+/database/*.sqlite*
+/storage/**/*.log
+/storage/app/models/*
+/bootstrap/cache/*.php
+.phpunit.result.cache

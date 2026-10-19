@@ -1,0 +1,25 @@
+<?php
+
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AuthController;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/', fn () => redirect('/admin'));
+Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verify'])->middleware(['signed', 'throttle:auth'])->name('verification.verify');
+Route::get('/reset-password', fn () => view('reset-password'))->name('password.reset');
+Route::get('/admin/login', [AdminController::class, 'loginForm'])->name('login');
+Route::post('/admin/login', [AdminController::class, 'login'])->middleware('throttle:auth');
+Route::prefix('admin')->middleware(['auth', 'active', 'admin'])->group(function () {
+    Route::get('/', [AdminController::class, 'dashboard']);
+    Route::post('logout', [AdminController::class, 'logout']);
+    Route::get('users', [AdminController::class, 'users']);
+    Route::get('users/{user}', [AdminController::class, 'user']);
+    Route::patch('users/{user}', [AdminController::class, 'updateUser']);
+    Route::delete('users/{user}/tokens', [AdminController::class, 'revoke']);
+    Route::get('models', [AdminController::class, 'models']);
+    Route::get('models/search', [AdminController::class, 'search'])->middleware('throttle:hub');
+    Route::get('models/inspect', [AdminController::class, 'inspect'])->middleware('throttle:hub');
+    Route::post('models', [AdminController::class, 'import'])->middleware('throttle:hub');
+    Route::post('models/{model}/download', [AdminController::class, 'download']);
+    Route::patch('models/{model}', [AdminController::class, 'configure']);
+});
