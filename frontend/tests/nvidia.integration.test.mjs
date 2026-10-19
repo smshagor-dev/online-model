@@ -34,6 +34,19 @@ function fixture({
     if (url.endsWith("/status")) return Response.json({ cancelled: false });
     assert.equal(url, "https://integrate.api.nvidia.com/v1/chat/completions");
     assert.equal(options.headers.Authorization, "Bearer secret-nvidia-key");
+    if (JSON.parse(options.body).stream === false)
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                action: "finish",
+                reason: "Evidence sufficient for this fixture",
+              }),
+            },
+          },
+        ],
+      });
     return new Response(
       'data: {"choices":[{"delta":{"reasoning_content":"hidden reasoning"}}]}\n\ndata: {"choices":[{"delta":{"content":"Hello"}}]}\n\n' +
         (truncated ? "" : "data: [DONE]\n\n"),
@@ -74,15 +87,18 @@ test("Next server connects directly to NVIDIA and persists only final answer to 
   const begin = f.calls.find((x) => x.url.endsWith("/begin"));
   assert.equal(begin.body.deep_research, true);
   assert.equal(begin.body.search_time_range, "week");
-  const provider = f.calls.find((x) => x.url.includes("nvidia.com"));
-  assert.equal(provider.body.messages[0].content, "PRIVATE CONTEXT");
+  const provider = f.calls.find(
+    (x) => x.url.includes("nvidia.com") && x.body.stream,
+  );
+  assert.ok(provider.body.messages[0].content.includes("PRIVATE CONTEXT"));
   const done = f.calls.find((x) => x.url.endsWith("/finish"));
   assert.equal(done.body.content, "Hello");
   assert.equal(done.body.status, "complete");
   assert.equal(done.options.headers.Authorization, "Bearer user-token");
   assert.equal(done.options.headers["X-Chat-Bridge-Key"], config.bridgeKey);
   assert.equal(
-    f.calls.find((x) => x.url.includes("nvidia.com")).body.stream,
+    f.calls.find((x) => x.url.includes("nvidia.com") && x.body.stream).body
+      .stream,
     true,
   );
 });

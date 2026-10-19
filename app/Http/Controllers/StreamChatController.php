@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\AiModel;
 use App\Models\Conversation;
+use App\Models\Message;
 use App\Models\Project;
 use App\Services\ChatContext;
+use App\Services\HostedChatActivity;
+use App\Services\ResearchCompletion;
 use App\Services\WebResearch;
 use App\Services\WebSearch;
 use Illuminate\Http\Request;
@@ -57,9 +60,13 @@ class StreamChatController
                 $h = array_slice($h, 2);
             }$messages = [$messages[0], ...$h, $messages[count($messages) - 1]];
         }
-        $lock = Cache::lock('chat-user:'.$r->user()->id, 180);
+        app(HostedChatActivity::class)->recover($r->user()->id);
+        $lock = Cache::lock('chat-user:'.$r->user()->id, 86400);
         abort_unless($lock->get(), 409, 'A request is already running.');
         try {
+
+            app(HostedChatActivity::class)->heartbeat($r->user()->id, $lock->owner());
+
             $saved = null;
             $userMessage = null;
             if (! $temporary) {
@@ -71,12 +78,16 @@ class StreamChatController
                 });
             }
         } catch (Throwable $e) {
+
+            app(HostedChatActivity::class)->finish($r->user()->id, $lock->owner());
+
             $lock->release();
             throw $e;
         }
 
-        return response()->stream(function () use ($messages, $model, $saved, $userMessage, $c, $temporary, $lock, $sources) {
+        return response()->stream(function () use ($messages, $model, $saved, $userMessage, $c, $temporary, $lock, $sources, $deep, $d, $r, $evidence) {
             ignore_user_abort(true);
+            set_time_limit(0);
             $text = '';
             $status = 'complete';
             $finished = false;
@@ -91,61 +102,101 @@ class StreamChatController
             };
             try {
                 $emit('meta', ['conversation_id' => $temporary ? null : $c->id, 'user_message_id' => $userMessage?->id, 'message_id' => $saved?->id, 'sources' => $sources]);
-                $upstream = Http::withToken((string) config('models.inference_key'))->accept('text/event-stream')->connectTimeout(10)->timeout(120)->withOptions(['stream' => true, 'read_timeout' => 20, 'allow_redirects' => false])->post(rtrim(config('models.inference_url'), '/').'/chat/completions', ['model' => $model->runtime_model, 'messages' => $messages, 'max_tokens' => 2048, 'stream' => true]);
-                if (! $upstream->successful()) {
-                    throw new \RuntimeException('Inference failed.');
+                if ($deep) {
+                    $coverage = app(ResearchCompletion::class)->run($d['message'], $evidence, $model->runtime_model, function ($label, $found) use (&$sources, $saved, $emit, $r, $lock) {
+                        $sources = app(WebResearch::class)->summaries($found);
+                        if ($saved) {
+                            Message::whereKey($saved->id)->where('status', 'generating')->update(['sources' => $sources, 'updated_at' => now()]);
+                        }
+                        app(HostedChatActivity::class)->heartbeat($r->user()->id, $lock->owner());
+                        $emit('research', ['label' => $label, 'sources' => $sources]);
+                    }, fn () => connection_aborted() || ($saved && Cache::get('stop-message:'.$saved->id)));
+                    $sources = app(WebResearch::class)->summaries($coverage['sources']);
+                    $messages[0]['content'] .= app(WebResearch::class)->prompt($coverage['sources']).'\nCoverage review: '.$coverage['conclusion'];
                 }
-                $body = $upstream->toPsrResponse()->getBody();
-                $buffer = '';
-                $started = microtime(true);
-                while (! $body->eof()) {
-                    if (microtime(true) - $started > 120) {
-                        throw new \RuntimeException('Inference timeout.');
+                $previousPart = '';
+                do {
+                    app(HostedChatActivity::class)->heartbeat($r->user()->id, $lock->owner());
+                    $finishReason = null;
+                    $finished = false;
+                    $before = strlen($text);
+                    $upstream = Http::withToken((string) config('models.inference_key'))->accept('text/event-stream')->connectTimeout(10)->timeout(120)->withOptions(['stream' => true, 'read_timeout' => 20, 'allow_redirects' => false])->post(rtrim(config('models.inference_url'), '/').'/chat/completions', ['model' => $model->runtime_model, 'messages' => $messages, 'stream' => true]);
+                    if (! $upstream->successful()) {
+                        throw new \RuntimeException('Inference failed.');
                     }
-                    if (connection_aborted() || ($saved && Cache::get('stop-message:'.$saved->id))) {
-                        $status = 'cancelled';
-                        break;
-                    }
-                    $buffer .= $body->read(1024);
-                    if (strlen($buffer) > 1048576) {
-                        throw new \RuntimeException('Invalid inference frame.');
-                    }
-                    while (($end = strpos($buffer, "\n")) !== false) {
-                        $line = trim(substr($buffer, 0, $end));
-                        $buffer = substr($buffer, $end + 1);
-                        if (! str_starts_with($line, 'data:')) {
-                            continue;
-                        }$payload = trim(substr($line, 5));
-                        if ($payload === '[DONE]') {
-                            $finished = true;
-                            break 2;
-                        }$data = json_decode($payload, true);
-                        if (isset($data['error'])) {
-                            throw new \RuntimeException('Inference error.');
-                        }$delta = $data['choices'][0]['delta']['content'] ?? '';
-                        if (is_string($delta) && $delta !== '') {
-                            $text .= $delta;
-                            if (strlen($text) > 262144) {
-                                throw new \RuntimeException('Response too large.');
-                            }$emit('delta', ['content' => $delta]);
-                        }if (isset($data['choices'][0]['finish_reason'])) {
-                            $finished = true;
+                    $body = $upstream->toPsrResponse()->getBody();
+                    $buffer = '';
+                    $started = microtime(true);
+                    while (! $body->eof()) {
+                        if (microtime(true) - $started > 120) {
+                            throw new \RuntimeException('Inference timeout.');
+                        }
+                        if (connection_aborted() || ($saved && Cache::get('stop-message:'.$saved->id))) {
+                            $status = 'cancelled';
+                            break;
+                        }
+                        $buffer .= $body->read(1024);
+                        if (strlen($buffer) > 1048576) {
+                            throw new \RuntimeException('Invalid inference frame.');
+                        }
+                        while (($end = strpos($buffer, "\n")) !== false) {
+                            $line = trim(substr($buffer, 0, $end));
+                            $buffer = substr($buffer, $end + 1);
+                            if (! str_starts_with($line, 'data:')) {
+                                continue;
+                            }$payload = trim(substr($line, 5));
+                            if ($payload === '[DONE]') {
+                                $finished = true;
+                                break 2;
+                            }$data = json_decode($payload, true);
+                            if (isset($data['error'])) {
+                                throw new \RuntimeException('Inference error.');
+                            }$delta = $data['choices'][0]['delta']['content'] ?? '';
+                            if (is_string($delta) && $delta !== '') {
+                                $text .= $delta;
+                                $emit('delta', ['content' => $delta]);
+                            }if (isset($data['choices'][0]['finish_reason'])) {
+                                $finishReason = $data['choices'][0]['finish_reason'];
+                                $finished = true;
+                            }
                         }
                     }
-                }
-                if ($status === 'complete' && (! $finished || $text === '')) {
-                    throw new \RuntimeException('Incomplete model response.');
-                }
+                    if ($status === 'complete' && (! $finished || $text === '')) {
+                        throw new \RuntimeException('Incomplete model response.');
+                    }
+                    $body?->close();
+                    if ($status === 'cancelled') {
+                        break;
+                    }
+                    if ($finishReason === 'length') {
+                        $part = substr($text, $before);
+                        if ($part === '' || $part === $previousPart) {
+                            throw new \RuntimeException('Continuation made no progress.');
+                        }
+                        $previousPart = $part;
+                        $messages[] = ['role' => 'assistant', 'content' => $part];
+                        $messages[] = ['role' => 'user', 'content' => 'Continue exactly where the answer stopped. Complete every remaining part of the original request without repeating earlier text.'];
+                        if ($saved) {
+                            Message::whereKey($saved->id)->where('status', 'generating')->update(['content' => $text, 'updated_at' => now()]);
+                        }
+                    } elseif ($finishReason && $finishReason !== 'stop') {
+                        throw new \RuntimeException('Runtime stopped before completion.');
+                    }
+                } while ($finishReason === 'length');
             } catch (Throwable $e) {
-                $status = 'failed';
+                $status = connection_aborted() || ($saved && Cache::get('stop-message:'.$saved->id)) ? 'cancelled' : 'failed';
                 $emit('error', ['message' => 'The model response was interrupted. Your saved chat contains the partial result.']);
             } finally {
                 $body?->close();
                 if ($saved) {
-                    $saved->update(['content' => $text, 'status' => $status]);
+                    Message::whereKey($saved->id)->update(['content' => $text, 'status' => $status, 'sources' => $sources]);
                     $c->touch();
                     Cache::forget('stop-message:'.$saved->id);
-                }$lock->release();
+                }
+
+                app(HostedChatActivity::class)->finish($r->user()->id, $lock->owner());
+
+                $lock->release();
                 $emit('done', ['conversation_id' => $temporary ? null : $c->id, 'message_id' => $saved?->id, 'status' => $status]);
             }
         }, 200, ['Content-Type' => 'text/event-stream', 'Cache-Control' => 'no-cache, no-transform', 'X-Accel-Buffering' => 'no']);

@@ -7,6 +7,7 @@ use App\Models\ScheduledTask;
 use App\Models\TaskRun;
 use App\Models\User;
 use App\Services\ChatContext;
+use App\Services\ResearchCompletion;
 use App\Services\WebResearch;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -17,7 +18,7 @@ class RunWorkspaceTask implements ShouldQueue
 {
     use Queueable;
 
-    public int $timeout = 240;
+    public int $timeout = 0;
 
     public int $tries = 1;
 
@@ -46,6 +47,13 @@ class RunWorkspaceTask implements ShouldQueue
                     TaskRun::whereKey($run->id)->where('status', 'running')->update(['steps' => $steps, 'sources' => app(WebResearch::class)->summaries($evidence)]);
                 }, fn () => TaskRun::find($run->id)?->status !== 'running');
             }
+            if ($task->kind === 'research') {
+                $coverage = app(ResearchCompletion::class)->run($task->prompt, $sources, $model->runtime_model, function ($label, $evidence) use (&$steps, $run) {
+                    $steps[] = ['label' => $label, 'status' => 'complete'];
+                    TaskRun::whereKey($run->id)->where('status', 'running')->update(['steps' => $steps, 'sources' => app(WebResearch::class)->summaries($evidence)]);
+                }, fn () => TaskRun::find($run->id)?->status !== 'running');
+                $sources = $coverage['sources'];
+            }
             if (TaskRun::find($run->id)?->status !== 'running') {
                 return;
             }
@@ -53,13 +61,34 @@ class RunWorkspaceTask implements ShouldQueue
             $run->update(['steps' => $steps]);
             $messages = app(ChatContext::class)->build($user, null, $task->prompt);
             if ($sources) {
-                $messages[0]['content'] .= app(WebResearch::class)->prompt($sources);
+                $messages[0]['content'] .= app(WebResearch::class)->prompt($sources).'\nCoverage review: '.($coverage['conclusion'] ?? '');
             }
-            $response = Http::withToken((string) config('models.inference_key'))->connectTimeout(10)->timeout(120)->withOptions(['allow_redirects' => false])->post(rtrim(config('models.inference_url'), '/').'/chat/completions', ['model' => $model->runtime_model, 'messages' => $messages, 'stream' => false, 'max_tokens' => 2048]);
-            $result = $response->json('choices.0.message.content');
-            if (! $response->successful() || ! is_string($result) || trim($result) === '' || strlen($result) > 100000) {
-                throw new \RuntimeException('Invalid runtime response.');
-            }
+            $result = '';
+            $previousPart = '';
+            do {
+                if (TaskRun::find($run->id)?->status !== 'running') {
+                    return;
+                }
+                $response = Http::withToken((string) config('models.inference_key'))->connectTimeout(10)->timeout(120)->withOptions(['allow_redirects' => false])->post(rtrim(config('models.inference_url'), '/').'/chat/completions', ['model' => $model->runtime_model, 'messages' => $messages, 'stream' => false]);
+                $part = $response->json('choices.0.message.content');
+                if (! $response->successful() || ! is_string($part) || trim($part) === '') {
+                    throw new \RuntimeException('Invalid runtime response.');
+                }
+                $result .= $part;
+                $reason = $response->json('choices.0.finish_reason');
+                if ($reason && ! in_array($reason, ['stop', 'length'], true)) {
+                    throw new \RuntimeException('Runtime stopped before completion.');
+                }
+                TaskRun::whereKey($run->id)->where('status', 'running')->update(['result' => $result]);
+                if ($reason === 'length') {
+                    if ($part === $previousPart) {
+                        throw new \RuntimeException('Continuation repeated output without progress.');
+                    }
+                    $previousPart = $part;
+                    $messages[] = ['role' => 'assistant', 'content' => $part];
+                    $messages[] = ['role' => 'user', 'content' => 'Continue exactly where the answer stopped. Finish all remaining parts of the original request without repeating earlier text.'];
+                }
+            } while ($reason === 'length');
             $steps[count($steps) - 1]['status'] = 'complete';
             TaskRun::whereKey($run->id)->where('status', 'running')->update(['status' => 'complete', 'result' => $result, 'sources' => app(WebResearch::class)->summaries($sources), 'steps' => $steps]);
         } catch (Throwable $e) {

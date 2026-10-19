@@ -365,7 +365,7 @@ function TaskPlanner({
       <h3>{research ? "Research workspace" : "Scheduled tasks"}</h3>
       <p className="muted">
         {research
-          ? "Search three complementary queries, collect up to eight diverse sources and read up to six public pages for a sourced report. Unavailable pages and snippet-only evidence are clearly marked. Use Deep research in the chat composer for NVIDIA reports."
+          ? "Gather an initial evidence batch, then search and read further until the model can address your full request. There is no fixed query or source count. Unavailable evidence is labeled. Use Deep research in the chat composer for NVIDIA reports."
           : "Run prompts now or schedule one-time, daily or weekly runs. Results stay in task history. Times below use your browser’s timezone."}{" "}
         The server scheduler and task worker must be running. These tools
         require a configured local model; NVIDIA hosted chat is available in the

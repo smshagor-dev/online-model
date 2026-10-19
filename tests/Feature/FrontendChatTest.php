@@ -5,9 +5,14 @@ namespace Tests\Feature;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
+use App\Services\HostedChatActivity;
+use App\Services\WebResearch;
+use App\Services\WebSearch;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -89,6 +94,62 @@ class FrontendChatTest extends TestCase
         $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $r->json('ticket'), 'content' => '', 'status' => 'failed'], $this->headers())->assertOk();
         $this->assertDatabaseHas('messages', ['id' => $r->json('message_id'), 'content' => '', 'status' => 'failed']);
         $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Next'], $this->headers())->assertOk();
+    }
+
+    public function test_daily_chat_quota_is_optional_and_can_be_enabled_explicitly(): void
+    {
+        $user = $this->authenticate();
+        $request = Request::create('/api/v1/chat');
+        $request->setUserResolver(fn () => $user);
+        config(['models.daily_limit' => 0]);
+        $this->assertCount(1, (RateLimiter::limiter('chat'))($request));
+        config(['models.daily_limit' => 2]);
+        $this->assertCount(2, (RateLimiter::limiter('chat'))($request));
+    }
+
+    public function test_large_answer_and_new_source_summaries_are_saved_without_the_old_text_cap(): void
+    {
+        $this->authenticate();
+        $r = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Long report'], $this->headers())->assertOk();
+        $answer = str_repeat('Evidence. ', 30000);
+        $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $r->json('ticket'), 'content' => $answer, 'status' => 'complete', 'sources' => [['url' => 'https://example.org/paper', 'title' => '', 'snippet' => '', 'citation' => 1, 'read_status' => 'read', 'page_text' => 'Not retained']]], $this->headers())->assertOk();
+        $saved = Message::find($r->json('message_id'));
+        $this->assertSame(hash('sha256', $answer), hash('sha256', $saved->content));
+        $this->assertArrayNotHasKey('page_text', $saved->sources[0]);
+    }
+
+    public function test_research_tool_requires_a_live_owned_research_lease(): void
+    {
+        $this->authenticate();
+        $this->postJson('/api/v1/chat/frontend/tool', ['ticket' => str_repeat('a', 64), 'action' => 'search', 'query' => 'Question'], $this->headers())->assertStatus(410);
+        $r = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Plain chat'], $this->headers())->assertOk();
+        $this->postJson('/api/v1/chat/frontend/tool', ['ticket' => $r->json('ticket'), 'action' => 'search', 'query' => 'Question'], $this->headers())->assertStatus(409);
+    }
+
+    public function test_abandoned_hosted_lock_is_recovered_without_releasing_another_owner(): void
+    {
+        $user = $this->authenticate();
+        $lock = Cache::lock('chat-user:'.$user->id, 86400);
+        $this->assertTrue($lock->get());
+        app(HostedChatActivity::class)->heartbeat($user->id, $lock->owner());
+        $this->travel(11)->minutes();
+        $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Recovered'], $this->headers())->assertOk();
+        app(HostedChatActivity::class)->recover($user->id);
+        $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Overlap'], $this->headers())->assertStatus(409);
+    }
+
+    public function test_search_tools_are_available_only_during_active_owned_research(): void
+    {
+        $this->authenticate();
+        $this->partialMock(WebResearch::class)->shouldReceive('collect')->once()->andReturn([]);
+        $this->mock(WebSearch::class)->shouldReceive('search')->times(65)->andReturn([['url' => 'https://example.org/new', 'title' => 'New evidence', 'snippet' => 'Summary']]);
+        $r = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Research', 'deep_research' => true], $this->headers())->assertOk();
+        $payload = ['ticket' => $r->json('ticket'), 'action' => 'search', 'query' => 'Missing evidence'];
+        for ($i = 0; $i < 65; $i++) {
+            $this->postJson('/api/v1/chat/frontend/tool', [...$payload, 'query' => 'Evidence '.$i], $this->headers())->assertOk()->assertJsonPath('sources.0.title', 'New evidence');
+        }
+        $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $r->json('ticket'), 'content' => 'Done', 'status' => 'complete'], $this->headers())->assertOk();
+        $this->postJson('/api/v1/chat/frontend/tool', $payload, $this->headers())->assertStatus(409);
     }
 
     public function test_deleted_conversation_is_not_recreated_by_late_finish(): void

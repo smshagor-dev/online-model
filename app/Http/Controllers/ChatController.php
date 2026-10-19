@@ -6,6 +6,7 @@ use App\Models\AiModel;
 use App\Models\Conversation;
 use App\Models\Project;
 use App\Services\ChatContext;
+use App\Services\HostedChatActivity;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -60,6 +61,7 @@ class ChatController
         abort_if(! empty($d['temporary']) && ! empty($d['conversation_id']), 422, 'Temporary chats cannot continue saved conversations.');
         $model = AiModel::where('enabled', true)->where('status', 'ready')->findOrFail($d['model_id']);
         abort_unless($model->runtime_model, 503, 'Model is not connected to inference.');
+        app(HostedChatActivity::class)->recover($r->user()->id);
         $lock = Cache::lock('chat-user:'.$r->user()->id, 150);
         abort_unless($lock->get(), 409, 'A request is already running.');
         try {

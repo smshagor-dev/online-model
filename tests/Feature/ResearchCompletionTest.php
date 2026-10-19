@@ -1,0 +1,48 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Services\ResearchCompletion;
+use App\Services\WebSearch;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
+
+class ResearchCompletionTest extends TestCase
+{
+    public function test_local_research_continues_past_the_initial_batch_until_the_model_finishes(): void
+    {
+        $calls = 0;
+        Http::fake(function () use (&$calls) {
+            $calls++;
+            $decision = $calls <= 12 ? ['action' => 'search', 'query' => 'Evidence '.$calls] : ['action' => 'finish', 'reason' => 'All requested sections supported'];
+
+            return Http::response(['choices' => [['message' => ['content' => json_encode($decision)]]]]);
+        });
+        $this->mock(WebSearch::class)->shouldReceive('search')->times(12)->andReturnUsing(fn ($query) => [['url' => 'https://example.org/'.urlencode($query), 'title' => $query, 'snippet' => 'Summary']]);
+        $result = app(ResearchCompletion::class)->run('Question', [], 'fixture', fn () => null, fn () => false);
+        $this->assertSame(13, $calls);
+        $this->assertCount(12, $result['sources']);
+        $this->assertSame('All requested sections supported', $result['conclusion']);
+    }
+
+    public function test_repeated_action_stops_with_an_explicit_failure(): void
+    {
+        Http::fake(fn () => Http::response(['choices' => [['message' => ['content' => '{"action":"search","query":"Repeated"}']]]]));
+        $this->mock(WebSearch::class)->shouldReceive('search')->once()->andReturn([]);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Research repeated an action');
+        app(ResearchCompletion::class)->run('Question', [], 'fixture', fn () => null, fn () => false);
+    }
+
+    public function test_cancelled_request_never_calls_the_model(): void
+    {
+        Http::fake();
+        try {
+            app(ResearchCompletion::class)->run('Question', [], 'fixture', fn () => null, fn () => true);
+            $this->fail('Cancellation ignored');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Research cancelled.', $e->getMessage());
+        }
+        Http::assertNothingSent();
+    }
+}

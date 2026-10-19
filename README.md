@@ -95,3 +95,5 @@ Interactive Nemotron chat can connect directly from the Next.js server to NVIDIA
 ## Web search and deep research
 
 Chat supports search snippets or a deeper report with multiple queries, diverse sources, public-page reading, freshness filters and source cards. NVIDIA reports keep inference on the Next.js server and chat storage in Laravel. Configure your own SearXNG service; see [search and research setup](docs/WEB_RESEARCH.md) for limits, privacy and background research requirements.
+
+Daily chat/task quotas default to disabled (`CHAT_DAILY_LIMIT=0`, `TASK_DAILY_LIMIT=0`). Deep research continues beyond its initial evidence batch until the model’s coverage decision, with automatic continuation at output-token boundaries. External provider/hosting limits and user Stop still apply; see [research policy](docs/WEB_RESEARCH.md).

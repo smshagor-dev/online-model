@@ -89,7 +89,7 @@ class ToolsTest extends TestCase
         $r = TaskRun::create(['scheduled_task_id' => $t->id]);
         $this->mock(WebSearch::class)->shouldReceive('search')->times(3)->andReturn([['title' => 'Source', 'url' => 'https://example.com/article', 'snippet' => 'Summary']]);
         $this->mock(WebReader::class)->shouldReceive('read')->once()->andReturn(str_repeat('Verified page fixture text. ', 5));
-        Http::fake(['*' => Http::response(['choices' => [['message' => ['content' => 'Sourced report https://example.com/article']]]])]);
+        Http::fake(fn ($request) => Http::response(['choices' => [['message' => ['content' => str_contains($request['messages'][0]['content'], 'research coordinator') ? json_encode(['action' => 'finish', 'reason' => 'Fixture coverage complete']) : 'Sourced report https://example.com/article']]]]));
         (new RunWorkspaceTask($r->id))->handle();
         $this->assertSame('complete', $r->fresh()->status);
         $this->assertSame('read', $r->fresh()->sources[0]['read_status']);

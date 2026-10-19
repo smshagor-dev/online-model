@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Services\ChatContext;
+use App\Services\HostedChatActivity;
+use App\Services\WebReader;
 use App\Services\WebResearch;
 use App\Services\WebSearch;
 use Illuminate\Http\Request;
@@ -46,10 +48,12 @@ class FrontendChatController
             }
             $messages = [$messages[0], ...$history, $messages[count($messages) - 1]];
         }
-        $lock = Cache::lock('chat-user:'.$r->user()->id, 300);
+        app(HostedChatActivity::class)->recover($r->user()->id);
+        $lock = Cache::lock('chat-user:'.$r->user()->id, 86400);
         abort_unless($lock->get(), 409, 'A request is already running.');
         $assistant = null;
         try {
+            app(HostedChatActivity::class)->heartbeat($r->user()->id, $lock->owner());
             $research = app(WebResearch::class);
             $deep = ! empty($d['deep_research']);
             $options = ['time_range' => $d['search_time_range'] ?? null];
@@ -68,11 +72,12 @@ class FrontendChatController
                 });
             }
             $ticket = bin2hex(random_bytes(32));
-            Cache::put('frontend-chat:'.hash('sha256', $ticket), ['user_id' => $r->user()->id, 'message_id' => $assistant?->id, 'conversation_id' => $temporary ? null : $c->id, 'lock_owner' => $lock->owner(), 'done' => false], 600);
+            Cache::put('frontend-chat:'.hash('sha256', $ticket), ['user_id' => $r->user()->id, 'message_id' => $assistant?->id, 'conversation_id' => $temporary ? null : $c->id, 'lock_owner' => $lock->owner(), 'done' => false, 'deep_research' => $deep], 600);
 
             return ['ticket' => $ticket, 'messages' => $messages, 'conversation_id' => $temporary ? null : $c->id, 'user_message_id' => $question?->id, 'message_id' => $assistant?->id, 'sources' => $sources];
         } catch (Throwable $e) {
             $assistant?->update(['status' => 'failed']);
+            app(HostedChatActivity::class)->finish($r->user()->id, $lock->owner());
             $lock->release();
             throw $e;
         }
@@ -91,19 +96,54 @@ class FrontendChatController
 
     public function status(Request $r)
     {
-        [, $lease] = $this->lease($r);
-        $cancelled = $lease['message_id'] && (! Message::whereKey($lease['message_id'])->where('status', 'generating')->exists() || Cache::get('stop-message:'.$lease['message_id']));
+        [$key] = $this->lease($r);
 
-        return ['cancelled' => (bool) $cancelled, 'done' => $lease['done']];
+        return Cache::lock($key.':finish', 20)->block(3, function () use ($key, $r) {
+            $lease = Cache::get($key);
+            abort_unless($lease && $lease['user_id'] === $r->user()->id, 410);
+            $cancelled = $lease['message_id'] && (! Message::whereKey($lease['message_id'])->where('status', 'generating')->exists() || Cache::get('stop-message:'.$lease['message_id']));
+            if (! $lease['done'] && ! $cancelled) {
+                Cache::put($key, $lease, 600);
+                app(HostedChatActivity::class)->heartbeat($r->user()->id, $lease['lock_owner']);
+                if ($lease['message_id']) {
+                    Message::whereKey($lease['message_id'])->where('status', 'generating')->update(['updated_at' => now()]);
+                }
+            }
+
+            return ['cancelled' => (bool) $cancelled, 'done' => $lease['done']];
+        });
+    }
+
+    public function tool(Request $r)
+    {
+        [, $lease] = $this->lease($r);
+        abort_unless(! $lease['done'] && ! empty($lease['deep_research']), 409);
+        abort_if($lease['message_id'] && (! Message::whereKey($lease['message_id'])->where('status', 'generating')->exists() || Cache::get('stop-message:'.$lease['message_id'])), 409, 'Research stopped.');
+        $d = $r->validate(['action' => 'required|in:search,read', 'query' => 'required_if:action,search|string|max:500', 'url' => 'required_if:action,read|string|max:2000', 'time_range' => 'nullable|in:day,week,month,year']);
+        if ($d['action'] === 'search') {
+            return ['sources' => app(WebSearch::class)->search($d['query'], ['limit' => 10, 'time_range' => $d['time_range'] ?? null])];
+        }
+        try {
+            $url = WebSearch::canonicalUrl($d['url']);
+            abort_unless($url, 422);
+            $text = app(WebReader::class)->read($url);
+
+            return ['url' => $url, 'page_text' => $text, 'read_status' => mb_strlen(trim($text)) >= 80 ? 'read' : 'unavailable'];
+        } catch (Throwable $e) {
+            return ['url' => $d['url'], 'read_status' => 'unavailable'];
+        }
     }
 
     public function finish(Request $r)
     {
         [$key] = $this->lease($r);
-        $d = $r->validate(['content' => 'present|nullable|string|max:262144', 'status' => 'required|in:complete,failed,cancelled']);
-        $d['content'] = $d['content'] ?? '';
+        $d = $r->validate(['content' => 'present|nullable|string', 'sources' => 'sometimes|array', 'sources.*.url' => 'required|string|max:2000', 'sources.*.title' => 'present|nullable|string|max:200', 'sources.*.snippet' => 'sometimes|nullable|string|max:2000', 'sources.*.read_status' => 'sometimes|in:read,unavailable,snippet_only', 'sources.*.citation' => 'sometimes|integer|min:1', 'status' => 'required|in:complete,failed,cancelled']);
+        // Preserve provider whitespace after validating the submitted field type.
+        $d['content'] = json_decode($r->getContent(), true)['content'] ?? '';
+        if (! is_string($d['content'])) {
+            $d['content'] = '';
+        }
         abort_if($d['status'] === 'complete' && trim($d['content']) === '', 422, 'Completed answer is empty.');
-        abort_if(strlen($d['content']) > 262144, 422, 'Response exceeds storage limit.');
 
         return Cache::lock($key.':finish', 20)->block(3, function () use ($key, $r, $d) {
             $lease = Cache::get($key);
@@ -115,12 +155,21 @@ class FrontendChatController
                 $m = Message::whereKey($lease['message_id'])->whereHas('conversation', fn ($q) => $q->where('user_id', $r->user()->id))->first();
                 // Message ownership is checked via its conversation below; deletion is never undone.
                 if ($m) {
-                    $m->update(['content' => $d['content'], 'status' => $d['status']]);
+                    $updates = ['content' => $d['content'], 'status' => $d['status']];
+                    if (isset($d['sources'])) {
+                        $updates['sources'] = array_values(array_filter(array_map(function ($source) {
+                            $url = WebSearch::canonicalUrl($source['url']);
+
+                            return $url ? ['url' => $url, 'title' => $source['title'] ?: mb_substr($url, 0, 200), 'snippet' => $source['snippet'] ?? '', 'read_status' => $source['read_status'] ?? 'snippet_only', 'citation' => $source['citation'] ?? 1] : null;
+                        }, $d['sources'])));
+                    }
+                    $m->update($updates);
                 }
             }
             $lease['done'] = true;
             $lease['status'] = $d['status'];
             Cache::put($key, $lease, 600);
+            app(HostedChatActivity::class)->finish($r->user()->id, $lease['lock_owner']);
             Cache::restoreLock('chat-user:'.$r->user()->id, $lease['lock_owner'])->release();
 
             return ['stored' => true, 'status' => $d['status']];

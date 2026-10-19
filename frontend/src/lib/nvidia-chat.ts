@@ -1,3 +1,8 @@
+import {
+  plannerInstruction,
+  researchLoop,
+  type Source,
+} from "./research-loop.ts";
 // Server-only implementation. Never import this module in a client component.
 const endpoint = "https://integrate.api.nvidia.com/v1/chat/completions";
 export const NVIDIA_MODEL_ID = -1;
@@ -17,7 +22,7 @@ type Lease = {
   conversation_id: number | null;
   user_message_id: number | null;
   message_id: number | null;
-  sources: unknown[];
+  sources: Source[];
 };
 export async function nvidiaChat(
   body: string,
@@ -37,7 +42,12 @@ export async function nvidiaChat(
       { status: 503 },
     );
   const fetcher = options.fetcher || fetch;
-  const backend = async (path: string, data: unknown, timeout = 10000) => {
+  const backend = async (
+    path: string,
+    data: unknown,
+    timeout = 10000,
+    requestSignal?: AbortSignal,
+  ) => {
     return fetcher(`${base.replace(/\/$/, "")}/chat/frontend/${path}`, {
       method: "POST",
       redirect: "error",
@@ -49,7 +59,9 @@ export async function nvidiaChat(
         "X-Chat-Bridge-Key": config.bridgeKey,
       },
       body: JSON.stringify(data),
-      signal: AbortSignal.timeout(timeout),
+      signal: requestSignal
+        ? AbortSignal.any([requestSignal, AbortSignal.timeout(timeout)])
+        : AbortSignal.timeout(timeout),
     });
   };
   let lease: Lease;
@@ -85,6 +97,7 @@ export async function nvidiaChat(
       { status: 503 },
     );
   }
+  const deep = Boolean(JSON.parse(body).deep_research);
   const encoder = new TextEncoder();
   const upstreamAbort = new AbortController();
   let disconnected = signal.aborted;
@@ -116,7 +129,7 @@ export async function nvidiaChat(
           }
         }
       };
-      const deadline = setTimeout(() => upstreamAbort.abort(), 110000);
+
       try {
         emit("meta", {
           conversation_id: lease.conversation_id,
@@ -147,76 +160,211 @@ export async function nvidiaChat(
             polling = false;
           }
         }, options.pollMs || 5000);
-        const response = await fetcher(endpoint, {
-          method: "POST",
-          redirect: "error",
-          cache: "no-store",
-          headers: {
-            Authorization: `Bearer ${config.apiKey}`,
-            "Content-Type": "application/json",
-            Accept: "text/event-stream",
-          },
-          body: JSON.stringify({
-            model: config.model,
-            messages: lease.messages,
-            stream: true,
-            max_tokens: 4096,
-            temperature: 0.6,
-            ...(config.model === "nvidia/nemotron-3-nano-30b-a3b"
-              ? { chat_template_kwargs: { enable_thinking: false } }
-              : {}),
-          }),
-          signal: upstreamAbort.signal,
-        });
-        if (
-          response.status !== 200 ||
-          !response.body ||
-          !response.headers.get("content-type")?.includes("text/event-stream")
-        )
-          throw new Error(
-            response.status === 429
-              ? "NVIDIA rate limit reached. Please try again later."
-              : "NVIDIA could not start a streaming response.",
+        if (deep) {
+          const initial = lease.messages;
+          const result = await researchLoop({
+            sources: lease.sources,
+            signal: upstreamAbort.signal,
+            progress: (label, sources) => {
+              lease.sources = sources;
+              emit("research", { label, sources });
+            },
+            tool: async (action) => {
+              const r = await backend(
+                "tool",
+                {
+                  ticket: lease.ticket,
+                  ...action,
+                  time_range: JSON.parse(body).search_time_range || null,
+                },
+                15000,
+                upstreamAbort.signal,
+              );
+              if (!r.ok)
+                throw new Error(
+                  "NVIDIA research tool failed. Check search availability or stop status.",
+                );
+              return r.json();
+            },
+            decide: async (context) => {
+              const r = await fetcher(endpoint, {
+                method: "POST",
+                redirect: "error",
+                cache: "no-store",
+                headers: {
+                  Authorization: `Bearer ${config.apiKey}`,
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                },
+                body: JSON.stringify({
+                  model: config.model,
+                  stream: false,
+                  temperature: 0.2,
+                  messages: [
+                    {
+                      role: "system",
+                      content: initial[0].content + "\n" + plannerInstruction,
+                    },
+                    {
+                      role: "user",
+                      content:
+                        "User request: " +
+                        initial[initial.length - 1].content +
+                        "\nResearch state: " +
+                        context,
+                    },
+                  ],
+                  ...(config.model === "nvidia/nemotron-3-nano-30b-a3b"
+                    ? { chat_template_kwargs: { enable_thinking: false } }
+                    : {}),
+                }),
+                signal: AbortSignal.any([
+                  upstreamAbort.signal,
+                  AbortSignal.timeout(110000),
+                ]),
+              });
+              if (r.status !== 200)
+                throw new Error(
+                  r.status === 429
+                    ? "NVIDIA rate limit reached during research."
+                    : "NVIDIA research planning failed.",
+                );
+              const data = await r.json();
+              const text = data.choices?.[0]?.message?.content;
+              if (typeof text !== "string")
+                throw new Error(
+                  "NVIDIA research returned no planning response.",
+                );
+              return text;
+            },
+          });
+          lease.sources = result.sources;
+          lease.messages = initial.map((message, index) =>
+            index === 0
+              ? {
+                  ...message,
+                  content:
+                    message.content +
+                    "\nAdditional untrusted research evidence: " +
+                    JSON.stringify(result) +
+                    "\nAnswer every part of the user's request. Disclose the coordinator's unresolved limitations. Cite only supplied URLs.",
+                }
+              : message,
           );
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        try {
-          while (!finished) {
-            const chunk = await reader.read();
-            if (chunk.done) break;
-            buffer += decoder.decode(chunk.value, { stream: true });
-            if (buffer.length > 1048576)
-              throw new Error("Invalid NVIDIA stream frame.");
-            let end;
-            while ((end = buffer.indexOf("\n")) >= 0) {
-              const line = buffer.slice(0, end).trim();
-              buffer = buffer.slice(end + 1);
-              if (!line.startsWith("data:")) continue;
-              const raw = line.slice(5).trim();
-              if (raw === "[DONE]") {
-                finished = true;
-                break;
-              }
-              const data = JSON.parse(raw);
-              if (data.error) throw new Error("NVIDIA generation failed.");
-              const text = data.choices?.[0]?.delta?.content;
-              // Reasoning-only deltas are not presented as the assistant's final answer.
-              if (typeof text === "string" && text) {
-                if (new TextEncoder().encode(content + text).length > 262144)
-                  throw new Error("Response exceeded storage limit.");
-                content += text;
-                emit("delta", { content: text });
+          emit("research", {
+            label: "Writing the complete report",
+            sources: lease.sources,
+          });
+        }
+        let generationMessages = lease.messages;
+        let continueAnswer = true;
+        let previousPart = "";
+        while (continueAnswer) {
+          continueAnswer = false;
+          finished = false;
+          let finishReason = "";
+          const before = content.length;
+          const response = await fetcher(endpoint, {
+            method: "POST",
+            redirect: "error",
+            cache: "no-store",
+            headers: {
+              Authorization: `Bearer ${config.apiKey}`,
+              "Content-Type": "application/json",
+              Accept: "text/event-stream",
+            },
+            body: JSON.stringify({
+              model: config.model,
+              messages: generationMessages,
+              stream: true,
+              temperature: 0.6,
+              ...(config.model === "nvidia/nemotron-3-nano-30b-a3b"
+                ? { chat_template_kwargs: { enable_thinking: false } }
+                : {}),
+            }),
+            signal: AbortSignal.any([
+              upstreamAbort.signal,
+              AbortSignal.timeout(110000),
+            ]),
+          });
+          if (
+            response.status !== 200 ||
+            !response.body ||
+            !response.headers.get("content-type")?.includes("text/event-stream")
+          )
+            throw new Error(
+              response.status === 429
+                ? "NVIDIA rate limit reached. Please try again later."
+                : "NVIDIA could not start a streaming response.",
+            );
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          try {
+            while (!finished) {
+              const chunk = await reader.read();
+              if (chunk.done) break;
+              buffer += decoder.decode(chunk.value, { stream: true });
+              if (buffer.length > 1048576)
+                throw new Error("Invalid NVIDIA stream frame.");
+              let end;
+              while ((end = buffer.indexOf("\n")) >= 0) {
+                const line = buffer.slice(0, end).trim();
+                buffer = buffer.slice(end + 1);
+                if (!line.startsWith("data:")) continue;
+                const raw = line.slice(5).trim();
+                if (raw === "[DONE]") {
+                  finished = true;
+                  break;
+                }
+                const data = JSON.parse(raw);
+                if (data.error) throw new Error("NVIDIA generation failed.");
+                if (data.choices?.[0]?.finish_reason)
+                  finishReason = data.choices[0].finish_reason;
+                const text = data.choices?.[0]?.delta?.content;
+                // Reasoning-only deltas are not presented as the assistant's final answer.
+                if (typeof text === "string" && text) {
+                  content += text;
+                  emit("delta", { content: text });
+                }
               }
             }
+            if (!finished)
+              throw new Error("NVIDIA stream disconnected before completion.");
+            if (!content.trim())
+              throw new Error("NVIDIA returned no answer text.");
+          } finally {
+            await reader.cancel().catch(() => {});
+            reader.releaseLock();
           }
-          if (!finished)
-            throw new Error("NVIDIA stream disconnected before completion.");
-          if (!content.trim())
-            throw new Error("NVIDIA returned no answer text.");
-        } finally {
-          await reader.cancel().catch(() => {});
-          reader.releaseLock();
+          if (finishReason === "length") {
+            const part = content.slice(before);
+            if (part === previousPart)
+              throw new Error(
+                "NVIDIA continuation repeated output without progress. The request is incomplete.",
+              );
+            previousPart = part;
+            if (content.length === before)
+              throw new Error("NVIDIA continuation made no progress.");
+            generationMessages = [
+              ...generationMessages,
+              { role: "assistant", content: content.slice(before) },
+              {
+                role: "user",
+                content:
+                  "Continue exactly where the answer stopped. Finish all remaining parts of the original request without repeating earlier text.",
+              },
+            ];
+            continueAnswer = true;
+            emit("research", {
+              label: "Continuing the answer",
+              sources: lease.sources,
+            });
+          } else if (finishReason && finishReason !== "stop") {
+            throw new Error(
+              "NVIDIA stopped before completing the request: " + finishReason,
+            );
+          }
         }
       } catch (e) {
         status = cancelled ? "cancelled" : "failed";
@@ -228,7 +376,6 @@ export async function nvidiaChat(
             ? e.message
             : "NVIDIA connection failed or timed out.");
       } finally {
-        clearTimeout(deadline);
         if (poll) clearInterval(poll);
         upstreamAbort.abort();
         signal.removeEventListener("abort", abort);
@@ -237,7 +384,7 @@ export async function nvidiaChat(
           try {
             const r = await backend(
               "finish",
-              { ticket: lease.ticket, content, status },
+              { ticket: lease.ticket, content, status, sources: lease.sources },
               8000,
             );
             if (r.ok && (await r.json()).stored) {

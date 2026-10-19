@@ -103,6 +103,7 @@ export default function ChatWorkspace() {
   const [searchAvailable, setSearchAvailable] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
   const [deepResearch, setDeepResearch] = useState(false);
+  const [researchProgress, setResearchProgress] = useState("");
   const [searchTimeRange, setSearchTimeRange] = useState("");
   const [canvasInitial, setCanvasInitial] = useState<string | null>(null);
   const [mediaOpen, setMediaOpen] = useState(false);
@@ -517,6 +518,7 @@ export default function ChatWorkspace() {
     const id = override ? override.conversationId : conversationId;
     setError("");
     setBusy(true);
+    setResearchProgress("Gathering initial sources");
     setDraft("");
     setMessages([...history, { role: "user", content: text }]);
     const controller = new AbortController();
@@ -569,6 +571,17 @@ export default function ChatWorkspace() {
                 sources: data.sources as Message["sources"],
               },
             ]);
+          }
+          if (event === "research") {
+            setResearchProgress(String(data.label));
+            if (Array.isArray(data.sources))
+              setMessages((previous) =>
+                previous.map((m, i) =>
+                  i === previous.length - 1
+                    ? { ...m, sources: data.sources as Message["sources"] }
+                    : m,
+                ),
+              );
           }
           if (event === "delta")
             setMessages((previous) =>
@@ -1575,8 +1588,8 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
             )}
             {busy && deepResearch && (
               <p className="muted" role="status">
-                Researching sources and drafting your report… This may take a
-                few minutes.
+                {researchProgress ||
+                  "Researching sources and drafting your report…"}
               </p>
             )}
             <div className="composer-toolbar">

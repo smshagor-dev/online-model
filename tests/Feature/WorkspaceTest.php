@@ -7,6 +7,8 @@ use App\Models\Conversation;
 use App\Models\Memory;
 use App\Models\Message;
 use App\Models\User;
+use App\Services\ResearchCompletion;
+use App\Services\WebResearch;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -84,6 +86,32 @@ class WorkspaceTest extends TestCase
         $this->fakeStream();
         $this->postJson('/api/v1/chat/stream', ['model_id' => $this->model()->id, 'message' => 'Hi'])->streamedContent();
         $this->assertDatabaseHas('messages', ['role' => 'assistant', 'status' => 'cancelled']);
+    }
+
+    public function test_local_deep_research_reports_progress_and_continues_truncated_generation(): void
+    {
+        Sanctum::actingAs($this->user());
+        $this->partialMock(WebResearch::class)->shouldReceive('collect')->once()->andReturn([]);
+        $source = ['url' => 'https://example.org/report', 'title' => 'Evidence', 'read_status' => 'read', 'citation' => 1];
+        $this->mock(ResearchCompletion::class)->shouldReceive('run')->once()->andReturnUsing(function ($question, $sources, $model, $progress) use ($source) {
+            $progress('Read more evidence', [$source]);
+
+            return ['sources' => [$source], 'conclusion' => 'Request covered'];
+        });
+        $calls = 0;
+        Http::fake(function () use (&$calls) {
+            $calls++;
+            $payload = ['choices' => [['delta' => ['content' => $calls === 1 ? 'First ' : 'last'], 'finish_reason' => $calls === 1 ? 'length' : 'stop']]];
+
+            return Http::response('data: '.json_encode($payload)."\n\ndata: [DONE]\n\n", 200, ['Content-Type' => 'text/event-stream']);
+        });
+        $r = $this->postJson('/api/v1/chat/stream', ['model_id' => $this->model()->id, 'message' => 'Complete report', 'deep_research' => true])->assertOk();
+        $this->assertStringContainsString('event: research', $r->streamedContent());
+        $this->assertSame(2, $calls);
+        $answer = Message::where('role', 'assistant')->first();
+        $this->assertSame('First last', $answer->content);
+        $this->assertSame('complete', $answer->status);
+        $this->assertCount(1, $answer->sources);
     }
 
     public function test_search_finds_message_text_and_archiving_hides_chat(): void

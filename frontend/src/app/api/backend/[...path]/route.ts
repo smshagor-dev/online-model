@@ -159,9 +159,9 @@ async function proxy(
           ? { Authorization: `Bearer ${token}` }
           : {}),
       },
-      signal: AbortSignal.timeout(
-        endpoint.startsWith("chat") ? 220_000 : 30_000,
-      ),
+      signal: endpoint.startsWith("chat")
+        ? request.signal
+        : AbortSignal.timeout(30_000),
     });
     if (
       upstream.ok &&

@@ -45,7 +45,7 @@ class WebSearch
                 continue;
             }
             $text = fn ($value, $max) => mb_substr(html_entity_decode(strip_tags(is_scalar($value) ? (string) $value : ''), ENT_QUOTES | ENT_HTML5, 'UTF-8'), 0, $max);
-            $results[$url] = ['title' => $text($v['title'] ?? $url, 200), 'url' => $url, 'snippet' => $text($v['content'] ?? '', 2000)];
+            $results[$url] = ['title' => $text($v['title'] ?? $url, 200) ?: mb_substr($url, 0, 200), 'url' => $url, 'snippet' => $text($v['content'] ?? '', 2000)];
             if (count($results) >= min(10, max(1, (int) ($options['limit'] ?? 5)))) {
                 break;
             }
