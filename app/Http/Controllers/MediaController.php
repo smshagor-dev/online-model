@@ -23,7 +23,7 @@ class MediaController
             $query->where('kind', $r->query('kind'));
         }
 
-        return $query->latest('id')->paginate(20);
+        return $query->select(['id', 'kind', 'prompt', 'status', 'output_mime', 'result_text', 'error', 'bytes', 'created_at', 'updated_at'])->latest('id')->paginate(20);
     }
 
     public function show(Request $r, int $id)
@@ -52,7 +52,7 @@ class MediaController
             $query = MediaTask::where('user_id', $r->user()->id);
             abort_if((clone $query)->whereDate('created_at', today())->count() >= config('media.daily_limit'), 429, 'Daily media limit reached.');
             abort_if((clone $query)->whereIn('status', ['queued', 'running'])->count() >= 2, 429, 'Wait for your active tasks.');
-            abort_if((clone $query)->sum('bytes') + (clone $query)->whereIn('status', ['queued', 'running'])->count() * 20000000 + strlen($raw ?? '') + 20000000 > config('media.storage_bytes'), 422, 'Media storage quota reached. Delete older results.');
+            abort_if((clone $query)->sum('bytes') + (clone $query)->whereIn('status', ['queued', 'running'])->count() * 25000000 + strlen($raw ?? '') + 25000000 > config('media.storage_bytes'), 422, 'Media storage quota reached. Delete older results.');
             $path = $raw ? 'media/'.$r->user()->id.'/'.Str::uuid().'.input' : null;
             if ($path) {
                 Storage::disk('local')->put($path, $raw);

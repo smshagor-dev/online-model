@@ -70,8 +70,57 @@ def execute(code: str):
             raise ValueError('Invalid sandbox result')
         if len(base64.b64decode(result['data'], validate=True)) > 20_000_000:
             raise ValueError('Artifact limit exceeded')
+        result["artifacts"] = previews(base64.b64decode(result["data"], validate=True))
         return result
     finally:
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, check=False)
         if process and process.poll() is None:
             process.kill(); process.wait(timeout=5)
+
+
+def previews(raw: bytes):
+    """Bounded, allowlisted previews outside the execution container. No file extraction."""
+    import csv
+    import io
+    import pathlib
+    import zipfile
+    items = []
+    budget = 0
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        if len(archive.infolist()) > 21:
+            raise ValueError('Too many artifacts')
+        for entry in archive.infolist():
+            name = pathlib.PurePosixPath(entry.filename).name[:200]
+            if not name or entry.is_dir() or entry.file_size > 500000:
+                continue
+            suffix = pathlib.PurePosixPath(name).suffix.lower()
+            if suffix not in ('.png', '.csv', '.txt', '.md', '.json'):
+                continue
+            data = archive.read(entry)
+            if suffix == '.png':
+                import struct
+                if len(data) < 33 or not data.startswith(b'\x89PNG\r\n\x1a\n') or data[12:16] != b'IHDR':
+                    continue
+                width, height = struct.unpack('>II', data[16:24])
+                if not 0 < width * height <= 16000000:
+                    continue
+                item = {'name': name, 'type': 'image', 'content': base64.b64encode(data).decode()}
+            elif suffix == '.csv':
+                text = data.decode('utf-8-sig', errors='replace')
+                rows = []
+                for row in csv.reader(io.StringIO(text)):
+                    rows.append([cell[:2048] for cell in row[:30]])
+                    if len(rows) >= 101:
+                        break
+                item = {'name': name, 'type': 'table', 'rows': rows}
+            else:
+                try:
+                    item = {'name': name, 'type': 'text', 'content': data.decode('utf-8')[:20000]}
+                except UnicodeDecodeError:
+                    continue
+            size = len(json.dumps(item).encode())
+            if budget + size > 1500000:
+                break
+            budget += size
+            items.append(item)
+    return items

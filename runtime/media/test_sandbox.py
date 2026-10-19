@@ -31,3 +31,27 @@ class SandboxContractTests(unittest.TestCase):
                 self.assertFalse(any(a.startswith('--volume') or a.startswith('--mount') for a in args))
                 self.assertEqual(cleanup.call_args.args[0][:3],['docker','rm','-f'])
         finally: process.stdout.close()
+
+
+class ArtifactPreviewTests(unittest.TestCase):
+    def archive(self, entries):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as z:
+            for name, content in entries.items(): z.writestr(name, content)
+        return output.getvalue()
+
+    def test_csv_and_text_previews_are_bounded_and_skip_html(self):
+        data = self.archive({'data.csv': 'x,y\n' + '1,2\n'*500, 'notes.txt': 'x'*30000, 'unsafe.html':'<script>bad</script>'})
+        items = sandbox.previews(data)
+        self.assertEqual(len(items), 2)
+        self.assertEqual(len(items[0]['rows']), 101)
+        self.assertEqual(len(items[1]['content']), 20000)
+
+    def test_valid_png_and_invalid_png(self):
+        png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=')
+        items = sandbox.previews(self.archive({'chart.png':png,'bad.png':b'not a png'}))
+        self.assertEqual(len(items),1)
+        self.assertEqual(items[0]['type'],'image')
+
+    def test_oversized_decompressed_file_is_not_read(self):
+        self.assertEqual(sandbox.previews(self.archive({'huge.csv':'a'*500001})),[])

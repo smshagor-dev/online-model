@@ -1,11 +1,18 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, type Page } from "@/lib/api";
+import ArtifactPreviews, { type Artifact } from "./artifact-previews";
 import Dialog from "./dialog";
 import ResponseMarkdown from "./response-markdown";
 
 type Kind =
-  "image" | "vision" | "transcription" | "speech" | "video" | "document";
+  | "image"
+  | "vision"
+  | "transcription"
+  | "speech"
+  | "video"
+  | "document"
+  | "code";
 type Task = {
   id: number;
   kind: Kind;
@@ -14,8 +21,10 @@ type Task = {
   result_text: string | null;
   output_mime: string | null;
   error: string | null;
+  artifacts?: Artifact[];
 };
 const labels: Record<Kind, string> = {
+  code: "Python run",
   document: "Read PDF or DOCX",
   image: "Create image",
   vision: "Ask about an image",
@@ -41,6 +50,7 @@ export default function MediaDialog({
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [preview, setPreview] = useState("");
   const [revision, setRevision] = useState(0);
   const controller = useRef<AbortController | null>(null);
@@ -92,6 +102,13 @@ export default function MediaDialog({
     const c = new AbortController();
     let url = "";
     setPreview("");
+    setArtifacts([]);
+    if (task?.status === "complete" && task.kind === "code")
+      api<Task>(`media/${task.id}`, "GET", undefined, c.signal)
+        .then((t) => setArtifacts(t.artifacts || []))
+        .catch((e) => {
+          if (!c.signal.aborted) setError(e.message);
+        });
     if (task?.status === "complete" && task.output_mime) {
       fetch(`/api/backend/media/${task.id}/output`, {
         signal: c.signal,
@@ -298,6 +315,7 @@ export default function MediaDialog({
             </p>
             <p>{task.prompt}</p>
             {task.error && <p role="alert">{task.error}</p>}
+            {!!artifacts.length && <ArtifactPreviews items={artifacts} />}
             {task.result_text && (
               <>
                 <ResponseMarkdown content={task.result_text} />
@@ -318,7 +336,7 @@ export default function MediaDialog({
             {preview && (
               <a
                 href={preview}
-                download={`openmindai-${task.id}.${task.kind === "image" ? "png" : task.kind === "speech" ? "wav" : "mp4"}`}
+                download={`openmindai-${task.id}.${task.kind === "image" ? "png" : task.kind === "speech" ? "wav" : task.kind === "code" ? "zip" : "mp4"}`}
               >
                 Download result
               </a>

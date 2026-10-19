@@ -151,4 +151,15 @@ class MediaTest extends TestCase
         Storage::disk('local')->assertMissing('media/test.output');
         $this->assertDatabaseCount('media_tasks', 0);
     }
+
+    public function test_code_artifacts_are_persisted_but_not_in_list_payloads(): void
+    {
+        $this->setupEngine();
+        config(['media.kinds' => ['code']]);
+        $id = $this->postJson('/api/v1/media', ['kind' => 'code', 'prompt' => 'print(1)', 'approved' => true])->assertStatus(202)->json('id');
+        Http::fake(['*' => Http::response(['text' => 'hello', 'mime' => 'application/zip', 'data' => 'UEsDBBQAAAAAAOBEU12GphA2BQAAAAUAAAAKAAAAc3Rkb3V0LnR4dGhlbGxvUEsBAhQDFAAAAAAA4ERTXYamEDYFAAAABQAAAAoAAAAAAAAAAAAAAIABAAAAAHN0ZG91dC50eHRQSwUGAAAAAAEAAQA4AAAALQAAAAAA', 'artifacts' => [['name' => 'data.csv', 'type' => 'table', 'rows' => [['x', 'y'], ['1', '2']]]]])]);
+        (new RunMediaTask($id))->handle();
+        $this->getJson('/api/v1/media/'.$id)->assertOk()->assertJsonPath('status', 'complete')->assertJsonPath('artifacts.0.rows.1.1', '2');
+        $this->getJson('/api/v1/media')->assertOk()->assertJsonMissingPath('data.0.artifacts');
+    }
 }

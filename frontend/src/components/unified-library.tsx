@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, type Page } from "@/lib/api";
+import ArtifactPreviews, { type Artifact } from "./artifact-previews";
 import Dialog from "./dialog";
 type FileItem = { id: number; name: string; bytes: number };
 type Media = {
@@ -30,6 +31,7 @@ export default function LibraryPanel({
     text?: string;
     url?: string;
     mime?: string;
+    artifacts?: Artifact[];
   } | null>(null);
   const [revision, setRevision] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -191,7 +193,20 @@ export default function LibraryPanel({
                   disabled={busy || m.status !== "complete"}
                   onClick={() =>
                     void run(async (signal) => {
-                      if (m.output_mime) {
+                      if (m.output_mime === "application/zip") {
+                        const detail = await api<{ artifacts?: Artifact[] }>(
+                          `media/${m.id}`,
+                          "GET",
+                          undefined,
+                          signal,
+                        );
+                        if (!signal.aborted)
+                          setPreview({
+                            title: m.prompt || m.kind,
+                            text: m.result_text || "",
+                            artifacts: detail.artifacts || [],
+                          });
+                      } else if (m.output_mime) {
                         const r = await fetch(
                           `/api/backend/media/${m.id}/output`,
                           { signal, cache: "no-store" },
@@ -262,6 +277,9 @@ export default function LibraryPanel({
           onClose={() => setPreview(null)}
           wide
         >
+          {!!preview.artifacts?.length && (
+            <ArtifactPreviews items={preview.artifacts} />
+          )}
           {preview.text !== undefined && (
             <pre className="file-text-preview">{preview.text}</pre>
           )}

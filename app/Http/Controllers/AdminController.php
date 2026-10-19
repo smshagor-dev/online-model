@@ -58,7 +58,7 @@ class AdminController
             });
         }
 
-return view('admin.users', ['users' => $q->latest()->paginate(25)->withQueryString()]);
+        return view('admin.users', ['users' => $q->latest()->paginate(25)->withQueryString()]);
     }
 
     public function user(Request $r, User $user)
@@ -78,7 +78,7 @@ return view('admin.users', ['users' => $q->latest()->paginate(25)->withQueryStri
             DB::table('sessions')->where('user_id', $user->id)->delete();
         }
 
-return back()->with('status', 'User updated.');
+        return back()->with('status', 'User updated.');
     }
 
     public function revoke(Request $r, User $user)
@@ -129,7 +129,7 @@ return back()->with('status', 'User updated.');
             throw $e;
         }
 
-return back()->with('status', 'Download queued.');
+        return back()->with('status', 'Download queued.');
     }
 
     public function configure(Request $r, AiModel $model)
@@ -138,6 +138,6 @@ return back()->with('status', 'Download queued.');
         abort_if($d['enabled'] && ($model->status !== 'ready' || empty($d['runtime_model'])), 422, 'Download model and configure its runtime ID first.');
         $model->update($d);
 
-        return back()->with('status','Runtime mapping saved.');
+        return back()->with('status', 'Runtime mapping saved.');
     }
 }

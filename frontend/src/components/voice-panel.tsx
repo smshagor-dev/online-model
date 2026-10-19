@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import ScreenPreview from "./screen-preview";
 import { api } from "@/lib/api";
 export default function VoicePanel({
   onText,
@@ -7,6 +8,10 @@ export default function VoicePanel({
   onText: (text: string) => void;
 }) {
   const [available, setAvailable] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [phase, setPhase] = useState("");
+  const discard = useRef(false);
+  const epoch = useRef(0);
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -18,6 +23,7 @@ export default function VoicePanel({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audio = useRef<AudioContext | null>(null);
   const frame = useRef<number>(0);
+  const lastMeterUpdate = useRef(0);
   const alive = useRef(true);
   function cleanup() {
     stream.current?.getTracks().forEach((t) => t.stop());
@@ -38,6 +44,7 @@ export default function VoicePanel({
       });
     return () => {
       alive.current = false;
+      ++epoch.current;
       c.abort();
       controller.current?.abort();
       if (recorder.current?.state === "recording") recorder.current.stop();
@@ -48,6 +55,7 @@ export default function VoicePanel({
     const c = new AbortController();
     controller.current = c;
     setBusy(true);
+    setPhase("Transcribing…");
     try {
       const input = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -98,6 +106,10 @@ export default function VoicePanel({
   }
   async function start() {
     setBusy(true);
+    setPhase("Requesting microphone…");
+    const request = ++epoch.current;
+    discard.current = false;
+    setMuted(false);
     setError("");
     try {
       if (
@@ -108,7 +120,7 @@ export default function VoicePanel({
           "Microphone recording needs HTTPS and a supported browser.",
         );
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!alive.current) {
+      if (!alive.current || request !== epoch.current) {
         media.getTracks().forEach((t) => t.stop());
         return;
       }
@@ -132,7 +144,10 @@ export default function VoicePanel({
         cleanup();
         if (alive.current) {
           setRecording(false);
-          void transcribe(new Blob(parts, { type: format }));
+          setLevel(0);
+          if (!discard.current)
+            void transcribe(new Blob(parts, { type: format }));
+          else setBusy(false);
         }
       };
       audio.current = new AudioContext();
@@ -143,16 +158,24 @@ export default function VoicePanel({
         analyser.getByteTimeDomainData(samples);
         let sum = 0;
         for (const v of samples) sum += (v - 128) ** 2;
-        if (alive.current)
+        if (
+          alive.current &&
+          performance.now() - lastMeterUpdate.current > 100
+        ) {
+          lastMeterUpdate.current = performance.now();
           setLevel(Math.min(100, Math.sqrt(sum / samples.length) * 4));
+        }
         frame.current = requestAnimationFrame(draw);
       }
       draw();
       r.start();
       setRecording(true);
       setBusy(false);
-      timer.current = setTimeout(() => r.stop(), 110000);
+      timer.current = setTimeout(() => {
+        if (r.state === "recording") r.stop();
+      }, 110000);
     } catch (e) {
+      if (!alive.current || request !== epoch.current) return;
       cleanup();
       setBusy(false);
       setError((e as Error).message);
@@ -164,8 +187,9 @@ export default function VoicePanel({
       <p className="muted">
         Record up to 110 seconds, then transcribe with your private model.
         Review the transcript before sending. This is turn-based input;
-        continuous realtime conversation, screen sharing and background
-        listening are not enabled.
+        continuous realtime conversation and background listening are not
+        enabled. Screen preview below sends a frame only when you explicitly
+        choose it.
       </p>
       {!available && (
         <p role="status">
@@ -187,7 +211,10 @@ export default function VoicePanel({
         {recording ? (
           <button
             className="danger-button"
-            onClick={() => recorder.current?.stop()}
+            onClick={() => {
+              if (recorder.current?.state === "recording")
+                recorder.current.stop();
+            }}
           >
             Stop & transcribe
           </button>
@@ -200,11 +227,37 @@ export default function VoicePanel({
             Start recording
           </button>
         )}
-        {busy && (
+        {recording && (
           <>
-            <span role="status">Transcribing…</span>
+            <button
+              aria-pressed={muted}
+              onClick={() => {
+                const next = !muted;
+                stream.current?.getAudioTracks().forEach((t) => {
+                  t.enabled = !next;
+                });
+                setMuted(next);
+              }}
+            >
+              {muted ? "Unmute microphone" : "Mute microphone"}
+            </button>
             <button
               onClick={() => {
+                discard.current = true;
+                if (recorder.current?.state === "recording")
+                  recorder.current.stop();
+              }}
+            >
+              Discard recording
+            </button>
+          </>
+        )}
+        {busy && (
+          <>
+            <span role="status">{phase}</span>
+            <button
+              onClick={() => {
+                ++epoch.current;
                 controller.current?.abort();
                 setBusy(false);
               }}
@@ -230,6 +283,7 @@ export default function VoicePanel({
       >
         Use transcript in chat
       </button>
+      <ScreenPreview onText={onText} />
       <p className="muted">
         Recordings create a saved media task. Inputs are deleted after
         processing; transcript tasks remain until deleted from Library.

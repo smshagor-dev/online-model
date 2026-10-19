@@ -11,6 +11,11 @@ class MediaTask extends Model
 
     protected $hidden = ['input_path', 'output_path'];
 
+    protected function casts(): array
+    {
+        return ['artifacts' => 'array'];
+    }
+
     protected static function booted(): void
     {
         static::deleted(function (self $task) {

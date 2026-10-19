@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import ArtifactPreviews, { type Artifact } from "./artifact-previews";
 import { api } from "@/lib/api";
 export default function InlineMedia({
   id,
@@ -15,6 +16,7 @@ export default function InlineMedia({
     result_text: string | null;
     output_mime: string | null;
     error: string | null;
+    artifacts?: Artifact[];
   } | null>(null);
   const [error, setError] = useState("");
   const [url, setUrl] = useState("");
@@ -85,6 +87,7 @@ export default function InlineMedia({
       {url && task?.output_mime === "video/mp4" && (
         <video className="media-preview" controls src={url} />
       )}{" "}
+      {!!task?.artifacts?.length && <ArtifactPreviews items={task.artifacts} />}
       {task?.result_text && (
         <>
           <pre className="file-text-preview">{task.result_text}</pre>

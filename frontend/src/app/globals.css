@@ -2032,3 +2032,43 @@ html[data-theme="light"] .shared-message.user {
     font-size: 12px;
   }
 }
+
+.artifact-previews {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0;
+}
+.artifact-previews details {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+.artifact-previews summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.artifact-table {
+  max-height: 360px;
+  overflow: auto;
+  margin: 16px 0;
+}
+.artifact-table table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.artifact-table td,
+.artifact-table th {
+  padding: 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+  max-width: 300px;
+  overflow-wrap: anywhere;
+}
+.artifact-chart {
+  width: 100%;
+  max-height: 300px;
+  color: var(--text);
+  background: var(--sidebar);
+  border-radius: 10px;
+  margin-top: 12px;
+}

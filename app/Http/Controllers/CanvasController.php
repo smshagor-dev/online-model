@@ -75,7 +75,7 @@ class CanvasController
 
     public function delete(Request $r, int $id)
     {
-        $this->show($r,$id)->delete();
+        $this->show($r, $id)->delete();
 
         return response()->noContent();
     }

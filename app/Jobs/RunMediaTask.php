@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\MediaTask;
 use App\Models\User;
+use App\Services\ArtifactPreviews;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,7 @@ class RunMediaTask implements ShouldQueue
                 throw new \RuntimeException('Media runtime failed.');
             }
             $data = $response->json();
+            $artifacts = $task->kind === 'code' ? app(ArtifactPreviews::class)->validate($data['artifacts'] ?? []) : [];
             $text = in_array($task->kind, ['vision', 'transcription', 'document', 'code'], true) ? ($data['text'] ?? null) : null;
             if ($text !== null && (! is_string($text) || strlen($text) > 100000)) {
                 throw new \RuntimeException('Invalid text output.');
@@ -61,7 +63,7 @@ class RunMediaTask implements ShouldQueue
             } elseif (! is_string($text) || trim($text) === '' || strlen($text) > 100000) {
                 throw new \RuntimeException('Invalid text output.');
             }
-            DB::transaction(function () use ($task, $raw, $path, $data, $text) {
+            DB::transaction(function () use ($task, $raw, $path, $data, $text, $artifacts) {
                 $current = MediaTask::lockForUpdate()->find($task->id);
                 if (! $current || $current->status !== 'running') {
                     return;
@@ -69,7 +71,7 @@ class RunMediaTask implements ShouldQueue
                 if ($path) {
                     Storage::disk('local')->put($path, $raw);
                 }
-                $current->update(['status' => 'complete', 'result_text' => $text, 'output_path' => $path, 'output_mime' => $path ? $data['mime'] : null, 'bytes' => strlen($raw ?? '') + strlen($text ?? '')]);
+                $current->update(['status' => 'complete', 'artifacts' => $artifacts, 'result_text' => $text, 'output_path' => $path, 'output_mime' => $path ? $data['mime'] : null, 'bytes' => strlen($raw ?? '') + strlen($text ?? '') + strlen(json_encode($artifacts))]);
             });
         } catch (Throwable $e) {
             if ($path) {
