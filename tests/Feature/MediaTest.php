@@ -37,6 +37,71 @@ class MediaTest extends TestCase
         return base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=');
     }
 
+    public function test_hosted_image_uses_existing_frontend_secret_and_saves_private_png(): void
+    {
+        $user = $this->setupEngine();
+        config([
+            'media.url' => null,
+            'media.key' => null,
+            'models.frontend_chat_key' => str_repeat('s', 32),
+        ]);
+        $headers = ['X-Chat-Bridge-Key' => str_repeat('s', 32)];
+        $created = $this->withHeaders($headers)
+            ->postJson('/api/v1/media/hosted/begin', ['prompt' => 'Sunrise'])
+            ->assertStatus(202)->assertJsonPath('kind', 'image')
+            ->assertJsonPath('status', 'running')->assertJsonMissingPath('output_path');
+        Queue::assertNothingPushed();
+        $id = $created->json('id');
+        $this->postJson('/api/v1/media/'.$id.'/hosted/finish', [
+            'mime' => 'image/png', 'data' => base64_encode($this->png()),
+        ])->assertOk()->assertJsonPath('status', 'complete')->assertJsonPath('output_mime', 'image/png')
+          ->assertJsonMissingPath('output_path');
+        $output = $this->get('/api/v1/media/'.$id.'/output')->assertOk()
+            ->assertHeader('Content-Type', 'image/png');
+        $this->assertSame($this->png(), $output->streamedContent());
+        Storage::disk('local')->assertExists('media/'.$user->id.'/'.$id.'.output');
+        $this->assertDatabaseHas('media_daily_usage', [
+            'user_id' => $user->id, 'kind' => 'image', 'requests' => 1,
+        ]);
+    }
+
+    public function test_hosted_image_bridge_rejects_missing_key_and_bad_images(): void
+    {
+        $this->setupEngine();
+        config(['models.frontend_chat_key' => str_repeat('s', 32)]);
+        $this->postJson('/api/v1/media/hosted/begin', ['prompt' => 'Sunrise'])->assertForbidden();
+        $this->withHeaders(['X-Chat-Bridge-Key' => str_repeat('s', 32)]);
+        $created = $this->postJson('/api/v1/media/hosted/begin', ['prompt' => 'Sunrise'])->assertStatus(202);
+        $id = $created->json('id');
+        $this->postJson('/api/v1/media/'.$id.'/hosted/finish', [
+            'mime' => 'image/jpeg', 'data' => base64_encode($this->png()),
+        ])->assertStatus(422);
+        $this->getJson('/api/v1/media/'.$id)->assertJsonPath('status', 'running');
+        $this->postJson('/api/v1/media/'.$id.'/hosted/fail', [])->assertNoContent();
+        $this->getJson('/api/v1/media/'.$id)->assertJsonPath('status', 'failed');
+        $this->get('/api/v1/media/'.$id.'/output')->assertNotFound();
+    }
+
+    public function test_hosted_image_shared_quota_and_task_ownership(): void
+    {
+        $user = $this->setupEngine();
+        config([
+            'models.frontend_chat_key' => str_repeat('s', 32),
+            'media.image_daily_limit' => 1,
+        ]);
+        $this->withHeaders(['X-Chat-Bridge-Key' => str_repeat('s', 32)]);
+        $id = $this->postJson('/api/v1/media/hosted/begin', ['prompt' => 'First'])
+            ->assertStatus(202)->json('id');
+        $this->postJson('/api/v1/media/hosted/begin', ['prompt' => 'Second'])->assertStatus(429);
+        $other = $this->user();
+        $this->assertNotSame($other->id, $user->id);
+        Sanctum::actingAs($other);
+        $this->postJson('/api/v1/media/'.$id.'/hosted/finish', [
+            'mime' => 'image/png', 'data' => base64_encode($this->png()),
+        ])->assertNotFound();
+        $this->postJson('/api/v1/media/'.$id.'/hosted/fail', [])->assertNotFound();
+    }
+
     public function test_disabled_engine_is_not_advertised_or_queued(): void
     {
         $this->setupEngine();
