@@ -340,31 +340,6 @@ html[data-theme="light"] .workspace .profile-button:hover {
 .workspace .topbar-right {
   gap: 10px;
 }
-.workspace .model-picker {
-  padding: 8px 10px;
-  margin-left: -10px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 20px;
-  font-weight: 550;
-  letter-spacing: -0.5px;
-}
-.workspace .model-picker:hover {
-  background: var(--ui-tint);
-}
-.workspace .model-picker svg {
-  color: var(--muted);
-  width: 15px;
-}
-.workspace .active-model-label {
-  font-size: 10px;
-  color: var(--muted);
-  margin: -3px 0 0;
-  max-width: 220px;
-}
 .workspace .topbar-new-chat {
   border: 0;
 }
@@ -802,17 +777,7 @@ html .dialog .settings-nav button.selected {
   .workspace .topbar-right {
     gap: 6px;
   }
-  .workspace .model-picker {
-    font-size: 18px;
-    margin-left: 0;
-    padding: 7px 6px;
-  }
-  .workspace .active-model-label {
-    max-width: 145px;
-    margin-left: 6px;
-    font-size: 9px;
-  }
-  .workspace .topbar-new-chat {
+.workspace .topbar-new-chat {
     display: none;
   }
   .workspace .topbar .temporary-toggle {
@@ -911,5 +876,24 @@ html .dialog .settings-nav button.selected {
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Static product title: model details are selected internally, not exposed here. */
+.workspace .topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .workspace .topbar-brand {
+    font-size: 18px;
+    min-height: 35px;
   }
 }
