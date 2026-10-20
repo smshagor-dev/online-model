@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   AudioLines,
@@ -195,6 +195,10 @@ export default function ChatWorkspace() {
   const historyRequest = useRef<AbortController | null>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const composerToolsRef = useRef<HTMLDetailsElement>(null);
+  const [toolMenuOpen, setToolMenuOpen] = useState(false);
+  const [toolMenuPosition, setToolMenuPosition] = useState({
+    top: 12, left: 12, width: 440, maxHeight: 570,
+  });
 
   const clearSession = useCallback(() => {
     chatRequest.current?.abort();
@@ -415,6 +419,53 @@ export default function ChatWorkspace() {
     document.addEventListener("keydown", keyboard);
     return () => document.removeEventListener("keydown", keyboard);
   }, [busy]);
+  useLayoutEffect(() => {
+    if (!toolMenuOpen) return;
+    const reposition = () => {
+      const summary = composerToolsRef.current?.querySelector("summary");
+      const menu = composerToolsRef.current?.querySelector<HTMLElement>(".composer-tools-menu");
+      if (!summary || !menu) return;
+      const rect = summary.getBoundingClientRect();
+      const viewport = window.visualViewport;
+      const vw = viewport?.width ?? window.innerWidth;
+      const vh = viewport?.height ?? window.innerHeight;
+      const offsetY = viewport?.offsetTop ?? 0;
+      const mobile = vw <= 600;
+      const width = Math.min(440, Math.max(180, vw - 24));
+      const availableAbove = Math.max(0, rect.top - offsetY - 20);
+      const availableBelow = Math.max(0, vh - (rect.bottom - offsetY) - 20);
+      const above = availableAbove >= 300 || availableAbove >= availableBelow;
+      const availableHeight = mobile
+        ? Math.max(100, vh - 24)
+        : Math.max(100, above ? availableAbove : availableBelow);
+      const maxHeight = Math.min(570, availableHeight);
+      const visibleHeight = Math.min(menu.scrollHeight, maxHeight);
+      const left = mobile ? 12
+        : Math.max(12, Math.min(rect.left - 44, vw - width - 12));
+      const top = mobile
+        ? offsetY + vh - visibleHeight - 12
+        : above
+          ? Math.max(offsetY + 12, rect.top - visibleHeight - 10)
+          : Math.min(offsetY + vh - visibleHeight - 12, rect.bottom + 10);
+      setToolMenuPosition((previous) => {
+        if (previous.top === top && previous.left === left &&
+            previous.width === width && previous.maxHeight === maxHeight) return previous;
+        return { top, left, width, maxHeight };
+      });
+    };
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    window.visualViewport?.addEventListener("resize", reposition);
+    window.visualViewport?.addEventListener("scroll", reposition);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+      window.visualViewport?.removeEventListener("resize", reposition);
+      window.visualViewport?.removeEventListener("scroll", reposition);
+    };
+  }, [toolMenuOpen]);
+
   const scrollBottom = useCallback(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
@@ -1739,12 +1790,19 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                   <Plus size={22} strokeWidth={1.8} />
                 )}
               </button>
-              <details className="composer-tools" ref={composerToolsRef}>
+              <details className="composer-tools" ref={composerToolsRef}
+                onToggle={(event) => setToolMenuOpen(event.currentTarget.open)}>
                 <summary>
                   <SlidersHorizontal size={17} />
                   <span>Tools</span>
                 </summary>
                 <WelcomeToolsMenu
+                  position={toolMenuPosition}
+                  onClose={() => {
+                    composerToolsRef.current?.removeAttribute("open");
+                    setToolMenuOpen(false);
+                    composerToolsRef.current?.querySelector("summary")?.focus();
+                  }}
                   busy={busy || uploading}
                   signedIn={Boolean(user)}
                   searchAvailable={searchAvailable}

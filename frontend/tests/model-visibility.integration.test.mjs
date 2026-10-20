@@ -23,7 +23,7 @@ test("chat header is static while existing model routing remains active", () => 
   assert.doesNotMatch(workspace, /className="model-menu-wrapper"/);
   assert.match(workspace, /setModelId\(\(previous\) =>/);
   assert.match(workspace, /model_id: modelId/);
-  assert.match(workspace, /This chat uses an external AI service/);
+  assert.doesNotMatch(workspace, /This chat uses an external AI service/);
 });
 
 test("workspace tool descriptions do not display the provider name", () => {

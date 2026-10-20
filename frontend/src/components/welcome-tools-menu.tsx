@@ -8,9 +8,11 @@ export type WelcomeToolAction =
   | "project" | "research" | "voice" | "code" | "planner";
 
 export default function WelcomeToolsMenu({
-  busy, signedIn, searchAvailable, imageAvailable, mediaKinds, mediaMode, onMediaMode,
+  position, onClose, busy, signedIn, searchAvailable, imageAvailable, mediaKinds, mediaMode, onMediaMode,
   webSearch, deepResearch, searchTimeRange, onSearchTimeRange, onSelect,
 }: {
+  position: { top: number; left: number; width: number; maxHeight: number };
+  onClose: () => void;
   busy: boolean;
   signedIn: boolean;
   searchAvailable: boolean;
@@ -34,8 +36,12 @@ export default function WelcomeToolsMenu({
     { action: "research", icon: FlaskConical, title: "Deep research", subtitle: !signedIn ? "Sign in to start detailed research" : searchAvailable ? "Research and prepare a detailed report" : "Search provider not configured", blocked: !searchAvailable, active: deepResearch },
   ] as const;
   return (
-    <div className="composer-tools-menu" aria-label="Chat tools">
-      <p className="popover-heading">Choose a tool</p>
+    <div className="composer-tools-menu" role="dialog" aria-label="Chat tools" style={position}>
+      <div className="welcome-tools-heading">
+        <p className="popover-heading">Choose a tool</p>
+        <button className="welcome-tools-close" aria-label="Close tools"
+          type="button" onClick={onClose}>Close</button>
+      </div>
       {items.map((item) => (
         <button
           key={item.action}

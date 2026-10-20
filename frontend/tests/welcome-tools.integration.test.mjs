@@ -34,3 +34,16 @@ test("browser links require valid public URL forms and do not read native tabs",
   assert.match(browser, /parts\.length > 10/);
   assert.match(browser, /cannot read your/);
 });
+
+
+test("tools stay within the viewport and remain scrollable at mobile sizes", () => {
+  const theme = readFileSync(new URL("../src/app/chat-theme.css", import.meta.url), "utf8");
+  assert.match(workspace, /onToggle=\{\(event\) => setToolMenuOpen/);
+  assert.match(workspace, /window\.visualViewport/);
+  assert.match(workspace, /getBoundingClientRect\(\)/);
+  assert.match(menu, /style=\{position\}/);
+  assert.match(menu, /aria-label="Close tools"/);
+  assert.match(theme, /position: fixed/);
+  assert.match(theme, /max-width: calc\(100vw - 24px\)/);
+  assert.match(theme, /overflow-y: auto/);
+});

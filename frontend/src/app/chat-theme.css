@@ -557,12 +557,6 @@ html[data-theme="light"] .workspace .composer {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.workspace .provider-notice {
-  font-size: 10px;
-  line-height: 1.5;
-  color: var(--muted);
-  margin: 0 10px 9px;
-}
 .workspace .suggestions {
   display: flex;
   justify-content: center;
@@ -916,3 +910,76 @@ html .dialog .settings-nav button.selected {
 .workspace .welcome-tools-select { display: grid; gap: 6px; padding: 5px 10px; color: var(--muted); font-size: 11px; }
 .workspace .composer-tools-menu .welcome-tools-select select { width: 100%; }
 @media(max-width:480px) { .workspace .composer-tools-menu { left: -40px; max-height: min(510px, 66dvh); } .workspace .composer-tools-menu button.welcome-tool-item { min-height: 49px; padding: 8px 9px; gap: 10px; } }
+
+
+/* Viewport-positioned tool picker: never clipped by the scrollable welcome grid. */
+.workspace .composer-tools-menu {
+  position: fixed;
+  bottom: auto;
+  z-index: 120;
+  min-width: 0;
+  box-sizing: border-box;
+  max-width: calc(100vw - 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  touch-action: pan-y;
+  border-radius: 16px;
+  box-shadow: 0 16px 44px #00000035;
+}
+.workspace .composer-tools-menu .welcome-tools-heading {
+  position: sticky;
+  top: -10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--ui-elevated);
+}
+.workspace .composer-tools-menu .welcome-tools-heading .popover-heading {
+  flex: 1;
+  margin: 0;
+}
+.workspace .composer-tools-menu button.welcome-tools-close {
+  flex: none;
+  width: auto;
+  min-height: 33px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.workspace .composer-tools-menu button.welcome-tool-item { min-width: 0; }
+.workspace .composer-area, .workspace .composer, .workspace .composer-toolbar { min-width: 0; }
+.workspace .composer-toolbar .composer-right { margin-left: auto; }
+.workspace .composer-toolbar .composer-active-mode {
+  min-width: 0;
+  max-width: min(160px, 32vw);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+@media (max-width: 760px) {
+  .workspace .composer-area { width: calc(100% - 24px); }
+  .workspace .composer { padding: 13px 10px 9px; }
+  .workspace .composer-toolbar { flex-wrap: wrap; row-gap: 6px; }
+  .workspace .topbar { padding-inline: 12px; }
+  .workspace .topbar-right { min-width: 0; }
+  .workspace .welcome { padding-inline: 12px; }
+}
+@media (max-width: 600px) {
+  .workspace .composer-tools-menu { border-radius: 18px; box-shadow: 0 12px 48px #00000045; }
+  .workspace .composer-tools-menu button.welcome-tool-item { min-height: 50px; padding: 9px 10px; }
+  .workspace .composer-toolbar .composer-active-mode { max-width: 24vw; }
+}
+@media (max-width: 380px) {
+  .workspace .composer-toolbar { gap: 2px; }
+  .workspace .composer-toolbar .composer-right { gap: 3px; }
+  .workspace .composer-toolbar .composer-active-mode { max-width: 20vw; }
+  .workspace .welcome h1 { font-size: 26px; }
+}
+@media (max-height: 550px) {
+  .workspace .composer-tools-menu button.welcome-tool-item { min-height: 43px; padding-block: 6px; }
+}
