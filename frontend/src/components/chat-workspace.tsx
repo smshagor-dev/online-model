@@ -59,30 +59,12 @@ import {
 } from "@/lib/api";
 
 const suggestions = [
-  {
-    icon: Code2,
-    title: "Build something",
-    text: "Help me plan a web application",
-    color: "blue",
-  },
-  {
-    icon: PenLine,
-    title: "Find the right words",
-    text: "Help me write a clear, thoughtful email",
-    color: "coral",
-  },
-  {
-    icon: BookOpen,
-    title: "Learn something new",
-    text: "Explain a complex topic in simple terms",
-    color: "purple",
-  },
-  {
-    icon: Lightbulb,
-    title: "Explore an idea",
-    text: "Help me brainstorm a creative project",
-    color: "amber",
-  },
+  { icon: Code2, title: "Write & debug code", text: "Help me build a modern web application", color: "blue" },
+  { icon: PenLine, title: "Write something", text: "Write a thoughtful and professional email", color: "coral" },
+  { icon: BookOpen, title: "Learn a concept", text: "Explain machine learning in simple terms", color: "purple" },
+  { icon: Lightbulb, title: "Explore ideas", text: "Brainstorm creative ideas for my next project", color: "amber" },
+  { icon: Search, title: "Explore a topic", text: "Help me research a topic with reliable sources", color: "blue" },
+  { icon: MessageCircle, title: "Get a second opinion", text: "Help me think through an important decision", color: "purple" },
 ];
 export default function ChatWorkspace() {
   const [settingsRevision, setSettingsRevision] = useState(0);
@@ -845,19 +827,20 @@ export default function ChatWorkspace() {
         aria-label="Chat history"
       >
         <div className="sidebar-top">
-          <button
-            className="brand-symbol"
-            aria-label="New chat"
-            onClick={newChat}
-            disabled={busy}
-          >
-            <Image
-              src="/openmindai-logo.png"
-              alt="Openmindai"
-              width={30}
-              height={30}
-            />
-          </button>
+          <div className="sidebar-brand">
+            <button
+              className="brand-symbol"
+              aria-label="OpenMindAI: start a new chat"
+              onClick={newChat}
+              disabled={busy}
+            >
+              <Image src="/openmindai-logo.png" alt="" width={30} height={30} />
+            </button>
+            <div className="sidebar-brand-copy">
+              <strong>OpenMindAI</strong>
+              <span>Your intelligent workspace</span>
+            </div>
+          </div>
           <button
             className="icon-button sidebar-toggle"
             aria-label="Collapse sidebar"
@@ -869,10 +852,10 @@ export default function ChatWorkspace() {
             <PanelLeftClose size={20} />
           </button>
         </div>
-        <button className="sidebar-action" onClick={newChat} disabled={busy}>
+        <button className="sidebar-action new-chat-action" onClick={newChat} disabled={busy}>
           <SquarePen size={19} />
           <span>New chat</span>
-          <small>⌘ K</small>
+          <small>Ctrl K</small>
         </button>
         <button
           className="sidebar-action"
@@ -905,6 +888,7 @@ export default function ChatWorkspace() {
         )}
         {user && (
           <div className="sidebar-organize">
+            <span className="nav-section-label">Workspace</span>
             <button
               className="sidebar-action"
               onClick={() => setWorkspaceOpen(true)}
@@ -961,7 +945,7 @@ export default function ChatWorkspace() {
           </button>
         )}
         <div className="history-list">
-          <span className="section-label">Your chats</span>
+          <span className="section-label">Recent conversations</span>
           {initializing ? (
             <p className="sidebar-empty">Loading your workspace…</p>
           ) : !user ? (
@@ -988,6 +972,7 @@ export default function ChatWorkspace() {
                 className={`history-item ${conversationId === chat.id ? "active" : ""}`}
                 key={chat.id}
               >
+                <MessageCircle size={15} className="history-icon" aria-hidden="true" />
                 <button
                   className="history-title"
                   disabled={busy || loadingChat}
@@ -1114,7 +1099,7 @@ export default function ChatWorkspace() {
                 aria-expanded={modelOpen}
                 disabled={busy}
               >
-                <span>Openmindai</span>
+                <span>OpenMindAI</span>
                 <ChevronDown size={17} />
               </button>
               {selectedModel && (
@@ -1163,6 +1148,15 @@ export default function ChatWorkspace() {
             </div>
           </div>
           <div className="topbar-right">
+            <button
+              className="icon-button topbar-new-chat"
+              onClick={newChat}
+              disabled={busy}
+              aria-label="Start a new conversation"
+              title="New chat (Ctrl+K)"
+            >
+              <SquarePen size={18} />
+            </button>
             {user && (
               <>
                 <button
@@ -1225,16 +1219,16 @@ export default function ChatWorkspace() {
               <div className="welcome-mark">
                 <Image
                   src="/openmindai-logo.png"
-                  alt="Openmindai"
+                  alt=""
                   width={46}
                   height={46}
                 />
               </div>
-              <p className="eyebrow">A LITTLE CURIOSITY GOES A LONG WAY</p>
-              <h1>What’s on your mind?</h1>
+              <p className="eyebrow">YOUR AI WORKSPACE</p>
+              <h1>How can I help you today?</h1>
               <p className="welcome-subtitle">
-                A question, a first draft, a spark of an idea.
-                <br className="mobile-break" /> Let’s make something of it.
+                Turn ideas into answers, writing, research, and working code.
+                <br className="mobile-break" /> All in one place.
               </p>
               <div className="suggestions">
                 {suggestions.map((item) => (
@@ -1254,6 +1248,11 @@ export default function ChatWorkspace() {
                     <small>{item.text}</small>
                   </button>
                 ))}
+              </div>
+              <div className="welcome-capabilities" aria-label="Workspace capabilities">
+                <span><Sparkles size={15} /> Intelligent responses</span>
+                <span><Paperclip size={15} /> Files &amp; documents</span>
+                <span><Code2 size={15} /> Code &amp; research</span>
               </div>
             </section>
           ) : (
