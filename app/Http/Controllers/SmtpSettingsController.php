@@ -65,9 +65,11 @@ class SmtpSettingsController
         if (! $username || $usernameChanged) {
             $smtp->password = null;
         }
-        if ($newPassword !== '') {
+        if ($newPassword !== '' && $username) {
             $smtp->password = $newPassword;
         }
+        // A previous successful test is no longer valid after changing the settings.
+        $smtp->last_tested_at = null;
         $smtp->save();
 
         return redirect('/admin/smtp-settings')->with('status', 'SMTP settings saved. New outgoing messages will use these settings when enabled.');
@@ -84,7 +86,10 @@ class SmtpSettingsController
         // Reconfigure and purge a resolved mailer to pick up the latest saved database settings.
         app(SmtpSettings::class)->apply();
         if (app()->resolved('mail.manager')) {
-            app('mail.manager')->purge('smtp');
+            $manager = app('mail.manager');
+            if ($manager instanceof \Illuminate\Mail\MailManager) {
+                $manager->purge('smtp');
+            }
         }
 
         try {
