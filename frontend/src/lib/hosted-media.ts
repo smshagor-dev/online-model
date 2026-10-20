@@ -10,7 +10,11 @@ export const hostedMediaEnabled = () =>
   !!process.env.NVIDIA_API_KEY && (process.env.FRONTEND_CHAT_BRIDGE_KEY?.length || 0) >= 32;
 
 class WorkError extends Error {
-  constructor(message: string, readonly status = 503) { super(message); }
+  status: number;
+  constructor(message: string, status = 503) {
+    super(message);
+    this.status = status;
+  }
 }
 function decodeInput(encoded: unknown): Buffer {
   if (typeof encoded !== "string" || encoded.length > 11000000 ||
