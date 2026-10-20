@@ -36,12 +36,14 @@ const labels: Record<Kind, string> = {
 export default function MediaDialog({
   onClose,
   onUse,
+  initialKind = "image",
 }: {
+  initialKind?: Kind;
   onClose: () => void;
   onUse: (text: string) => void;
 }) {
   const [kinds, setKinds] = useState<Kind[]>([]);
-  const [kind, setKind] = useState<Kind>("image");
+  const [kind, setKind] = useState<Kind>(initialKind);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
@@ -65,7 +67,8 @@ export default function MediaDialog({
       .then((caps) => {
         setKinds((caps.media || []).filter((k) => String(k) !== "code"));
         const first = caps.media?.find((k) => String(k) !== "code");
-        if (first) setKind(first);
+        if (caps.media?.includes(initialKind)) setKind(initialKind);
+        else if (first) setKind(first);
       })
       .catch((e) => {
         if (!c.signal.aborted) setError(e.message);

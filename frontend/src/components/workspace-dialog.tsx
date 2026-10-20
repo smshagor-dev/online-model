@@ -10,8 +10,10 @@ export default function WorkspaceDialog({
   onProject,
   onChanged,
   onAttachment,
+  initialTab = "instructions",
 }: {
   onClose: () => void;
+  initialTab?: string;
   onProject: (id: number | null) => void;
   onChanged: () => void;
   onAttachment: (file: { id: number; name: string }) => void;
@@ -21,7 +23,7 @@ export default function WorkspaceDialog({
   >([]);
   const [filePage, setFilePage] = useState(1);
   const [fileLast, setFileLast] = useState(1);
-  const [tab, setTab] = useState("instructions");
+  const [tab, setTab] = useState(initialTab);
   const [projects, setProjects] = useState<Project[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [shares, setShares] = useState<Share[]>([]);
