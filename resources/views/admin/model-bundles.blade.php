@@ -1,20 +1,26 @@
 @extends('admin.layout')
+@section('title', 'Media model snapshots')
+@section('section', 'Media models')
 @section('content')
-<h1>Media model snapshots</h1>
-<p>Download revision-pinned Hugging Face snapshots for the private image, vision, transcription, speech or video runtime. Safetensors and verified configuration/tokenizer files are supported. Python and pickle weight files are excluded. A stored snapshot still needs a compatible runtime and hardware.</p>
-<p><a href="/admin/models">Chat model library</a></p>
-<form class="panel" method="get" action="/admin/model-bundles/inspect">
-<label>Hugging Face repository<input name="repository" placeholder="owner/repository" required maxlength="160"></label>
-<label>Runtime purpose<select name="purpose">@foreach(['image','vision','transcription','speech','video'] as $kind)<option>{{$kind}}</option>@endforeach</select></label>
-<button>Inspect snapshot</button>
+<div class="admin-page-heading"><div><span class="eyebrow">AI OPERATIONS</span><h1>Media model snapshots</h1><p>Import revision-pinned model files for image, vision, transcription, speech and video runtimes.</p></div><div class="heading-actions"><a href="/admin/models" class="subtle-label">← Chat model library</a></div></div>
+<div class="muted-note" style="margin-bottom:21px"><strong>Runtime compatibility matters.</strong> Verified safetensors and configuration files can be downloaded. Python and pickle weights are excluded. A downloaded snapshot does not install an inference engine or guarantee suitable hardware.</div>
+<form class="admin-card" method="get" action="/admin/model-bundles/inspect" style="margin-bottom:23px">
+    <div class="section-separator"><h2>Inspect Hugging Face snapshot</h2><p>Choose a repository and the intended runtime purpose.</p></div>
+    <div class="form-fields"><div class="field"><label for="bundle_repo">Hugging Face repository</label><input id="bundle_repo" name="repository" placeholder="owner/repository" required maxlength="160"></div>
+    <div class="field"><label for="bundle_purpose">Runtime purpose</label><select id="bundle_purpose" name="purpose">@foreach(['image','vision','transcription','speech','video'] as $kind)<option value="{{ $kind }}">{{ ucfirst($kind) }}</option>@endforeach</select></div></div>
+    <div class="form-actions"><button class="btn-primary-admin" type="submit">Inspect snapshot →</button></div>
 </form>
-@foreach($bundles as $bundle)
-<div class="card"><h2>{{$bundle->name}}</h2><p><span class="badge">{{$bundle->purpose}}</span> <span class="badge">{{$bundle->status}}</span></p>
-<p>{{$bundle->repository}} · {{count($bundle->files)}} verified files · {{number_format($bundle->bytes/1073741824,2)}} GiB<br>Revision <code>{{$bundle->revision}}</code><br>License {{$bundle->license}}</p>
-@if($bundle->download_error)<p role="alert">{{$bundle->download_error}}</p>@endif
-@if(in_array($bundle->status,['available','failed']))<form method="post" action="/admin/model-bundles/{{$bundle->id}}/download">@csrf<button>Download snapshot</button></form>@endif
-@if($bundle->status==='ready')<p>Private runtime setting:<br><code>MEDIA_{{strtoupper($bundle->purpose)}}_PATH={{storage_path('app/models/bundles/'.$bundle->id)}}</code></p><p>If the GPU runtime is on another machine, transfer this complete verified folder there, set its local path and restart the runtime. No inference engine is installed or enabled by downloading.</p>@endif
+<div class="section-separator"><h2>Imported snapshots</h2><p>Stored models and their verified download status.</p></div>
+<div class="entity-list">
+    @forelse($bundles as $bundle)
+    <section class="admin-card entity-card">
+        <div class="entity-card-header"><div><h2>{{ $bundle->name }}</h2><p class="entity-meta">{{ $bundle->repository }}</p></div><div class="badge-set"><span class="badge">{{ ucfirst($bundle->purpose) }}</span><span class="status-pill {{ $bundle->status === 'ready' ? 'success' : ($bundle->status === 'failed' ? 'danger' : 'warning') }}">{{ ucfirst($bundle->status) }}</span></div></div>
+        <p class="entity-meta">{{ count($bundle->files) }} verified files · {{ number_format($bundle->bytes / 1073741824, 2) }} GiB · {{ $bundle->license }} · Revision <code>{{ $bundle->revision }}</code></p>
+        @if($bundle->download_error)<p class="error-message" role="alert">{{ $bundle->download_error }}</p>@endif
+        @if(in_array($bundle->status, ['available', 'failed']))<form method="post" action="/admin/model-bundles/{{ $bundle->id }}/download">@csrf<button type="submit" class="btn-primary-admin">Download snapshot</button></form>@endif
+        @if($bundle->status === 'ready')<div class="muted-note"><strong>Private runtime setting</strong><div><code>MEDIA_{{ strtoupper($bundle->purpose) }}_PATH={{ storage_path('app/models/bundles/'.$bundle->id) }}</code></div><div>If the runtime is on another machine, transfer the complete folder and configure that machine's local path.</div></div>@endif
+    </section>
+    @empty<div class="empty-block">No media model snapshots imported yet.</div>@endforelse
 </div>
-@endforeach
-{{$bundles->links()}}
+<div class="pagination-wrap">{{ $bundles->links() }}</div>
 @endsection
