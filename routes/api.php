@@ -8,6 +8,7 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ConnectorController;
 use App\Http\Controllers\FrontendChatController;
 use App\Http\Controllers\MediaController;
+use App\Http\Controllers\HostedImageController;
 use App\Http\Controllers\RealtimeController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StreamChatController;
@@ -80,6 +81,10 @@ Route::prefix('v1')->group(function () {
         Route::get('canvases/{id}/versions/{version}', [CanvasController::class, 'version']);
         Route::get('media', [MediaController::class, 'index']);
         Route::post('media', [MediaController::class, 'create'])->middleware('throttle:sensitive');
+        // Server-only hosted image bridge; requires the existing 32+ character shared secret.
+        Route::post('media/hosted/begin', [HostedImageController::class, 'begin'])->middleware('throttle:sensitive');
+        Route::post('media/{id}/hosted/finish', [HostedImageController::class, 'finish'])->middleware('throttle:sensitive');
+        Route::post('media/{id}/hosted/fail', [HostedImageController::class, 'fail'])->middleware('throttle:sensitive');
         Route::get('media/{id}', [MediaController::class, 'show']);
         Route::get('media/{id}/output', [MediaController::class, 'output']);
         Route::delete('media/{id}', [MediaController::class, 'delete']);
