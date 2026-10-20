@@ -57,6 +57,7 @@ class UnfamiliarLogin
         DB::table('login_ip_challenges')->insert([
             'id' => $id, 'user_id' => $user->id, 'ip_hash' => $fingerprint,
             'password_fingerprint' => hash('sha256', $user->password),
+            'email_fingerprint' => hash('sha256', mb_strtolower($user->email)),
             'device_name' => $device, 'code_hash' => Hash::make($code),
             'attempts' => 0, 'expires_at' => now()->addMinutes(10),
             'created_at' => now(), 'updated_at' => now(),
@@ -90,7 +91,9 @@ class UnfamiliarLogin
 
             $user = User::find($row->user_id);
             if (! $user || ! $user->is_active || ! $user->email_verified_at ||
-                ! hash_equals($row->password_fingerprint, hash('sha256', $user->password))) {
+                ! hash_equals($row->password_fingerprint, hash('sha256', $user->password)) ||
+                ! $row->email_fingerprint ||
+                ! hash_equals($row->email_fingerprint, hash('sha256', mb_strtolower($user->email)))) {
                 DB::table('login_ip_challenges')->where('id', $row->id)->delete();
 
                 return null;

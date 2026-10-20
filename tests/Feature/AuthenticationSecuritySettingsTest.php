@@ -171,4 +171,20 @@ class AuthenticationSecuritySettingsTest extends TestCase
         $this->postJson('/api/v1/login', $this->payload())->assertOk();
         Notification::assertNothingSent();
     }
+    public function test_email_change_invalidates_pending_ip_challenge(): void
+    {
+        app(AdminSettings::class)->save(['unusual_ip_verification_enabled' => '1']);
+        $user = $this->user();
+        Notification::fake();
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10']);
+        $this->postJson('/api/v1/login', $this->payload())->assertOk();
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.20']);
+        $challenge = $this->postJson('/api/v1/login', $this->payload())->assertStatus(202);
+        $code = Notification::sent($user, LoginIpVerification::class)->first()->code;
+        $user->forceFill(['email' => 'changed@example.com'])->save();
+        $this->postJson('/api/v1/login/verify-ip', [
+            'challenge_id' => $challenge->json('challenge_id'), 'code' => $code,
+        ])->assertStatus(422);
+    }
+
 }
