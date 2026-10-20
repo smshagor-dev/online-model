@@ -283,7 +283,7 @@ export default function LibraryPanel({
           {preview.text !== undefined && (
             <pre className="file-text-preview">{preview.text}</pre>
           )}
-          {preview.url && preview.mime === "image/png" && (
+          {preview.url && ["image/png", "image/jpeg"].includes(preview.mime || "") && (
             <img
               className="library-image-full"
               src={preview.url}
