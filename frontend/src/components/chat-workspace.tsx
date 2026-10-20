@@ -536,7 +536,7 @@ export default function ChatWorkspace() {
       setError("");
       try {
         const task = await api<{ id: number }>(
-          "media",
+          mediaMode === "image" ? "media/image" : "media",
           "POST",
           { kind: mediaMode, prompt: text },
           controller.signal,
