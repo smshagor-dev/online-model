@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>@yield('title', 'Administration') · OpenMindAI</title>
+<title>@yield('title', 'Administration') · {{ app(\App\Services\AdminSettings::class)->get('site_name') }}</title>
 <link rel="icon" href="{{ asset('openmindai-logo.png') }}">
 {{-- Tabler UI is MIT licensed; admin.css provides local styling if CDN is unavailable. --}}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.6.1/dist/css/tabler.min.css">
@@ -23,7 +23,7 @@ $navigation = [
 ];
 @endphp
 <aside class="admin-sidebar" id="admin-sidebar" aria-label="Administration menu">
-    <a class="admin-brand" href="/admin"><img src="{{ asset('openmindai-logo.png') }}" width="42" height="42" alt=""><span><strong>OpenMindAI</strong><small>MANAGEMENT CONSOLE</small></span></a>
+    <a class="admin-brand" href="/admin"><img src="{{ asset('openmindai-logo.png') }}" width="42" height="42" alt=""><span><strong>{{ app(\App\Services\AdminSettings::class)->get('site_name') }}</strong><small>MANAGEMENT CONSOLE</small></span></a>
     <nav class="admin-menu" aria-label="Main navigation">
         @foreach($navigation as $item)
             @if($loop->index === 0)<div class="nav-section">WORKSPACE</div>@endif
@@ -64,7 +64,7 @@ $navigation = [
         @if($errors->any())<div class="notice error" role="alert">{{ $errors->first() }}</div>@endif
         @yield('content')
     </main>
-    <footer class="admin-footer">OpenMindAI · Administration <span>Secure workspace</span></footer>
+    <footer class="admin-footer">{{ app(\App\Services\AdminSettings::class)->get('site_name') }} · Administration <span>Secure workspace</span></footer>
 </div>
 <script src="{{ asset('js/admin-photo.js') }}" defer></script>
 <script src="{{ asset('js/admin-console.js') }}" defer></script>

@@ -71,6 +71,7 @@ class AdminConsoleTest extends TestCase
         $this->assertSame(45, app(AdminSettings::class)->limit('chat_daily_limit'));
         $this->assertSame(7, app(AdminSettings::class)->limit('task_daily_limit'));
         $this->assertFalse(app(AdminSettings::class)->enabled('registration_enabled'));
+        $this->get('/admin')->assertSee('Research Console');
         $this->assertSame($admin->id, auth()->id());
     }
 
@@ -87,6 +88,9 @@ class AdminConsoleTest extends TestCase
         $this->admin();
         $this->patch('/admin/settings', $this->settings())->assertRedirect('/admin/settings');
         auth()->logout();
+        $this->getJson('/api/v1/public-config')->assertOk()
+            ->assertJsonPath('registration_enabled', false)
+            ->assertJsonMissingPath('chat_daily_limit');
 
         $this->postJson('/api/v1/register', [
             'name' => 'Visitor', 'email' => 'visitor@example.com',
