@@ -19,6 +19,7 @@ $navigation = [
     ['Media models', '/admin/model-bundles', 'layers', request()->is('admin/model-bundles*')],
     ['Public assistants', '/admin/assistants', 'spark', request()->is('admin/assistants*')],
     ['Workspace settings', '/admin/settings', 'settings', request()->is('admin/settings*')],
+    ['SMTP settings', '/admin/smtp-settings', 'mail', request()->is('admin/smtp-settings*')],
     ['My profile', '/admin/profile', 'profile', request()->is('admin/profile*')],
 ];
 @endphp
@@ -39,6 +40,7 @@ $navigation = [
                     @case('layers')<path d="m12 3 9 5-9 5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5"/>@break
                     @case('spark')<path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z"/>@break
                     @case('settings')<circle cx="12" cy="12" r="3"/><path d="M4 11V9l3-1 1-3 3-1 1-2 2 2 3 1 1 3 3 1v4l-3 1-1 3-3 1-2 2-2-2-3-1-1-3-2-1z"/>@break
+                    @case('mail')<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 7 9-7"/>@break
                     @case('profile')<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>@break
                 @endswitch
             </svg>

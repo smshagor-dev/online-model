@@ -6,6 +6,7 @@ use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\AssistantGalleryController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ModelBundleController;
+use App\Http\Controllers\SmtpSettingsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect('/admin'));
@@ -16,6 +17,9 @@ Route::post('/admin/login', [AdminController::class, 'login'])->middleware('thro
 Route::prefix('admin')->middleware(['auth', 'active', 'admin'])->group(function () {
     Route::get('/', [AdminController::class, 'dashboard']);
     Route::get('settings', [AdminSettingsController::class, 'index']);
+    Route::get('smtp-settings', [SmtpSettingsController::class, 'index']);
+    Route::patch('smtp-settings', [SmtpSettingsController::class, 'update'])->middleware('throttle:sensitive');
+    Route::post('smtp-settings/test', [SmtpSettingsController::class, 'test'])->middleware('throttle:sensitive');
     Route::patch('settings', [AdminSettingsController::class, 'update'])->middleware('throttle:sensitive');
     Route::post('logout', [AdminController::class, 'logout']);
     Route::get('assistants', [AssistantGalleryController::class, 'moderation']);
