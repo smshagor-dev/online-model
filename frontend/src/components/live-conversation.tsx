@@ -171,7 +171,7 @@ export default function LiveConversation({
     if (!text.trim() || version !== epoch.current || !activeRef.current) return;
     const cleaned = text.replace(/[`*_#]/g, "").trim();
     // The hosted voice currently supports English and a 1000-character limit.
-    if (cleaned.length > 1000 || /[^\\x00-\\x7F]/.test(cleaned)) {
+    if (cleaned.length > 1000 || /[^\x00-\x7F]/.test(cleaned)) {
       speak(cleaned, version);
       return;
     }
@@ -195,6 +195,7 @@ export default function LiveConversation({
         const end = () => resolve();
         player.addEventListener("ended", end, { once: true });
         player.addEventListener("error", end, { once: true });
+        player.addEventListener("pause", end, { once: true });
         // Interrupt and cleanup are handled by the session epoch.
       });
     } finally {
