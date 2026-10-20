@@ -119,7 +119,9 @@ class HostedMediaController
                     'error' => null,
                 ]);
             } catch (\Throwable $e) {
-                if ($path) Storage::disk('local')->delete($path);
+                if ($path) {
+                    Storage::disk('local')->delete($path);
+                }
                 throw $e;
             }
             return response()->json($task->fresh());
