@@ -12,6 +12,8 @@ class AdminSettings
         'support_email' => '',
         'dashboard_note' => 'Manage your AI platform, people and operations in one place.',
         'registration_enabled' => '1',
+        'registration_email_verification_enabled' => '0',
+        'unusual_ip_verification_enabled' => '0',
         'chat_daily_limit' => '200',
         'task_daily_limit' => '20',
     ];

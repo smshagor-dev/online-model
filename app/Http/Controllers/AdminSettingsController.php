@@ -21,6 +21,8 @@ class AdminSettingsController
             'support_email' => 'nullable|email|max:254',
             'dashboard_note' => 'nullable|string|max:220',
             'registration_enabled' => ['required', Rule::in(['0', '1'])],
+            'registration_email_verification_enabled' => ['sometimes', Rule::in(['0', '1'])],
+            'unusual_ip_verification_enabled' => ['sometimes', Rule::in(['0', '1'])],
             'chat_daily_limit' => 'required|integer|min:1|max:100000',
             'task_daily_limit' => 'required|integer|min:1|max:10000',
             'current_password' => 'required|current_password',
