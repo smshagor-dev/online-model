@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light">
     <title>Reset password · OpenMindAI</title>
     <link rel="icon" href="{{ asset('openmindai-logo.png') }}">
-    <link rel="stylesheet" href="{{ asset('css/admin-auth.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin-auth.css') }}?v=20261020-2">
 </head>
 <body>
 <div class="auth-layout">
