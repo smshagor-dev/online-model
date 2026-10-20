@@ -593,9 +593,9 @@ export default function ChatWorkspace() {
       setError("");
       try {
         const task = await api<{ id: number }>(
-          mediaMode === "image" ? "media/image" : "media",
+          ["image", "speech", "video", "document_create"].includes(mediaMode) ? "media/" + mediaMode : "media",
           "POST",
-          { kind: mediaMode, prompt: text },
+          { kind: mediaMode, prompt: text, ...(mediaMode === "document_create" ? { format: "docx" } : {}) },
           controller.signal,
         );
         if (!controller.signal.aborted) {
@@ -1820,7 +1820,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
               {(webSearch || mediaMode !== "chat") && (
                 <span className="composer-active-mode">
                   {mediaMode !== "chat"
-                    ? "Create " + mediaMode
+                    ? mediaMode === "document_create" ? "Create document" : "Create " + mediaMode
                     : deepResearch
                       ? "Deep research"
                       : "Web search"}
