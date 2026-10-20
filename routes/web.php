@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminAccountController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\AssistantGalleryController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ModelBundleController;
@@ -14,6 +15,8 @@ Route::get('/admin/login', [AdminController::class, 'loginForm'])->name('login')
 Route::post('/admin/login', [AdminController::class, 'login'])->middleware('throttle:auth');
 Route::prefix('admin')->middleware(['auth', 'active', 'admin'])->group(function () {
     Route::get('/', [AdminController::class, 'dashboard']);
+    Route::get('settings', [AdminSettingsController::class, 'index']);
+    Route::patch('settings', [AdminSettingsController::class, 'update'])->middleware('throttle:sensitive');
     Route::post('logout', [AdminController::class, 'logout']);
     Route::get('assistants', [AssistantGalleryController::class, 'moderation']);
     Route::patch('assistants/{publication}', [AssistantGalleryController::class, 'moderate']);

@@ -17,6 +17,7 @@ use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
+    Route::get('public-config', fn () => ['registration_enabled' => app(\App\Services\AdminSettings::class)->enabled('registration_enabled'), 'site_name' => app(\App\Services\AdminSettings::class)->get('site_name')])->middleware('throttle:60,1');
     Route::get('explore/assistants', [AssistantGalleryController::class, 'index'])->middleware('throttle:60,1');
     Route::get('explore/assistants/{slug}', [AssistantGalleryController::class, 'show'])->middleware('throttle:60,1');
     Route::get('shared/{token}', [WorkspaceController::class, 'shared'])->middleware('throttle:60,1');

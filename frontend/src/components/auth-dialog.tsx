@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, LoaderCircle, Mail, ShieldCheck } from "lucide-react";
 import Dialog from "./dialog";
 import { api, type User } from "@/lib/api";
@@ -12,6 +12,18 @@ export default function AuthDialog({
   onLogin: (user: User) => void;
 }) {
   const [mode, setMode] = useState<Mode>("login");
+  const [registrationEnabled, setRegistrationEnabled] = useState(true);
+  useEffect(() => {
+    let active = true;
+    api<{ registration_enabled: boolean }>("public-config")
+      .then((result) => {
+        if (!active) return;
+        setRegistrationEnabled(result.registration_enabled);
+        if (!result.registration_enabled) setMode((current) => current === "register" ? "login" : current);
+      })
+      .catch(() => { /* The server independently enforces registration policy. */ });
+    return () => { active = false; };
+  }, []);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -198,13 +210,13 @@ export default function AuthDialog({
             >
               Forgot password?
             </button>
-            <button
+            {registrationEnabled && <button
               className="text-button"
               disabled={busy}
               onClick={() => change("register")}
             >
               Create an account
-            </button>
+            </button>}
             <button
               className="text-button muted"
               disabled={busy}
