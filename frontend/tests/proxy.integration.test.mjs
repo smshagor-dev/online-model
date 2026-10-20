@@ -148,6 +148,8 @@ before(async () => {
       env: {
         ...process.env,
         NEXT_TELEMETRY_DISABLED: "1",
+        // These fixtures exercise the local backend proxy independently of .env.
+        CHAT_PROVIDER: "local",
         FRONTEND_URL: origin,
         LARAVEL_API_URL: `http://127.0.0.1:${backend.address().port}/api/v1`,
       },
@@ -190,7 +192,7 @@ async function login() {
 test("workspace renders the welcome layout", async () => {
   const r = await fetch(origin);
   const html = await r.text();
-  assert.ok(html.includes("What’s on your mind?"));
+  assert.ok(html.includes("What can I help with?"));
   assert.ok(html.includes("New chat"));
   assert.ok(html.includes("Ask anything"));
 });

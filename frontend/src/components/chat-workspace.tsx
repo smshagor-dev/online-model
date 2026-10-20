@@ -2,8 +2,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
+  AudioLines,
+  Plus,
+  SlidersHorizontal,
   Paperclip,
   FolderOpen,
+  FolderPlus,
+  Images,
+  Grid2X2,
   Archive,
   Pin,
   Square,
@@ -59,12 +65,42 @@ import {
 } from "@/lib/api";
 
 const suggestions = [
-  { icon: Code2, title: "Write & debug code", text: "Help me build a modern web application", color: "blue" },
-  { icon: PenLine, title: "Write something", text: "Write a thoughtful and professional email", color: "coral" },
-  { icon: BookOpen, title: "Learn a concept", text: "Explain machine learning in simple terms", color: "purple" },
-  { icon: Lightbulb, title: "Explore ideas", text: "Brainstorm creative ideas for my next project", color: "amber" },
-  { icon: Search, title: "Explore a topic", text: "Help me research a topic with reliable sources", color: "blue" },
-  { icon: MessageCircle, title: "Get a second opinion", text: "Help me think through an important decision", color: "purple" },
+  {
+    icon: Code2,
+    title: "Write & debug code",
+    text: "Help me build a modern web application",
+    color: "blue",
+  },
+  {
+    icon: PenLine,
+    title: "Write something",
+    text: "Write a thoughtful and professional email",
+    color: "coral",
+  },
+  {
+    icon: BookOpen,
+    title: "Learn a concept",
+    text: "Explain machine learning in simple terms",
+    color: "purple",
+  },
+  {
+    icon: Lightbulb,
+    title: "Explore ideas",
+    text: "Brainstorm creative ideas for my next project",
+    color: "amber",
+  },
+  {
+    icon: Search,
+    title: "Explore a topic",
+    text: "Help me research a topic with reliable sources",
+    color: "blue",
+  },
+  {
+    icon: MessageCircle,
+    title: "Get a second opinion",
+    text: "Help me think through an important decision",
+    color: "purple",
+  },
 ];
 export default function ChatWorkspace() {
   const [settingsRevision, setSettingsRevision] = useState(0);
@@ -134,6 +170,7 @@ export default function ChatWorkspace() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [accountMenu, setAccountMenu] = useState(false);
+  const [historyMenuId, setHistoryMenuId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadingChat, setLoadingChat] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -148,6 +185,7 @@ export default function ChatWorkspace() {
   const historyRequest = useRef<AbortController | null>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
+  const composerToolsRef = useRef<HTMLDetailsElement>(null);
 
   const clearSession = useCallback(() => {
     chatRequest.current?.abort();
@@ -287,10 +325,21 @@ export default function ChatWorkspace() {
   }, [user?.id, settingsRevision, report]);
   useEffect(() => {
     const element = inputRef.current;
-    if (element) {
+    if (!element) return;
+    const resize = () => {
       element.style.height = "auto";
       element.style.height = `${Math.min(element.scrollHeight, 200)}px`;
-    }
+    };
+    resize();
+    let width = element.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (width !== element.clientWidth) {
+        width = element.clientWidth;
+        resize();
+      }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
   }, [draft]);
   useEffect(() => {
     if (skipScroll.current) {
@@ -309,6 +358,13 @@ export default function ChatWorkspace() {
         setModelOpen(false);
       if (!accountMenuRef.current?.contains(event.target as Node))
         setAccountMenu(false);
+      if (
+        !(event.target instanceof Element) ||
+        !event.target.closest(".history-item")
+      )
+        setHistoryMenuId(null);
+      if (!composerToolsRef.current?.contains(event.target as Node))
+        composerToolsRef.current?.removeAttribute("open");
     }
     document.addEventListener("mousedown", dismiss);
     return () => document.removeEventListener("mousedown", dismiss);
@@ -326,6 +382,8 @@ export default function ChatWorkspace() {
   useEffect(() => {
     function keyboard(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        setHistoryMenuId(null);
+        composerToolsRef.current?.removeAttribute("open");
         setModelOpen(false);
         setAccountMenu(false);
         setSidebarOpen(false);
@@ -836,10 +894,6 @@ export default function ChatWorkspace() {
             >
               <Image src="/openmindai-logo.png" alt="" width={30} height={30} />
             </button>
-            <div className="sidebar-brand-copy">
-              <strong>OpenMindAI</strong>
-              <span>Your intelligent workspace</span>
-            </div>
           </div>
           <button
             className="icon-button sidebar-toggle"
@@ -852,172 +906,240 @@ export default function ChatWorkspace() {
             <PanelLeftClose size={20} />
           </button>
         </div>
-        <button className="sidebar-action new-chat-action" onClick={newChat} disabled={busy}>
-          <SquarePen size={19} />
-          <span>New chat</span>
-          <small>Ctrl K</small>
-        </button>
-        <button
-          className="sidebar-action"
-          onClick={() => {
-            setSearchOpen(!searchOpen);
-          }}
-        >
-          <Search size={19} />
-          <span>Search chats</span>
-        </button>
-        {searchOpen && (
-          <div className="history-search">
-            <Search size={15} />
-            <input
-              aria-label="Search saved chats"
-              placeholder="Search all saved chats"
-              maxLength={100}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              autoFocus
-            />
+        <div className="sidebar-scroll">
+          <nav className="sidebar-navigation" aria-label="Main navigation">
             <button
-              className="icon-button"
-              aria-label="Clear search"
-              onClick={() => setSearch("")}
-            >
-              <X size={14} />
-            </button>
-          </div>
-        )}
-        {user && (
-          <div className="sidebar-organize">
-            <span className="nav-section-label">Workspace</span>
-            <button
-              className="sidebar-action"
-              onClick={() => setWorkspaceOpen(true)}
-            >
-              <FolderOpen size={18} />
-              Projects & memory
-            </button>
-            <button
-              className="sidebar-action"
-              onClick={() => setMediaOpen(true)}
-            >
-              <Sparkles size={18} /> Media studio
-            </button>
-            <button
-              className="sidebar-action"
+              className="sidebar-action new-chat-action"
+              onClick={newChat}
               disabled={busy}
-              onClick={() => setToolsOpen("assistants")}
             >
-              <Code2 size={18} />
-              Tools & library
+              <SquarePen size={19} />
+              <span>New chat</span>
+              <kbd>Ctrl K</kbd>
             </button>
-            <select
-              aria-label="Filter by project"
-              value={projectId ?? ""}
-              onChange={(e) => {
-                setProjectId(e.target.value ? Number(e.target.value) : null);
-                newChat();
+            <button
+              className="sidebar-action"
+              aria-expanded={searchOpen}
+              onClick={() => {
+                setSearchOpen(!searchOpen);
               }}
             >
-              <option value="">All projects</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <button
-              className="text-button"
-              onClick={() => setArchived(!archived)}
-            >
-              <Archive size={14} />
-              {archived ? "Back to active chats" : "Archived chats"}
+              <Search size={19} />
+              <span>Search chats</span>
             </button>
-          </div>
-        )}
-        {user && (
-          <button
-            className="sidebar-action"
-            disabled={busy}
-            onClick={() => setCanvasInitial("")}
-          >
-            <PenLine size={18} />
-            Canvas
-          </button>
-        )}
-        <div className="history-list">
-          <span className="section-label">Recent conversations</span>
-          {initializing ? (
-            <p className="sidebar-empty">Loading your workspace…</p>
-          ) : !user ? (
-            <div className="sidebar-empty">
-              <MessageCircle size={23} />
-              <p>
-                Your next great idea
-                <br />
-                starts with a conversation.
-              </p>
-              <button className="text-button" onClick={() => setAuthOpen(true)}>
-                Sign in to save your chats
-              </button>
-            </div>
-          ) : filteredHistory.length === 0 ? (
-            <p className="sidebar-empty">
-              {search
-                ? "No matching conversations."
-                : "Your conversations will appear here."}
-            </p>
-          ) : (
-            filteredHistory.map((chat) => (
-              <div
-                className={`history-item ${conversationId === chat.id ? "active" : ""}`}
-                key={chat.id}
-              >
-                <MessageCircle size={15} className="history-icon" aria-hidden="true" />
+            {searchOpen && (
+              <div className="history-search">
+                <Search size={15} />
+                <input
+                  aria-label="Search saved chats"
+                  placeholder="Search all saved chats"
+                  maxLength={100}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  autoFocus
+                />
                 <button
-                  className="history-title"
-                  disabled={busy || loadingChat}
-                  onClick={() => void openChat(chat.id)}
-                  title={chat.title}
+                  className="icon-button"
+                  aria-label="Clear search"
+                  onClick={() => setSearch("")}
                 >
-                  {chat.title}
-                </button>
-                <button
-                  className="history-delete icon-button"
-                  disabled={busy}
-                  onClick={() => setToolsChat(chat)}
-                  aria-label={`Manage ${chat.title}`}
-                >
-                  <MoreHorizontal size={14} />
-                </button>
-                <button
-                  className="history-delete icon-button"
-                  disabled={busy}
-                  onClick={() => setDeleteId(chat.id)}
-                  aria-label={`Delete ${chat.title}`}
-                >
-                  <Trash2 size={14} />
+                  <X size={14} />
                 </button>
               </div>
-            ))
+            )}
+            {user && (
+              <>
+                <button
+                  className="sidebar-action"
+                  disabled={busy}
+                  onClick={() => {
+                    setToolsOpen("library");
+                    setSidebarOpen(false);
+                  }}
+                >
+                  <BookOpen size={19} />
+                  <span>Library</span>
+                </button>
+                <button
+                  className="sidebar-action"
+                  disabled={busy}
+                  onClick={() => {
+                    setMediaOpen(true);
+                    setSidebarOpen(false);
+                  }}
+                >
+                  <Images size={19} />
+                  <span>Images</span>
+                </button>
+                <button
+                  className="sidebar-action"
+                  disabled={busy}
+                  onClick={() => {
+                    setToolsOpen("assistants");
+                    setSidebarOpen(false);
+                  }}
+                >
+                  <Grid2X2 size={19} />
+                  <span>Assistants</span>
+                </button>
+                <button
+                  className="sidebar-action"
+                  disabled={busy}
+                  onClick={() => {
+                    setCanvasInitial("");
+                    setSidebarOpen(false);
+                  }}
+                >
+                  <PenLine size={19} />
+                  <span>Canvas</span>
+                </button>
+              </>
+            )}
+          </nav>
+          {user && (
+            <section className="sidebar-projects" aria-label="Projects">
+              <span className="section-label">Projects</span>
+              <button
+                className="sidebar-action"
+                disabled={busy}
+                onClick={() => {
+                  setWorkspaceOpen(true);
+                  setSidebarOpen(false);
+                }}
+              >
+                <FolderPlus size={19} />
+                <span>New project</span>
+              </button>
+              {projects.map((project) => (
+                <button
+                  key={project.id}
+                  className={
+                    "sidebar-action project-link " +
+                    (projectId === project.id ? "selected" : "")
+                  }
+                  aria-pressed={projectId === project.id}
+                  disabled={busy}
+                  onClick={() => {
+                    newChat();
+                    setProjectId(projectId === project.id ? null : project.id);
+                  }}
+                >
+                  <FolderOpen size={18} />
+                  <span>{project.name}</span>
+                </button>
+              ))}
+              {projectId !== null && (
+                <button
+                  className="sidebar-action"
+                  disabled={busy}
+                  onClick={() => {
+                    newChat();
+                    setProjectId(null);
+                  }}
+                >
+                  <X size={18} />
+                  <span>Show all chats</span>
+                </button>
+              )}
+            </section>
           )}
-          {user && historyPage < historyLastPage && (
-            <button
-              className="history-more"
-              disabled={loadingHistory}
-              onClick={async () => {
-                setLoadingHistory(true);
-                try {
-                  await refreshHistory(historyPage + 1);
-                } catch (e) {
-                  report(e);
-                } finally {
-                  setLoadingHistory(false);
-                }
-              }}
-            >
-              {loadingHistory ? "Loading…" : "Load more chats"}
-            </button>
-          )}
+          <div className="history-list">
+            <span className="section-label">
+              {archived
+                ? "Archived chats"
+                : projectId
+                  ? "Project chats"
+                  : "Your chats"}
+            </span>
+            {initializing ? (
+              <p className="sidebar-empty">Loading your workspace…</p>
+            ) : !user ? (
+              <div className="sidebar-empty">
+                <p>Log in to see your chat history.</p>
+              </div>
+            ) : filteredHistory.length === 0 ? (
+              <p className="sidebar-empty">
+                {search
+                  ? "No matching conversations."
+                  : "Your conversations will appear here."}
+              </p>
+            ) : (
+              filteredHistory.map((chat) => (
+                <div
+                  className={`history-item ${conversationId === chat.id ? "active" : ""}`}
+                  key={chat.id}
+                >
+                  <MessageCircle
+                    size={15}
+                    className="history-icon"
+                    aria-hidden="true"
+                  />
+                  <button
+                    className="history-title"
+                    disabled={busy || loadingChat}
+                    onClick={() => void openChat(chat.id)}
+                    title={chat.title}
+                  >
+                    {chat.title}
+                  </button>
+                  <button
+                    className="history-delete icon-button"
+                    disabled={busy}
+                    aria-label={"More options for " + chat.title}
+                    aria-expanded={historyMenuId === chat.id}
+                    onClick={() =>
+                      setHistoryMenuId(
+                        historyMenuId === chat.id ? null : chat.id,
+                      )
+                    }
+                  >
+                    <MoreHorizontal size={18} />
+                  </button>
+                  {historyMenuId === chat.id && (
+                    <div className="history-menu popover">
+                      <button
+                        onClick={() => {
+                          setToolsChat(chat);
+                          setHistoryMenuId(null);
+                        }}
+                      >
+                        <Pencil size={16} />
+                        Rename, share & more
+                      </button>
+                      <button
+                        className="history-menu-delete"
+                        onClick={() => {
+                          setDeleteId(chat.id);
+                          setHistoryMenuId(null);
+                        }}
+                      >
+                        <Trash2 size={16} />
+                        Delete chat
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+            {user && historyPage < historyLastPage && (
+              <button
+                className="history-more"
+                disabled={loadingHistory}
+                onClick={async () => {
+                  setLoadingHistory(true);
+                  try {
+                    await refreshHistory(historyPage + 1);
+                  } catch (e) {
+                    report(e);
+                  } finally {
+                    setLoadingHistory(false);
+                  }
+                }}
+              >
+                {loadingHistory ? "Loading…" : "Load more chats"}
+              </button>
+            )}
+          </div>
         </div>
         <div className="sidebar-footer" ref={accountMenuRef}>
           {user ? (
@@ -1036,7 +1158,7 @@ export default function ChatWorkspace() {
                 </span>
                 <span>
                   <strong>{user.name}</strong>
-                  <small>Personal workspace</small>
+                  <small>Personal account</small>
                 </span>
                 <MoreHorizontal size={18} />
               </button>
@@ -1049,6 +1171,25 @@ export default function ChatWorkspace() {
                     }}
                   >
                     <Settings size={17} /> Settings
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      setArchived(!archived);
+                      setAccountMenu(false);
+                    }}
+                  >
+                    <Archive size={17} />
+                    {archived ? "Show active chats" : "Archived chats"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setWorkspaceOpen(true);
+                      setAccountMenu(false);
+                    }}
+                  >
+                    <FolderOpen size={17} />
+                    Projects & memory
                   </button>
                   <button disabled={busy} onClick={() => void logout()}>
                     <LogOut size={17} /> Sign out
@@ -1066,14 +1207,19 @@ export default function ChatWorkspace() {
                 <LogIn size={18} />
               </span>
               <span>
-                <strong>Make it your space</strong>
-                <small>Sign in or create an account</small>
+                <strong>Log in</strong>
+                <small>Save your chats and more</small>
               </span>
             </button>
           )}
         </div>
       </aside>
-      <main className="main-panel">
+      <main
+        className={
+          "main-panel " +
+          (messages.length === 0 && !loadingChat ? "is-empty" : "")
+        }
+      >
         <header className="topbar">
           <div className="topbar-left">
             <button
@@ -1108,7 +1254,7 @@ export default function ChatWorkspace() {
               {modelOpen && (
                 <div className="model-menu popover">
                   <div className="popover-heading">
-                    Choose a model<small>Your self-hosted models</small>
+                    Choose a model<small>Available chat models</small>
                   </div>
                   {!user ? (
                     <button
@@ -1216,44 +1362,7 @@ export default function ChatWorkspace() {
         <div className="chat-scroll" ref={scrollRef}>
           {messages.length === 0 && !loadingChat ? (
             <section className="welcome">
-              <div className="welcome-mark">
-                <Image
-                  src="/openmindai-logo.png"
-                  alt=""
-                  width={46}
-                  height={46}
-                />
-              </div>
-              <p className="eyebrow">YOUR AI WORKSPACE</p>
-              <h1>How can I help you today?</h1>
-              <p className="welcome-subtitle">
-                Turn ideas into answers, writing, research, and working code.
-                <br className="mobile-break" /> All in one place.
-              </p>
-              <div className="suggestions">
-                {suggestions.map((item) => (
-                  <button
-                    key={item.title}
-                    onClick={() => {
-                      setDraft(item.text);
-                      inputRef.current?.focus();
-                    }}
-                  >
-                    <item.icon
-                      className={item.color}
-                      size={21}
-                      strokeWidth={1.6}
-                    />
-                    <span>{item.title}</span>
-                    <small>{item.text}</small>
-                  </button>
-                ))}
-              </div>
-              <div className="welcome-capabilities" aria-label="Workspace capabilities">
-                <span><Sparkles size={15} /> Intelligent responses</span>
-                <span><Paperclip size={15} /> Files &amp; documents</span>
-                <span><Code2 size={15} /> Code &amp; research</span>
-              </div>
+              <h1>What can I help with?</h1>
             </section>
           ) : (
             <div className="thread">
@@ -1542,25 +1651,6 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
               Conversation branches
             </button>
           )}
-          <div className="composer-modes">
-            <select
-              aria-label="Message mode"
-              value={mediaMode}
-              onChange={(e) => setMediaMode(e.target.value)}
-            >
-              <option value="chat">Chat</option>
-              {["image", "speech", "video"]
-                .filter((k) => mediaKinds.includes(k))
-                .map((k) => (
-                  <option key={k} value={k}>
-                    Create {k}
-                  </option>
-                ))}
-            </select>
-            <button onClick={() => setToolsOpen("voice")}>Voice</button>
-            <button onClick={() => setToolsOpen("research")}>Research</button>
-            <button onClick={() => setToolsOpen("code")}>Run Python</button>
-          </div>
           {mediaMode !== "chat" && (
             <p className="muted">
               Media tasks are saved separately in Library. They are not
@@ -1652,71 +1742,142 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
               </p>
             )}
             <div className="composer-toolbar">
-              {searchAvailable && (
-                <button
-                  type="button"
-                  className={`temporary-toggle ${webSearch ? "enabled" : ""}`}
-                  disabled={busy}
-                  aria-pressed={webSearch && !deepResearch}
-                  onClick={() => {
-                    setWebSearch(!webSearch || deepResearch);
-                    setDeepResearch(false);
-                  }}
-                >
-                  <Search size={13} />
-                  {webSearch && !deepResearch ? "Web search on" : "Web search"}
-                </button>
-              )}
-              {searchAvailable && (
-                <>
-                  <button
-                    type="button"
-                    className={`temporary-toggle ${deepResearch ? "enabled" : ""}`}
-                    disabled={busy}
-                    aria-pressed={deepResearch}
-                    onClick={() => {
-                      setDeepResearch(!deepResearch);
-                      setWebSearch(!deepResearch);
-                    }}
-                  >
-                    Deep research
-                  </button>
-                  {webSearch && (
-                    <select
-                      aria-label="Search freshness"
-                      value={searchTimeRange}
-                      disabled={busy}
-                      onChange={(event) =>
-                        setSearchTimeRange(event.target.value)
-                      }
-                    >
-                      <option value="">Any time</option>
-                      <option value="day">Past day</option>
-                      <option value="week">Past week</option>
-                      <option value="month">Past month</option>
-                      <option value="year">Past year</option>
-                    </select>
-                  )}
-                </>
-              )}
               <button
                 type="button"
                 className="icon-button"
                 disabled={busy || uploading}
-                aria-label="Attach a text or code file"
+                aria-label="Add photos and files"
+                title="Add photos and files"
                 onClick={() => fileRef.current?.click()}
               >
                 {uploading ? (
                   <LoaderCircle size={17} className="spin" />
                 ) : (
-                  <Paperclip size={17} />
+                  <Plus size={22} strokeWidth={1.8} />
                 )}
               </button>
-              <span className="composer-hint">
-                <Sparkles size={15} />
-                {selectedModel?.family || "Your AI, at your pace"}
-              </span>
+              <details className="composer-tools" ref={composerToolsRef}>
+                <summary>
+                  <SlidersHorizontal size={17} />
+                  <span>Tools</span>
+                </summary>
+                <div className="composer-tools-menu">
+                  <p className="popover-heading">Create & explore</p>
+                  <div className="composer-modes">
+                    <select
+                      aria-label="Message mode"
+                      value={mediaMode}
+                      onChange={(e) => setMediaMode(e.target.value)}
+                    >
+                      <option value="chat">Chat</option>
+                      {["image", "speech", "video"]
+                        .filter((k) => mediaKinds.includes(k))
+                        .map((k) => (
+                          <option key={k} value={k}>
+                            Create {k}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        composerToolsRef.current?.removeAttribute("open");
+                        setToolsOpen("voice");
+                      }}
+                    >
+                      Voice
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        composerToolsRef.current?.removeAttribute("open");
+                        setToolsOpen("research");
+                      }}
+                    >
+                      Research
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        composerToolsRef.current?.removeAttribute("open");
+                        setToolsOpen("code");
+                      }}
+                    >
+                      Run Python
+                    </button>
+                  </div>
+
+                  {searchAvailable && (
+                    <button
+                      type="button"
+                      className={`temporary-toggle ${webSearch ? "enabled" : ""}`}
+                      disabled={busy}
+                      aria-pressed={webSearch && !deepResearch}
+                      onClick={() => {
+                        setWebSearch(!webSearch || deepResearch);
+                        setDeepResearch(false);
+                      }}
+                    >
+                      <Search size={13} />
+                      {webSearch && !deepResearch
+                        ? "Web search on"
+                        : "Web search"}
+                    </button>
+                  )}
+                  {searchAvailable && (
+                    <>
+                      <button
+                        type="button"
+                        className={`temporary-toggle ${deepResearch ? "enabled" : ""}`}
+                        disabled={busy}
+                        aria-pressed={deepResearch}
+                        onClick={() => {
+                          setDeepResearch(!deepResearch);
+                          setWebSearch(!deepResearch);
+                        }}
+                      >
+                        Deep research
+                      </button>
+                      {webSearch && (
+                        <select
+                          aria-label="Search freshness"
+                          value={searchTimeRange}
+                          disabled={busy}
+                          onChange={(event) =>
+                            setSearchTimeRange(event.target.value)
+                          }
+                        >
+                          <option value="">Any time</option>
+                          <option value="day">Past day</option>
+                          <option value="week">Past week</option>
+                          <option value="month">Past month</option>
+                          <option value="year">Past year</option>
+                        </select>
+                      )}
+                    </>
+                  )}
+                </div>
+              </details>
+              {(webSearch || mediaMode !== "chat") && (
+                <span className="composer-active-mode">
+                  {mediaMode !== "chat"
+                    ? "Create " + mediaMode
+                    : deepResearch
+                      ? "Deep research"
+                      : "Web search"}
+                </span>
+              )}
               <div className="composer-right">
+                <button
+                  type="button"
+                  className="icon-button voice-button"
+                  aria-label="Open voice mode"
+                  title="Voice mode"
+                  disabled={busy}
+                  onClick={() => setToolsOpen("voice")}
+                >
+                  <AudioLines size={21} />
+                </button>
                 {draft.length > 14000 && (
                   <small>{draft.length.toLocaleString()}/16,000</small>
                 )}
@@ -1752,9 +1913,28 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
               </div>
             </div>
           </form>
+          {messages.length === 0 && !loadingChat && (
+            <div className="suggestions" aria-label="Try a prompt">
+              {suggestions.slice(0, 4).map((item) => (
+                <button
+                  key={item.title}
+                  onClick={() => {
+                    setDraft(item.text);
+                    inputRef.current?.focus();
+                  }}
+                >
+                  <item.icon
+                    className={item.color}
+                    size={21}
+                    strokeWidth={1.6}
+                  />
+                  <span>{item.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <p className="composer-note">
             AI can make mistakes. Check important information.
-            <span>Shift + Enter for a new line</span>
           </p>
         </div>
       </main>
