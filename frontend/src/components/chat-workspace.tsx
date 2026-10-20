@@ -1756,6 +1756,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                 </summary>
                 <WelcomeToolsMenu
                   busy={busy || uploading}
+                  signedIn={Boolean(user)}
                   searchAvailable={searchAvailable}
                   imageAvailable={mediaKinds.includes("image")}
                   mediaKinds={mediaKinds}
