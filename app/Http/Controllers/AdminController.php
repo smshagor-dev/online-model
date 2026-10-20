@@ -11,22 +11,52 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class AdminController
 {
-    public function loginForm()
+    public function loginForm(Request $r)
     {
-        return view('admin.login');
+        if ($r->boolean('restart')) {
+            $r->session()->forget('admin_challenge');
+        }
+        $challenge = $r->session()->get('admin_challenge');
+        $challenging = is_array($challenge) && ($challenge['expires'] ?? 0) > now()->timestamp;
+        if (! $challenging) {
+            $r->session()->forget('admin_challenge');
+        }
+
+        return view('admin.login', ['challenging' => $challenging]);
     }
 
     public function login(Request $r, TwoFactor $two)
     {
-        $d = $r->validate(['email' => 'required|email', 'password' => 'required|string|max:1024', 'code' => 'nullable|string|max:64']);
-        $u = User::where('email', $d['email'])->first();
-        abort_unless($u && Hash::check($d['password'], $u->password) && $u->is_admin && $u->is_active && $u->email_verified_at, 422, 'Invalid administrator credentials.');
-        if ($u->two_factor_confirmed_at) {
-            abort_unless($two->verify($u, $d['code'] ?? ''), 422, 'Valid two-factor code required.');
+        $challenge = $r->session()->get('admin_challenge');
+        if (is_array($challenge)) {
+            $u = User::find($challenge['id'] ?? null);
+            if (! $u || ($challenge['expires'] ?? 0) <= now()->timestamp || ! hash_equals($challenge['password_hash'] ?? '', $u->password) || ! $u->is_admin || ! $u->is_active || ! $u->email_verified_at || ! $u->two_factor_confirmed_at) {
+                $r->session()->forget('admin_challenge');
+
+                return redirect('/admin/login')->withErrors(['email' => 'Your sign-in session expired. Please sign in again.']);
+            }
+            $d = $r->validate(['code' => 'required|string|max:64']);
+            if (! $two->verify($u, $d['code'])) {
+                throw ValidationException::withMessages(['code' => 'Enter a valid authenticator or recovery code.']);
+            }
+        } else {
+            $d = $r->validate(['email' => 'required|email', 'password' => 'required|string|max:1024']);
+            $u = User::where('email', mb_strtolower(trim($d['email'])))->first();
+            if (! $u || ! Hash::check($d['password'], $u->password) || ! $u->is_admin || ! $u->is_active || ! $u->email_verified_at) {
+                throw ValidationException::withMessages(['email' => 'Invalid administrator credentials.']);
+            }
+            if ($u->two_factor_confirmed_at) {
+                $r->session()->regenerate();
+                $r->session()->put('admin_challenge', ['id' => $u->id, 'password_hash' => $u->password, 'expires' => now()->addMinutes(5)->timestamp]);
+
+                return redirect('/admin/login');
+            }
         }
+        $r->session()->forget('admin_challenge');
         Auth::login($u);
         $r->session()->regenerate();
         $r->session()->put('admin_verified', true);
