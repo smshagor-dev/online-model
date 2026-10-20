@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import ScreenPreview from "./screen-preview";
 import { api } from "@/lib/api";
+import { audioAsWavBase64 } from "@/lib/audio-file";
 export default function VoicePanel({
   onText,
 }: {
@@ -57,15 +58,10 @@ export default function VoicePanel({
     setBusy(true);
     setPhase("Transcribing…");
     try {
-      const input = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result).split(",")[1]);
-        reader.onerror = () => reject(new Error("Unable to read recording."));
-        reader.readAsDataURL(blob);
-      });
+      const input = await audioAsWavBase64(blob);
       if (c.signal.aborted) return;
       const task = await api<{ id: number }>(
-        "media",
+        "media/transcription",
         "POST",
         { kind: "transcription", prompt: "", input },
         c.signal,
@@ -185,7 +181,7 @@ export default function VoicePanel({
     <section className="voice-panel">
       <h3>Voice input</h3>
       <p className="muted">
-        Record up to 110 seconds, then transcribe with your private model.
+        Record up to 110 seconds, then transcribe securely using the configured speech service.
         Review the transcript before sending. This is turn-based input; use the
         Live workspace tab for continuous conversation. Background listening
         stops when you close that tab. Screen preview below sends a frame only
@@ -193,7 +189,7 @@ export default function VoicePanel({
       </p>
       {!available && (
         <p role="status">
-          An administrator must enable the self-hosted transcription engine.
+          An administrator must configure the speech transcription service.
         </p>
       )}
       {error && <p role="alert">{error}</p>}
