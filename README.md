@@ -27,3 +27,9 @@ Official search API: https://docs.searxng.org/dev/search_api.html
 Workspace now includes Teams, Connectors and Live. Team documents/discussions use membership and revision checks; private chats require reviewed snapshot consent before sharing. MCP tools use operator-reviewed endpoints, encrypted personal credentials and per-call approval. Live uses continuous microphone speech detection, private ASR, streamed chat and browser speech with optional sampled camera/screen observations. Billing is excluded.
 
 See [setup, scope and verification](docs/COLLABORATION_AND_LIVE.md) before enabling the live runtime or external connectors.
+
+## Administrator accounts
+
+Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in the server environment, then run `php artisan db:seed --class=AdminSeeder --force` after migrating and clearing stale config. Optional `ADMIN_NAME` and `ADMIN_AVATAR_PATH` customize the first profile. No default password is included, and reseeding never resets or promotes an existing account.
+
+In the admin panel, **My profile** edits your name/photo and supports password or verified email changes. **New admin** creates another administrator with an optional image after confirming your current password and enabled 2FA. See [administrator setup](docs/ADMIN_ACCOUNTS.md).

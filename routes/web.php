@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminAccountController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AssistantGalleryController;
 use App\Http\Controllers\AuthController;
@@ -16,6 +17,13 @@ Route::prefix('admin')->middleware(['auth', 'active', 'admin'])->group(function 
     Route::post('logout', [AdminController::class, 'logout']);
     Route::get('assistants', [AssistantGalleryController::class, 'moderation']);
     Route::patch('assistants/{publication}', [AssistantGalleryController::class, 'moderate']);
+    Route::get('profile', [AdminAccountController::class, 'profile']);
+    Route::patch('profile', [AdminAccountController::class, 'update']);
+    Route::post('profile/password', [AdminAccountController::class, 'password'])->middleware('throttle:sensitive');
+    Route::post('profile/email', [AdminAccountController::class, 'email'])->middleware('throttle:sensitive');
+    Route::delete('profile/email', [AdminAccountController::class, 'cancelEmail']);
+    Route::get('administrators/create', [AdminAccountController::class, 'create']);
+    Route::post('administrators', [AdminAccountController::class, 'store'])->middleware('throttle:sensitive');
     Route::get('users', [AdminController::class, 'users']);
     Route::get('users/{user}', [AdminController::class, 'user']);
     Route::patch('users/{user}', [AdminController::class, 'updateUser']);
