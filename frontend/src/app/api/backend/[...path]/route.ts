@@ -5,6 +5,7 @@ import {
   NVIDIA_MODEL_ID,
 } from "@/lib/nvidia-chat";
 import { generateHostedImage, hostedImageEnabled } from "@/lib/hosted-image";
+import { hostedMediaRequest, hostedMediaEnabled } from "@/lib/hosted-media";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -23,7 +24,7 @@ const publicPaths = new Set([
 ]);
 const routes: Record<string, RegExp> = {
   GET: /^(public-config|teams(?:\/\d+(?:\/(documents|threads)\/\d+)?)?|connectors|explore\/assistants(?:\/[a-f0-9-]{36})?|assistants|tasks(?:\/\d+\/runs)?|canvases\/\d+\/versions(?:\/\d+)?|conversations\/\d+\/branches|media(?:\/\d+(?:\/output)?)?|me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
-  POST: /^(teams(?:\/\d+\/(preview|invites|documents|threads(?:\/\d+)?))?|team-invites\/\d+\/accept|connectors\/[a-zA-Z0-9_-]{1,80}\/(connect|tools|call)|live\/(start|input|stop)|explore\/assistants\/[a-f0-9-]{36}\/copy|assistants(?:\/\d+\/publish)?|tasks(?:\/\d+\/runs(?:\/\d+\/resume)?)?|me\/(avatar|email)|email\/change\/confirm|settings\/data|media(?:\/image)?|login(?:\/verify-ip)?|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/(stream|resume))?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
+  POST: /^(teams(?:\/\d+\/(preview|invites|documents|threads(?:\/\d+)?))?|team-invites\/\d+\/accept|connectors\/[a-zA-Z0-9_-]{1,80}\/(connect|tools|call)|live\/(start|input|stop)|explore\/assistants\/[a-f0-9-]{36}\/copy|assistants(?:\/\d+\/publish)?|tasks(?:\/\d+\/runs(?:\/\d+\/resume)?)?|me\/(avatar|email)|email\/change\/confirm|settings\/data|media(?:\/(?:image|transcription|speech|video|document_create))?|login(?:\/verify-ip)?|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/(stream|resume))?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
   PATCH: /^(me|preferences|conversations\/\d+)$/,
   PUT: /^(teams\/\d+\/(members|documents)\/\d+|assistants\/\d+|tasks\/\d+|me\/password|projects\/\d+|canvases\/\d+|memories\/\d+|conversations\/\d+\/messages\/\d+\/feedback)$/,
   DELETE:
@@ -78,7 +79,7 @@ async function proxy(
         size += value.byteLength;
         if (
           size >
-          (endpoint === "media" || endpoint === "live/input"
+          (endpoint === "media" || endpoint === "live/input" || endpoint === "media/transcription"
             ? 11_000_000
             : endpoint === "me/avatar"
               ? 130_000
@@ -99,6 +100,20 @@ async function proxy(
     } catch {
       return NextResponse.json({ message: "Invalid JSON." }, { status: 400 });
     }
+  }
+  if (
+    ["media/transcription", "media/speech", "media/document_create", "media/video"].includes(endpoint) &&
+    request.method === "POST"
+  ) {
+    const kind = endpoint.slice("media/".length);
+    const data = JSON.parse(body!);
+    // Never trust the browser's requested engine or provider URL.
+    const response = await hostedMediaRequest(
+      JSON.stringify({ kind, prompt: data.prompt ?? "", input: data.input, format: data.format }),
+      token!, base, request.signal,
+    );
+    if (response.status === 401) jar.delete(cookieName);
+    return response;
   }
   if (endpoint === "media/image" && request.method === "POST") {
     const response = await generateHostedImage(body!, token!, base, request.signal);
@@ -190,7 +205,7 @@ async function proxy(
       const mime = upstream.headers.get("content-type")?.split(";")[0];
       if (
         !mime ||
-        !["image/png", "image/jpeg", "audio/wav", "video/mp4", "application/zip"].includes(
+        !["image/png", "image/jpeg", "audio/wav", "video/mp4", "application/zip", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"].includes(
           mime,
         )
       )
@@ -201,7 +216,7 @@ async function proxy(
       return new NextResponse(upstream.body, {
         headers: {
           "Content-Type": mime,
-          "Content-Disposition": `attachment; filename="openmindai-${endpoint.split("/")[1]}.${mime === "image/png" ? "png" : mime === "image/jpeg" ? "jpg" : mime === "audio/wav" ? "wav" : mime === "application/zip" ? "zip" : "mp4"}"`,
+          "Content-Disposition": `attachment; filename="openmindai-${endpoint.split("/")[1]}.${mime === "image/png" ? "png" : mime === "image/jpeg" ? "jpg" : mime === "audio/wav" ? "wav" : mime === "application/zip" ? "zip" : mime === "application/pdf" ? "pdf" : mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ? "docx" : "mp4"}"`,
           "Cache-Control": "private, no-store",
           "X-Content-Type-Options": "nosniff",
         },
@@ -219,12 +234,16 @@ async function proxy(
         );
       }
     }
-    if (endpoint === "capabilities" && upstream.ok && hostedImageEnabled()) {
+    if (endpoint === "capabilities" && upstream.ok && (hostedImageEnabled() || hostedMediaEnabled())) {
       const advertised = Array.isArray(data.media)
         ? data.media.filter((item): item is string => typeof item === "string")
         : [];
-      data.media = Array.from(new Set([...advertised, "image"]));
-      data.image_generation = true;
+      data.media = Array.from(new Set([
+        ...advertised, ...(hostedImageEnabled() ? ["image"] : []),
+        ...(hostedMediaEnabled() ? ["transcription", "speech", "document_create", "video"] : []),
+      ]));
+      data.image_generation = hostedImageEnabled() || data.image_generation === true;
+      data.voice_transcription = hostedMediaEnabled() || data.voice_transcription === true;
     }
     if (["login", "login/verify-ip", "register"].includes(endpoint) && upstream.ok && typeof data.token === "string") {
       jar.set(cookieName, data.token, {
