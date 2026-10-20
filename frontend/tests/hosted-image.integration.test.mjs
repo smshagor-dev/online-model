@@ -4,8 +4,9 @@ import { generateHostedImage } from "../src/lib/hosted-image.ts";
 
 const config = { apiKey: "private-image-key", bridgeKey: "s".repeat(32) };
 const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=";
+const jpeg = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAT/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABv/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/ALABcjf/2Q==";
 
-function backendScenario({ providerStatus = 200, finishReason = "SUCCESS", finishStatus = 200, limited = false } = {}) {
+function backendScenario({ providerStatus = 200, finishReason = "SUCCESS", finishStatus = 200, limited = false, imageData = png } = {}) {
   const calls = [];
   const fetcher = async (url, init) => {
     const body = JSON.parse(init.body);
@@ -30,7 +31,7 @@ function backendScenario({ providerStatus = 200, finishReason = "SUCCESS", finis
     assert.equal(body.samples, 1);
     assert.equal(body.prompt, "Sunrise over a forest");
     return Response.json(
-      { artifacts: [{ base64: png, finishReason }] },
+      { artifacts: [{ base64: imageData, finishReason }] },
       { status: providerStatus },
     );
   };
@@ -59,6 +60,21 @@ test("authenticated image bridge generates and saves a private image", async () 
   assert.equal(f.calls[2].body.mime, "image/png");
   assert.equal(f.calls[2].body.data, png);
   assert.doesNotMatch(JSON.stringify(saved), /NVIDIA|flux|private-image-key/i);
+});
+
+test("accepts the JPEG format returned by hosted generation", async () => {
+  const f = backendScenario({ imageData: jpeg });
+  const response = await generate(f);
+  assert.equal(response.status, 201);
+  assert.equal(f.calls[2].body.mime, "image/jpeg");
+  assert.equal(f.calls[2].body.data, jpeg);
+});
+
+test("rejects non-image content even when it is valid base64", async () => {
+  const f = backendScenario({ imageData: Buffer.from("not an image").toString("base64") });
+  const response = await generate(f);
+  assert.equal(response.status, 502);
+  assert.equal(f.calls.at(-1).url.endsWith("/fail"), true);
 });
 
 test("does not spend a provider call when image quota is exhausted", async () => {
