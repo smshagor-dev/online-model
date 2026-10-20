@@ -13,7 +13,7 @@ LARAVEL_API_URL=https://backend.example.com/api/v1
 FRONTEND_URL=https://chat.example.com
 CHAT_PROVIDER=nvidia
 NVIDIA_API_KEY=YOUR_PRIVATE_NVIDIA_API_KEY
-NVIDIA_MODEL=nvidia/nemotron-3-nano-30b-a3b
+NVIDIA_MODEL=nvidia/nemotron-3.5-lightning-30b-a3b
 FRONTEND_CHAT_BRIDGE_KEY=SAME_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
 ```
 
@@ -23,7 +23,7 @@ Laravel `.env`:
 FRONTEND_CHAT_BRIDGE_KEY=SAME_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
 ```
 
-Generate your own random secret, for example `openssl rand -hex 32`. Do not commit either secret and do not use `NEXT_PUBLIC_` prefixes. Set `CHAT_PROVIDER=local` to hide the hosted model. NVIDIA account/API access and provider limits are external deployment requirements; no key or account is bundled. The shipped example targets the documented Nemotron 3 Nano model. Its thinking mode is explicitly disabled for normal answer streaming. For another model ID, check that model's API parameters and account access before changing the setting.
+Generate your own random secret, for example `openssl rand -hex 32`. Do not commit either secret and do not use `NEXT_PUBLIC_` prefixes. Set `CHAT_PROVIDER=local` to hide the hosted model. NVIDIA account/API access and provider limits are external deployment requirements; no key or account is bundled. The shipped example targets Nemotron 3.5 Lightning. The previous `nvidia/nemotron-3-nano-30b-a3b` endpoint was retired on September 1, 2026 and returns HTTP 410; existing deployments must update `NVIDIA_MODEL` and restart Next.js. Its thinking mode is explicitly disabled for normal answer streaming. For another model ID, check that model's API parameters and account access before changing the setting.
 
 After deployment, clear/rebuild Laravel config and route caches, restart the Next.js server and run the existing scheduler. Configure HTTPS and SSE response buffering/timeouts on the frontend host. NVIDIA outbound network access is required only from the Next.js host; the backend needs no NVIDIA key and no GPU for this chat path. The frontend host still needs a Node.js runtime; static Next.js export cannot run the connection.
 
@@ -39,8 +39,8 @@ NVIDIA failures/rate limits surface as errors and saved failed turns; secrets an
 
 ## Verification
 
-Automated tests cover direct NVIDIA request construction with a provider fixture, token/context redaction from browser events, failed/truncated streams, persistence retries, cancellation, bridge ownership, idempotent saves, temporary-chat privacy and deletion. No live NVIDIA request was made during implementation because no API key was supplied. Validate with your own account/key and hosting timeouts before production use.
+Automated tests cover direct NVIDIA request construction with a provider fixture, token/context redaction from browser events, failed/truncated streams, persistence retries, cancellation, bridge ownership, idempotent saves, temporary-chat privacy and deletion. A minimal live streaming request to Nemotron 3.5 Lightning returned HTTP 200 and answer text during the model migration. Validate with your own account/key and hosting timeouts before production use.
 
 Official references:
-- https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-nano-30b-a3b-infer
-- https://docs.api.nvidia.com/nim/re/reference/nvidia-nemotron-3-nano-30b-a3b
+- https://build.nvidia.com/nvidia/nemotron-3.5-lightning-30b-a3b/build
+- https://build.nvidia.com/nvidia/nemotron-3.5-lightning-30b-a3b/modelcard

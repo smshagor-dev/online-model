@@ -48,7 +48,7 @@ export async function nvidiaChat(
   const config = options.config || {
     apiKey: process.env.NVIDIA_API_KEY || "",
     bridgeKey: process.env.FRONTEND_CHAT_BRIDGE_KEY || "",
-    model: process.env.NVIDIA_MODEL || "nvidia/nemotron-3-nano-30b-a3b",
+    model: process.env.NVIDIA_MODEL || "nvidia/nemotron-3.5-lightning-30b-a3b",
   };
   if (!config.apiKey || config.bridgeKey.length < 32)
     return Response.json(
@@ -266,7 +266,7 @@ export async function nvidiaChat(
                         context,
                     },
                   ],
-                  ...(config.model === "nvidia/nemotron-3-nano-30b-a3b"
+                  ...(config.model === "nvidia/nemotron-3.5-lightning-30b-a3b"
                     ? { chat_template_kwargs: { enable_thinking: false } }
                     : {}),
                 }),
@@ -352,7 +352,7 @@ export async function nvidiaChat(
               messages: generationMessages,
               stream: true,
               temperature: 0.6,
-              ...(config.model === "nvidia/nemotron-3-nano-30b-a3b"
+              ...(config.model === "nvidia/nemotron-3.5-lightning-30b-a3b"
                 ? { chat_template_kwargs: { enable_thinking: false } }
                 : {}),
             }),
@@ -369,7 +369,9 @@ export async function nvidiaChat(
             throw new Error(
               response.status === 429
                 ? "NVIDIA rate limit reached. Please try again later."
-                : "NVIDIA could not start a streaming response.",
+                : response.status === 410
+                  ? "NVIDIA model has been retired. Update NVIDIA_MODEL on the frontend server to an available model and restart the server."
+                  : "NVIDIA could not start a streaming response.",
             );
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
@@ -513,7 +515,7 @@ export async function nvidiaChat(
                     },
                     { role: "user", content: question },
                   ],
-                  ...(config.model === "nvidia/nemotron-3-nano-30b-a3b"
+                  ...(config.model === "nvidia/nemotron-3.5-lightning-30b-a3b"
                     ? { chat_template_kwargs: { enable_thinking: false } }
                     : {}),
                 }),

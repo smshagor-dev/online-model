@@ -4,7 +4,7 @@ import { nvidiaChat } from "../src/lib/nvidia-chat.ts";
 const config = {
   apiKey: "secret-nvidia-key",
   bridgeKey: "k".repeat(32),
-  model: "nvidia/nemotron-3-nano-30b-a3b",
+  model: "nvidia/nemotron-3.5-lightning-30b-a3b",
 };
 function fixture({
   upstreamStatus = 200,
@@ -135,6 +135,32 @@ test("provider throttling is recorded as failed without leaking provider body", 
     "failed",
   );
 });
+test("retired model reports an actionable error and saves the failed turn", async () => {
+  const f = fixture({ upstreamStatus: 410 });
+  const fixtureFetch = f.fetcher;
+  f.fetcher = async (url, options) => {
+    const response = await fixtureFetch(url, options);
+    return url.includes("nvidia.com")
+      ? Response.json({ detail: "PRIVATE PROVIDER DETAIL" }, { status: 410 })
+      : response;
+  };
+  const r = await nvidiaChat(
+    '{"message":"Hi"}',
+    "u",
+    "https://backend/api/v1",
+    new AbortController().signal,
+    { ...f, config },
+  );
+  const text = await r.text();
+  assert.match(text, /model has been retired/);
+  assert.match(text, /NVIDIA_MODEL/);
+  assert.doesNotMatch(text, /PRIVATE PROVIDER DETAIL|secret-nvidia-key/);
+  assert.equal(
+    f.calls.find((x) => x.url.endsWith("/finish")).body.status,
+    "failed",
+  );
+});
+
 test("persistence errors retry and never report successful save", async () => {
   const f = fixture({ saveFails: true });
   const r = await nvidiaChat(
