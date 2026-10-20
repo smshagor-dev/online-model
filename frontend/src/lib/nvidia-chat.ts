@@ -11,9 +11,9 @@ export const nvidiaEnabled = () => process.env.CHAT_PROVIDER === "nvidia";
 export function nvidiaModel() {
   return {
     id: NVIDIA_MODEL_ID,
-    name: "NVIDIA Nemotron",
-    family: "Nemotron · NVIDIA API",
-    license: "NVIDIA hosted API",
+    name: "OpenMindAI",
+    family: "Hosted AI",
+    license: "External inference service",
   };
 }
 type Config = { apiKey: string; bridgeKey: string; model: string };
