@@ -18,6 +18,8 @@ export default function LiveConversation({
 }) {
   const [available, setAvailable] = useState(false),
     [hostedVoice, setHostedVoice] = useState(false),
+    [generatedSpeech, setGeneratedSpeech] = useState(false),
+    [speechAvailable, setSpeechAvailable] = useState(false),
     [vision, setVision] = useState(false),
     [models, setModels] = useState<Model[]>([]),
     [model, setModel] = useState(0),
@@ -54,6 +56,8 @@ export default function LiveConversation({
     visual = useRef<{ text: string; at: number } | null>(null),
     speaking = useRef(false),
     playbackEpoch = useRef(0),
+    generatedPlayer = useRef<HTMLAudioElement | null>(null),
+    generatedUrl = useRef<string | null>(null),
     mode = useRef(0),
     vad = useRef(new VoiceActivity());
   useEffect(() => {
@@ -68,6 +72,7 @@ export default function LiveConversation({
       ).then((v) => {
         setAvailable(v.live_voice || v.media.includes("transcription"));
         setHostedVoice(!v.live_voice && v.media.includes("transcription"));
+        setSpeechAvailable(v.media.includes("speech"));
         setVision(v.live_voice && v.media.includes("vision"));
       }),
       api<Model[]>("models", "GET", undefined, c.signal).then((v) => {
@@ -99,6 +104,10 @@ export default function LiveConversation({
   function interrupt() {
     ++playbackEpoch.current;
     if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
+    generatedPlayer.current?.pause();
+    generatedPlayer.current = null;
+    if (generatedUrl.current) URL.revokeObjectURL(generatedUrl.current);
+    generatedUrl.current = null;
     speaking.current = false;
     generation.current?.abort();
     const current = activeMessage.current;
@@ -158,6 +167,45 @@ export default function LiveConversation({
     };
     speechSynthesis.speak(utterance);
   }
+  async function playGeneratedSpeech(text: string, version: number) {
+    if (!text.trim() || version !== epoch.current || !activeRef.current) return;
+    const cleaned = text.replace(/[`*_#]/g, "").trim();
+    // The hosted voice currently supports English and a 1000-character limit.
+    if (cleaned.length > 1000 || /[^\\x00-\\x7F]/.test(cleaned)) {
+      speak(cleaned, version);
+      return;
+    }
+    const playback = playbackEpoch.current;
+    const result = await api<{ id: number }>(
+      "media/speech", "POST", { kind: "speech", prompt: cleaned },
+    );
+    if (playback !== playbackEpoch.current || version !== epoch.current) return;
+    const response = await fetch("/api/backend/media/" + result.id + "/output", { cache: "no-store" });
+    if (!response.ok) throw new Error("Voice audio could not be loaded.");
+    const blob = await response.blob();
+    if (playback !== playbackEpoch.current || version !== epoch.current) return;
+    const url = URL.createObjectURL(blob);
+    generatedUrl.current = url;
+    const player = new Audio(url);
+    generatedPlayer.current = player;
+    speaking.current = true;
+    try {
+      await player.play();
+      await new Promise<void>(resolve => {
+        const end = () => resolve();
+        player.addEventListener("ended", end, { once: true });
+        player.addEventListener("error", end, { once: true });
+        // Interrupt and cleanup are handled by the session epoch.
+      });
+    } finally {
+      if (generatedPlayer.current === player) generatedPlayer.current = null;
+      if (generatedUrl.current === url) {
+        URL.revokeObjectURL(url);
+        generatedUrl.current = null;
+      }
+      speaking.current = false;
+    }
+  }
   async function processQueue(version: number) {
     if (processing.current || version !== epoch.current) return;
     processing.current = true;
@@ -204,6 +252,8 @@ export default function LiveConversation({
         const g = new AbortController();
         generation.current = g;
         let speech = "";
+        let fullReply = "";
+        let generatedPlayback: Promise<void> | null = null;
         let done = false;
         try {
           await streamChat(
@@ -232,11 +282,14 @@ export default function LiveConversation({
                   ),
                 );
                 speech += part;
-                let sentence;
-                do {
-                  [sentence, speech] = takeSentence(speech);
-                  if (sentence) speak(sentence, version);
-                } while (sentence);
+                fullReply += part;
+                if (!generatedSpeech) {
+                  let sentence;
+                  do {
+                    [sentence, speech] = takeSentence(speech);
+                    if (sentence) speak(sentence, version);
+                  } while (sentence);
+                }
               }
               if (event === "error") setError(String(data.message));
               if (event === "done") {
@@ -248,7 +301,10 @@ export default function LiveConversation({
                       : m,
                   ),
                 );
-                if (data.status === "complete") speak(speech, version);
+                if (data.status === "complete") {
+                  if (generatedSpeech) generatedPlayback = playGeneratedSpeech(fullReply, version);
+                  else speak(speech, version);
+                }
                 else {
                   speechSynthesis.cancel();
                   speaking.current = false;
@@ -271,6 +327,7 @@ export default function LiveConversation({
               ),
             );
         }
+        if (generatedPlayback) await generatedPlayback;
         if (version === epoch.current) setPhase("Listening…");
       }
     } catch (e) {
@@ -542,6 +599,13 @@ export default function LiveConversation({
         processed by an external provider. Save transcripts and responses in
         my chat history. Answer playback uses browser speech synthesis.
       </label>
+      {speechAvailable && (
+        <label>
+          <input type="checkbox" checked={generatedSpeech} disabled={active || starting}
+            onChange={e => setGeneratedSpeech(e.target.checked)} />
+          Use generated voice for English replies (may take longer and uses a media request).
+        </label>
+      )}
       <p className="muted">
         Use headphones for reliable interruption. Daily chat limits apply to
         each spoken question; the live session has a separate daily allowance.
