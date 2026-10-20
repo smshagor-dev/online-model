@@ -17,9 +17,9 @@ class AuthController
     {
         $data = $r->validate(['name' => 'required|string|max:120', 'email' => 'required|email|max:254|unique:users', 'password' => ['required', 'confirmed', PasswordRule::min(6)]]);
         $u = User::create($data);
-        $u->notify(new VerifyEmail);
+        $u->forceFill(['email_verified_at' => now()])->save();
 
-        return response()->json(['user' => $u, 'message' => 'Verify your email before logging in.'], 201);
+        return response()->json(['user' => $u, 'token' => $u->createToken('Openmindai Web', ['user'], now()->addDays(30))->plainTextToken, 'token_type' => 'Bearer', 'message' => 'Account created successfully.'], 201);
     }
 
     public function login(Request $r, TwoFactor $two)

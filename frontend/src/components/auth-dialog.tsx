@@ -36,11 +36,8 @@ export default function AuthDialog({
         });
         onLogin(result.user);
       } else if (mode === "register") {
-        await api("register", "POST", data);
-        setMode("login");
-        setNotice(
-          "Account created. Check your email to verify it, then sign in.",
-        );
+        const result = await api<{ user: User }>("register", "POST", data);
+        onLogin(result.user);
       } else {
         await api("forgot-password", "POST", data);
         setNotice("If an account exists, a password reset link has been sent.");

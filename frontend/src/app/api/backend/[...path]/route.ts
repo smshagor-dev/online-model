@@ -211,7 +211,7 @@ async function proxy(
         );
       }
     }
-    if (endpoint === "login" && upstream.ok && typeof data.token === "string") {
+    if (["login", "register"].includes(endpoint) && upstream.ok && typeof data.token === "string") {
       jar.set(cookieName, data.token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",

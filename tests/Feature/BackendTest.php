@@ -31,13 +31,16 @@ class BackendTest extends TestCase
         return $u;
     }
 
-    public function test_registration_does_not_grant_admin_or_unverified_token(): void
+    public function test_registration_succeeds_without_email_verification_and_never_grants_admin(): void
     {
         Notification::fake();
-        $r = $this->postJson('/api/v1/register', ['name' => 'User', 'email' => 'new@example.com', 'password' => 'StrongPassword123', 'password_confirmation' => 'StrongPassword123', 'is_admin' => true]);
-        $r->assertCreated()->assertJsonMissingPath('token');
+        $r = $this->postJson('/api/v1/register', ['name' => 'User', 'email' => 'new@example.com', 'password' => '123456', 'password_confirmation' => '123456', 'is_admin' => true]);
+        $r->assertCreated()->assertJsonStructure(['token', 'user'])->assertJsonPath('message', 'Account created successfully.');
+        $this->assertNotNull(User::first()->email_verified_at);
+        Notification::assertNothingSent();
+        $this->withToken($r->json('token'))->getJson('/api/v1/me')->assertOk();
         $this->assertFalse(User::first()->is_admin);
-        $this->postJson('/api/v1/login', ['email' => 'new@example.com', 'password' => 'StrongPassword123', 'device_name' => 'test'])->assertForbidden();
+        $this->postJson('/api/v1/login', ['email' => 'new@example.com', 'password' => '123456', 'device_name' => 'test'])->assertOk();
     }
 
     public function test_login_logout_and_account_access(): void
