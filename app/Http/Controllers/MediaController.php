@@ -86,7 +86,7 @@ class MediaController
 
         // Authenticated binary download; never expose a public storage URL.
         return Storage::disk('local')->download($task->output_path, 'openmindai-'.$task->id.match ($task->output_mime) {
-            'image/png' => '.png', 'audio/wav' => '.wav', 'video/mp4' => '.mp4', 'application/zip' => '.zip', default => '.bin',
+            'image/png' => '.png', 'image/jpeg' => '.jpg', 'audio/wav' => '.wav', 'video/mp4' => '.mp4', 'application/zip' => '.zip', default => '.bin',
         }, ['Content-Type' => $task->output_mime, 'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
     }
 
