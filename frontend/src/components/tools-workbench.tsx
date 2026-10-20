@@ -444,10 +444,10 @@ function TaskPlanner({
       <h3>{research ? "Research workspace" : "Scheduled tasks"}</h3>
       <p className="muted">
         {research
-          ? "Gather an initial evidence batch, then search and read further until the model can address your full request. There is no fixed query or source count. Unavailable evidence is labeled. Use Deep research in the chat composer for NVIDIA reports."
+          ? "Gather an initial evidence batch, then search and read further until the model can address your full request. There is no fixed query or source count. Unavailable evidence is labeled. Use Deep research in the chat composer for hosted reports."
           : "Run prompts now or schedule one-time, daily or weekly runs. Results stay in task history. Times below use your browser’s timezone."}{" "}
         The server scheduler and task worker must be running. These tools
-        require a configured local model; NVIDIA hosted chat is available in the
+        require a configured local model. Hosted chat is available in the
         chat workspace.
       </p>
       {research && !search && (
