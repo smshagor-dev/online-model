@@ -1649,16 +1649,6 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
               temporary chat messages.
             </p>
           )}
-          {modelId === -1 && mediaMode === "chat" && (
-            <p className="muted provider-notice">
-              This chat uses an external AI service. Your messages, conversation
-              context, selected files, and personalization may be sent to the
-              provider for processing.{" "}
-              {temporary
-                ? "Temporary mode prevents chat storage here; the provider’s privacy and retention policies still apply."
-                : "Your conversation is saved in your account."}
-            </p>
-          )}
           <form
             className="composer"
             onSubmit={send}
