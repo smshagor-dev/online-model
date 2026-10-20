@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { hostedMediaRequest } from "../src/lib/hosted-media.ts";
 import { renderDocx, renderPdf } from "../src/lib/document-files.ts";
-import { inflateRawSync } from "node:zlib";
 
 const cfg = { apiKey: "private-test-key", bridgeKey: "z".repeat(32), chatModel: "test/chat" };
 const wav = Buffer.alloc(52);
