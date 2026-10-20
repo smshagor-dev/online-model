@@ -107,4 +107,30 @@ class AdminConsoleTest extends TestCase
         $this->patch('/admin/settings', $this->settings())->assertForbidden();
         $this->assertDatabaseCount('admin_settings', 0);
     }
+    public function test_administration_pages_render_the_shared_workspace_layout(): void
+    {
+        $this->admin();
+        foreach ([
+            '/admin', '/admin/users', '/admin/administrators/create',
+            '/admin/profile', '/admin/models', '/admin/model-bundles',
+            '/admin/assistants', '/admin/settings',
+        ] as $page) {
+            $this->get($page)->assertOk()
+                ->assertSee('admin-main', false)
+                ->assertSee('css/admin.css', false);
+        }
+        $this->get('/admin/administrators/create')
+            ->assertSee('admin-form-grid', false)
+            ->assertSee('creator_password', false);
+    }
+
+    public function test_public_password_reset_and_admin_sign_in_do_not_require_an_admin_session(): void
+    {
+        $this->get('/reset-password?token=example&email=visitor%40example.com')
+            ->assertOk()->assertSee('reset-password-form', false)
+            ->assertSee('css/admin-auth.css', false);
+        $this->get('/admin/login')
+            ->assertOk()->assertSee('auth-card', false);
+    }
+
 }
