@@ -154,7 +154,7 @@ export default function MediaDialog({
       }
       if (c.signal.aborted) return;
       const result = await api<Task>(
-        "media",
+        kind === "image" ? "media/image" : "media",
         "POST",
         { kind, prompt, input },
         c.signal,
@@ -191,9 +191,10 @@ export default function MediaDialog({
   return (
     <Dialog title="Media studio" onClose={onClose} wide>
       <p className="muted">
-        Private self-hosted generation. Uploaded inputs are deleted after
-        processing. Results remain until you delete them. Closing this window
-        keeps queued tasks running.
+        Generated files are saved privately in your library. Image prompts are
+        processed by an external AI service when image creation is enabled.
+        Uploaded inputs are removed after processing. Saved results remain
+        until you delete them.
       </p>
       {error && (
         <p role="alert" className="form-error">
@@ -265,8 +266,8 @@ export default function MediaDialog({
         </form>
       ) : (
         <p role="status">
-          No media engine is enabled. An administrator must provision a
-          compatible Hugging Face model and connect the private runtime.
+          No creation service is enabled yet. An administrator must configure
+          the server-side API connection or a compatible private runtime.
         </p>
       )}
       <div className="media-history">
@@ -324,7 +325,7 @@ export default function MediaDialog({
                 </button>
               </>
             )}
-            {preview && task.output_mime === "image/png" && (
+            {preview && ["image/png", "image/jpeg"].includes(task.output_mime || "") && (
               <img className="media-preview" src={preview} alt={task.prompt} />
             )}
             {preview && task.output_mime === "audio/wav" && (
@@ -336,7 +337,7 @@ export default function MediaDialog({
             {preview && (
               <a
                 href={preview}
-                download={`openmindai-${task.id}.${task.kind === "image" ? "png" : task.kind === "speech" ? "wav" : task.kind === "code" ? "zip" : "mp4"}`}
+                download={`openmindai-${task.id}.${task.output_mime === "image/jpeg" ? "jpg" : task.kind === "image" ? "png" : task.kind === "speech" ? "wav" : task.kind === "code" ? "zip" : "mp4"}`}
               >
                 Download result
               </a>
