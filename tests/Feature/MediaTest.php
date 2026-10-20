@@ -118,6 +118,79 @@ class MediaTest extends TestCase
         $this->postJson('/api/v1/media/'.$id.'/hosted/fail', [])->assertNotFound();
     }
 
+    public function test_hosted_speech_transcription_is_saved_under_its_owner(): void
+    {
+        $this->setupEngine();
+        config(['models.frontend_chat_key' => str_repeat('s', 32)]);
+        $this->postJson('/api/v1/media/hosted/task/begin', [
+            'kind' => 'transcription', 'prompt' => '',
+        ])->assertForbidden();
+        $this->withHeaders(['X-Chat-Bridge-Key' => str_repeat('s', 32)]);
+        $start = $this->postJson('/api/v1/media/hosted/task/begin', [
+            'kind' => 'transcription', 'prompt' => '',
+        ])->assertStatus(202)->assertJsonPath('status', 'running');
+        $id = $start->json('id');
+        Queue::assertNothingPushed();
+        $this->postJson('/api/v1/media/'.$id.'/hosted/task/complete', [
+            'text' => 'Spoken words converted to text',
+        ])->assertOk()->assertJsonPath('status', 'complete')
+            ->assertJsonPath('result_text', 'Spoken words converted to text');
+        $this->getJson('/api/v1/media/'.$id)->assertJsonMissingPath('output_path');
+        $this->postJson('/api/v1/media/'.$id.'/hosted/task/complete', [
+            'text' => 'Cannot replace finished data',
+        ])->assertStatus(409);
+    }
+
+    public function test_hosted_audio_and_document_formats_are_validated_before_storage(): void
+    {
+        $this->setupEngine();
+        config(['models.frontend_chat_key' => str_repeat('s', 32)]);
+        $this->withHeaders(['X-Chat-Bridge-Key' => str_repeat('s', 32)]);
+        $speech = $this->postJson('/api/v1/media/hosted/task/begin', [
+            'kind' => 'speech', 'prompt' => 'Hello',
+        ])->assertStatus(202)->json('id');
+        $this->postJson('/api/v1/media/'.$speech.'/hosted/task/complete', [
+            'mime' => 'audio/wav', 'data' => base64_encode('<script>not audio</script>'),
+        ])->assertStatus(422);
+        $wav = 'RIFF'.pack('V', 36).'WAVEfmt '.pack('VvvVVvv', 16, 1, 1, 16000, 32000, 2, 16).'data'.pack('V', 0);
+        $this->postJson('/api/v1/media/'.$speech.'/hosted/task/complete', [
+            'mime' => 'audio/wav', 'data' => base64_encode($wav),
+        ])->assertOk()->assertJsonPath('output_mime', 'audio/wav');
+        $this->get('/api/v1/media/'.$speech.'/output')->assertOk()
+            ->assertHeader('Content-Type', 'audio/wav');
+
+        $doc = $this->postJson('/api/v1/media/hosted/task/begin', [
+            'kind' => 'document_create', 'prompt' => 'A simple report',
+        ])->assertStatus(202)->json('id');
+        $this->postJson('/api/v1/media/'.$doc.'/hosted/task/complete', [
+            'mime' => 'application/pdf', 'data' => base64_encode('<html>Not PDF</html>'),
+        ])->assertStatus(422);
+        $this->postJson('/api/v1/media/'.$doc.'/hosted/task/complete', [
+            'mime' => 'application/pdf', 'data' => base64_encode("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF"),
+        ])->assertOk()->assertJsonPath('output_mime', 'application/pdf');
+        $this->get('/api/v1/media/'.$doc.'/output')->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+    }
+
+    public function test_hosted_video_completion_requires_mp4_header_and_owner(): void
+    {
+        $this->setupEngine();
+        config(['models.frontend_chat_key' => str_repeat('s', 32)]);
+        $this->withHeaders(['X-Chat-Bridge-Key' => str_repeat('s', 32)]);
+        $id = $this->postJson('/api/v1/media/hosted/task/begin', [
+            'kind' => 'video', 'prompt' => 'Robot on a workbench',
+        ])->assertStatus(202)->json('id');
+        $mp4 = pack('N', 16).'ftypisom'.pack('N', 0);
+        $this->postJson('/api/v1/media/'.$id.'/hosted/task/complete', [
+            'mime' => 'video/mp4', 'data' => base64_encode('fake'),
+        ])->assertStatus(422);
+        Sanctum::actingAs($this->user());
+        $this->postJson('/api/v1/media/'.$id.'/hosted/task/complete', [
+            'mime' => 'video/mp4', 'data' => base64_encode($mp4),
+        ])->assertNotFound();
+        $this->postJson('/api/v1/media/'.$id.'/hosted/task/fail', [])->assertNotFound();
+    }
+
     public function test_disabled_engine_is_not_advertised_or_queued(): void
     {
         $this->setupEngine();
