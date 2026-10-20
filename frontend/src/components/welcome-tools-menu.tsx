@@ -63,12 +63,12 @@ export default function WelcomeToolsMenu({
         <button type="button" disabled={busy} onClick={() => onSelect("code")}>Run Python</button>
         <button type="button" disabled={busy} onClick={() => onSelect("planner")}>Research planner</button>
       </div>
-      {mediaKinds.some((kind) => ["image", "speech", "video"].includes(kind)) && (
+      {mediaKinds.some((kind) => ["image", "speech", "video", "document_create"].includes(kind)) && (
         <label className="welcome-tools-select">Media mode
           <select aria-label="Media task mode" value={mediaMode} disabled={busy} onChange={(e) => onMediaMode(e.target.value)}>
             <option value="chat">Chat</option>
-            {["image", "speech", "video"].filter((kind) => mediaKinds.includes(kind)).map((kind) => (
-              <option key={kind} value={kind}>Create {kind}</option>
+            {["image", "speech", "video", "document_create"].filter((kind) => mediaKinds.includes(kind)).map((kind) => (
+              <option key={kind} value={kind}>{kind === "document_create" ? "Create document" : `Create ${kind}`}</option>
             ))}
           </select>
         </label>
