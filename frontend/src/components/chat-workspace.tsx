@@ -1614,7 +1614,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                 ? "Temporary mode prevents chat storage here; the provider’s privacy and retention policies still apply."
                 : "Your conversation is saved in your account."}
             </p>
-          )
+          )}
           <form
             className="composer"
             onSubmit={send}
