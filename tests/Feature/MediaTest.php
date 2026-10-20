@@ -65,6 +65,22 @@ class MediaTest extends TestCase
         ]);
     }
 
+    public function test_hosted_image_preserves_jpeg_format_in_download(): void
+    {
+        $this->setupEngine();
+        config(['models.frontend_chat_key' => str_repeat('s', 32)]);
+        $this->withHeaders(['X-Chat-Bridge-Key' => str_repeat('s', 32)]);
+        $id = $this->postJson('/api/v1/media/hosted/begin', ['prompt' => 'Amber sunset'])
+            ->assertStatus(202)->json('id');
+        $jpeg = base64_decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAT/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABv/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/ALABcjf/2Q==');
+        $this->postJson('/api/v1/media/'.$id.'/hosted/finish', [
+            'mime' => 'image/jpeg', 'data' => base64_encode($jpeg),
+        ])->assertOk()->assertJsonPath('output_mime', 'image/jpeg');
+        $download = $this->get('/api/v1/media/'.$id.'/output')->assertOk()
+            ->assertHeader('Content-Type', 'image/jpeg');
+        $this->assertSame($jpeg, $download->streamedContent());
+    }
+
     public function test_hosted_image_bridge_rejects_missing_key_and_bad_images(): void
     {
         $this->setupEngine();
