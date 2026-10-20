@@ -290,6 +290,9 @@ export default function LibraryPanel({
               alt={preview.title}
             />
           )}{" "}
+          {preview.url && preview.mime === "application/pdf" && (
+            <iframe title="Generated PDF" className="pdf-preview" src={preview.url} />
+          )}
           {preview.url && preview.mime === "audio/wav" && (
             <audio controls src={preview.url} />
           )}{" "}
