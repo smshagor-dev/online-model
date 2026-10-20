@@ -270,7 +270,7 @@ export default function AccountDialog({
                     type="password"
                     autoComplete="new-password"
                     required
-                    minLength={12}
+                    minLength={6}
                   />
                 </label>
                 <label>
@@ -280,11 +280,11 @@ export default function AccountDialog({
                     type="password"
                     autoComplete="new-password"
                     required
-                    minLength={12}
+                    minLength={6}
                   />
                 </label>
                 <small className="muted">
-                  12+ characters with uppercase, lowercase and a number. You'll
+                  At least 6 characters. You'll
                   be signed out on all devices.
                 </small>
                 <button className="secondary-button" disabled={busy}>

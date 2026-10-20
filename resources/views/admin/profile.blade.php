@@ -25,10 +25,10 @@
 <form class="panel" method="post" action="/admin/profile/password">
     @csrf
     <label for="current_password">Current password</label><input id="current_password" name="current_password" type="password" required autocomplete="current-password">
-    <label for="new_password">New password</label><input id="new_password" name="password" type="password" minlength="12" maxlength="1024" required autocomplete="new-password">
+    <label for="new_password">New password</label><input id="new_password" name="password" type="password" minlength="6" maxlength="1024" required autocomplete="new-password">
     <label for="password_confirmation">Confirm new password</label><input id="password_confirmation" name="password_confirmation" type="password" required autocomplete="new-password">
     @if($account->two_factor_confirmed_at)<label for="password_code">Two-factor or recovery code</label><input id="password_code" name="code" maxlength="64" required autocomplete="one-time-code">@endif
-    <p><small>Use at least 12 characters with uppercase, lowercase and numbers. Other devices will be signed out.</small></p>
+    <p><small>Use at least 6 characters. Other devices will be signed out.</small></p>
     <button>Change password</button>
 </form>
 @endsection

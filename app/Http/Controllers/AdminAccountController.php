@@ -56,7 +56,7 @@ class AdminAccountController
     public function store(Request $r, TwoFactor $two)
     {
         $r->merge(['email' => strtolower(trim((string) $r->input('email')))]);
-        $d = $r->validate(['name' => 'required|string|max:120', 'email' => 'required|email|max:254|unique:users,email', 'password' => ['required', 'string', 'max:1024', 'confirmed', Password::min(12)->mixedCase()->numbers()]]);
+        $d = $r->validate(['name' => 'required|string|max:120', 'email' => 'required|email|max:254|unique:users,email', 'password' => ['required', 'string', 'max:1024', 'confirmed', Password::min(6)]]);
         abort_if(User::whereRaw('LOWER(email) = ?', [$d['email']])->exists(), 422, 'This email already belongs to an account.');
         $photo = $this->photo($r);
         $this->identity($r, $two);
@@ -68,7 +68,7 @@ class AdminAccountController
 
     public function password(Request $r, TwoFactor $two)
     {
-        $d = $r->validate(['password' => ['required', 'string', 'max:1024', 'confirmed', Password::min(12)->mixedCase()->numbers()]]);
+        $d = $r->validate(['password' => ['required', 'string', 'max:1024', 'confirmed', Password::min(6)]]);
         $this->identity($r, $two);
         DB::transaction(function () use ($r, $d) {
             $r->user()->forceFill(['password' => $d['password'], 'remember_token' => bin2hex(random_bytes(30)), 'pending_email' => null, 'email_change_token' => null, 'email_change_expires_at' => null])->save();

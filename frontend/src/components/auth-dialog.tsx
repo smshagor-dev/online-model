@@ -124,14 +124,14 @@ export default function AuthDialog({
                 mode === "register" ? "new-password" : "current-password"
               }
               required
-              minLength={mode === "register" ? 12 : undefined}
+              minLength={mode === "register" ? 6 : undefined}
             />
           </label>
         )}
         {mode === "register" && (
           <>
             <small className="muted">
-              At least 12 characters, with uppercase, lowercase and a number.
+              At least 6 characters.
             </small>
             <label>
               Confirm password
@@ -140,7 +140,7 @@ export default function AuthDialog({
                 type="password"
                 autoComplete="new-password"
                 required
-                minLength={12}
+                minLength={6}
               />
             </label>
           </>

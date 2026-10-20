@@ -15,7 +15,7 @@ class AdminSeeder extends Seeder
     public function run(): void
     {
         $settings = config('admin.seed');
-        $data = Validator::make(['name' => $settings['name'], 'email' => strtolower(trim((string) $settings['email'])), 'password' => $settings['password']], ['name' => 'required|string|max:120', 'email' => 'required|email|max:254', 'password' => ['required', 'string', 'max:1024', Password::min(12)->mixedCase()->numbers()]])->validate();
+        $data = Validator::make(['name' => $settings['name'], 'email' => strtolower(trim((string) $settings['email'])), 'password' => $settings['password']], ['name' => 'required|string|max:120', 'email' => 'required|email|max:254', 'password' => ['required', 'string', 'max:1024', Password::min(6)]])->validate();
         $avatar = null;
         if ($path = $settings['avatar_path'] ?? null) {
             if (! is_file($path) || ! is_readable($path) || filesize($path) > 96000) {

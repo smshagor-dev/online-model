@@ -26,7 +26,7 @@ class AccountController
 
     public function password(Request $r)
     {
-        $d = $r->validate(['current_password' => 'required|current_password', 'password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()]]);
+        $d = $r->validate(['current_password' => 'required|current_password', 'password' => ['required', 'confirmed', Password::min(6)]]);
         $u = $r->user();
         $u->forceFill(['password' => $d['password'], 'pending_email' => null, 'email_change_token' => null, 'email_change_expires_at' => null])->save();
         $u->tokens()->delete();

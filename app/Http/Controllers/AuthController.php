@@ -15,7 +15,7 @@ class AuthController
 {
     public function register(Request $r)
     {
-        $data = $r->validate(['name' => 'required|string|max:120', 'email' => 'required|email|max:254|unique:users', 'password' => ['required', 'confirmed', PasswordRule::min(12)->mixedCase()->numbers()]]);
+        $data = $r->validate(['name' => 'required|string|max:120', 'email' => 'required|email|max:254|unique:users', 'password' => ['required', 'confirmed', PasswordRule::min(6)]]);
         $u = User::create($data);
         $u->notify(new VerifyEmail);
 
@@ -54,7 +54,7 @@ class AuthController
 
     public function reset(Request $r)
     {
-        $r->validate(['email' => 'required|email', 'token' => 'required|string', 'password' => ['required', 'confirmed', PasswordRule::min(12)->mixedCase()->numbers()]]);
+        $r->validate(['email' => 'required|email', 'token' => 'required|string', 'password' => ['required', 'confirmed', PasswordRule::min(6)]]);
         $status = Password::reset($r->only('email', 'password', 'password_confirmation', 'token'), function (User $u, string $password) {
             DB::transaction(function () use ($u, $password) {
                 $u->forceFill(['password' => $password, 'pending_email' => null, 'email_change_token' => null, 'email_change_expires_at' => null, 'remember_token' => bin2hex(random_bytes(30))])->save();

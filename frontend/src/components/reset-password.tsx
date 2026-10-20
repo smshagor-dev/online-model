@@ -59,7 +59,7 @@ export default function ResetPassword({
                   type="password"
                   autoComplete="new-password"
                   required
-                  minLength={12}
+                  minLength={6}
                 />
               </label>
               <label>
@@ -69,11 +69,11 @@ export default function ResetPassword({
                   type="password"
                   autoComplete="new-password"
                   required
-                  minLength={12}
+                  minLength={6}
                 />
               </label>
               <small className="muted">
-                At least 12 characters, with uppercase, lowercase and a number.
+                At least 6 characters.
               </small>
               {error && (
                 <p className="feedback error" role="alert">

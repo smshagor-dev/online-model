@@ -36,20 +36,20 @@ class AdminAccountTest extends TestCase
 
     public function test_admin_seeder_is_explicit_idempotent_and_keeps_existing_account_details(): void
     {
-        config(['admin.seed' => ['name' => 'Seed owner', 'email' => 'Seed@Example.com', 'password' => 'StrongPassword123', 'avatar_path' => null]]);
+        config(['admin.seed' => ['name' => 'Seed owner', 'email' => 'Seed@Example.com', 'password' => '123456', 'avatar_path' => null]]);
         $this->seed(DatabaseSeeder::class);
         $u = User::firstOrFail();
         $this->assertTrue($u->is_admin);
         $this->assertTrue($u->is_active);
         $this->assertNotNull($u->email_verified_at);
         $this->assertSame('seed@example.com', $u->email);
-        $this->assertTrue(Hash::check('StrongPassword123', $u->password));
+        $this->assertTrue(Hash::check('123456', $u->password));
         $u->update(['name' => 'Edited owner']);
         config(['admin.seed.password' => 'DifferentPassword123']);
         $this->seed(AdminSeeder::class);
         $this->assertDatabaseCount('users', 1);
         $this->assertSame('Edited owner', $u->fresh()->name);
-        $this->assertTrue(Hash::check('StrongPassword123', $u->fresh()->password));
+        $this->assertTrue(Hash::check('123456', $u->fresh()->password));
     }
 
     public function test_seeder_never_promotes_an_existing_regular_user(): void

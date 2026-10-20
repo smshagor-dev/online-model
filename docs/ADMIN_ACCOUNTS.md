@@ -12,7 +12,7 @@ ADMIN_PASSWORD=your-own-strong-password
 ADMIN_AVATAR_PATH=
 ```
 
-Use at least 12 password characters, including uppercase, lowercase and numbers. No default sign-in password is shipped. Apply the database migrations, clear stale configuration and run:
+Use at least 6 password characters. No uppercase, lowercase or number combination is required. No default sign-in password is shipped. Apply the database migrations, clear stale configuration and run:
 
 ```bash
 php artisan migrate --force
