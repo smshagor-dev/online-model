@@ -74,7 +74,7 @@ export default function InlineMedia({
         {task?.kind || "Media"} · {task?.status || "Loading"}
       </strong>
       {(error || task?.error) && <p role="alert">{error || task?.error}</p>}
-      {url && task?.output_mime === "image/png" && (
+      {url && ["image/png", "image/jpeg"].includes(task?.output_mime || "") && (
         <a href={url} target="_blank" rel="noopener noreferrer">
           <img
             className="media-preview"
