@@ -27,7 +27,7 @@ For matching password-reset pages, set Laravel's separate `FRONTEND_URL` environ
 - HttpOnly cookie authentication through a Next.js backend-for-frontend; bearer tokens never enter browser JavaScript or localStorage.
 - First-party bundled fonts, lazily loaded account/Markdown UI and clear empty/error/loading states.
 
-Only enabled models from the existing Hugging Face backend appear. The frontend uses genuine inference SSE, with partial/failure status saved in history. Text/code attachments and on-device read-aloud are supported. Image/audio processing, realtime voice, model-provider fallback and code execution are absent. See the feature-coverage document before assuming ChatGPT feature parity.
+Chat routes to the configured hosted or local model internally without exposing a model selector in the chat header. Responses use genuine inference SSE with partial/failure status saved in history. Text/code attachments, hosted image and speech services, document generation, video generation, optional live voice turns and on-device read-aloud are integrated. Hosted API calls still require model-level account access and real deployment validation; consult the feature-coverage document.
 
 ## Production
 
@@ -71,10 +71,10 @@ Set Laravel `APP_NAME=Openmindai`. Optional `SEARXNG_SEARCH_URL` must point to y
 
 ## NVIDIA Nemotron chat
 
-See [NVIDIA setup](../docs/NVIDIA_FRONTEND_CHAT.md) for direct Next.js server-to-NVIDIA chat with Laravel message persistence. This is an explicit chat provider selection. Keep the API key in server environment variables. Scheduled tools and media continue to use the self-hosted runtime.
+See [hosted chat setup](../docs/NVIDIA_FRONTEND_CHAT.md) for server-side hosted chat with Laravel message persistence. The model routing is internal; the user interface remains provider-neutral. Keep the API key in server environment variables. Hosted image, speech, documents and video reuse this server-side credential through [hosted media](../docs/HOSTED_MEDIA_API.md). Legacy self-hosted tools remain independently configurable.
 
 ## Teams, connectors and live conversation
 
-Open the Workspace dialog and select Teams, Connectors or Live. Team discussion/document sharing has role checks and revision conflict handling. Connectors use the administrator's MCP catalogue and per-call approval, with credentials held by Laravel. Live requires the private warm transcription/vision service; it supports automatic microphone turns, streamed chat answers, browser speech and optional sampled camera/screen context.
+Open the Workspace dialog and select Teams, Connectors or Live. Team discussion/document sharing has role checks and revision conflict handling. Connectors use the administrator's MCP catalogue and per-call approval, with credentials held by Laravel. Live supports hosted speech-to-text and chat with browser speech playback or optional generated audio. Camera/screen observations still require a separately configured private vision runtime; this is not native duplex inference.
 
 See [deployment and limitations](../docs/COLLABORATION_AND_LIVE.md). OAuth connectors and native duplex audio/video model streaming are not included. Billing remains excluded.
