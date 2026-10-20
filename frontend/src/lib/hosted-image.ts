@@ -10,8 +10,10 @@ export const hostedImageEnabled = () =>
   (process.env.FRONTEND_CHAT_BRIDGE_KEY?.length ?? 0) >= 32;
 
 class ImageFailure extends Error {
-  constructor(message: string, public status: number) {
+  status: number;
+  constructor(message: string, status: number) {
     super(message);
+    this.status = status;
   }
 }
 
