@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 const cookieName = "openmindai_token";
 const publicPaths = new Set([
   "login",
+  "login/verify-ip",
   "register",
   "public-config",
   "forgot-password",
@@ -21,7 +22,7 @@ const publicPaths = new Set([
 ]);
 const routes: Record<string, RegExp> = {
   GET: /^(public-config|teams(?:\/\d+(?:\/(documents|threads)\/\d+)?)?|connectors|explore\/assistants(?:\/[a-f0-9-]{36})?|assistants|tasks(?:\/\d+\/runs)?|canvases\/\d+\/versions(?:\/\d+)?|conversations\/\d+\/branches|media(?:\/\d+(?:\/output)?)?|me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
-  POST: /^(teams(?:\/\d+\/(preview|invites|documents|threads(?:\/\d+)?))?|team-invites\/\d+\/accept|connectors\/[a-zA-Z0-9_-]{1,80}\/(connect|tools|call)|live\/(start|input|stop)|explore\/assistants\/[a-f0-9-]{36}\/copy|assistants(?:\/\d+\/publish)?|tasks(?:\/\d+\/runs(?:\/\d+\/resume)?)?|me\/(avatar|email)|email\/change\/confirm|settings\/data|media|login|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/(stream|resume))?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
+  POST: /^(teams(?:\/\d+\/(preview|invites|documents|threads(?:\/\d+)?))?|team-invites\/\d+\/accept|connectors\/[a-zA-Z0-9_-]{1,80}\/(connect|tools|call)|live\/(start|input|stop)|explore\/assistants\/[a-f0-9-]{36}\/copy|assistants(?:\/\d+\/publish)?|tasks(?:\/\d+\/runs(?:\/\d+\/resume)?)?|me\/(avatar|email)|email\/change\/confirm|settings\/data|media|login(?:\/verify-ip)?|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/(stream|resume))?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
   PATCH: /^(me|preferences|conversations\/\d+)$/,
   PUT: /^(teams\/\d+\/(members|documents)\/\d+|assistants\/\d+|tasks\/\d+|me\/password|projects\/\d+|canvases\/\d+|memories\/\d+|conversations\/\d+\/messages\/\d+\/feedback)$/,
   DELETE:
@@ -212,7 +213,7 @@ async function proxy(
         );
       }
     }
-    if (["login", "register"].includes(endpoint) && upstream.ok && typeof data.token === "string") {
+    if (["login", "login/verify-ip", "register"].includes(endpoint) && upstream.ok && typeof data.token === "string") {
       jar.set(cookieName, data.token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",

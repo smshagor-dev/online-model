@@ -13,12 +13,15 @@ export default function AuthDialog({
 }) {
   const [mode, setMode] = useState<Mode>("login");
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
+  const [registrationEmailVerification, setRegistrationEmailVerification] = useState(false);
+  const [ipChallengeId, setIpChallengeId] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    api<{ registration_enabled: boolean }>("public-config")
+    api<{ registration_enabled: boolean; registration_email_verification_enabled: boolean }>("public-config")
       .then((result) => {
         if (!active) return;
         setRegistrationEnabled(result.registration_enabled);
+        setRegistrationEmailVerification(result.registration_email_verification_enabled);
         if (!result.registration_enabled) setMode((current) => current === "register" ? "login" : current);
       })
       .catch(() => { /* The server independently enforces registration policy. */ });
@@ -31,6 +34,8 @@ export default function AuthDialog({
   const [showCode, setShowCode] = useState(false);
   function change(next: Mode) {
     setMode(next);
+    setIpChallengeId(null);
+    setShowCode(false);
     setError("");
     setNotice("");
   }
@@ -41,15 +46,36 @@ export default function AuthDialog({
     setBusy(true);
     const data = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      if (mode === "login") {
-        const result = await api<{ user: User }>("login", "POST", {
+      if (mode === "login" && ipChallengeId) {
+        const result = await api<{ user: User }>("login/verify-ip", "POST", {
+          challenge_id: ipChallengeId,
+          code: data.ip_code,
+        });
+        onLogin(result.user);
+      } else if (mode === "login") {
+        const result = await api<{ user?: User; verification_required?: boolean; challenge_id?: string }>("login", "POST", {
           ...data,
           device_name: "Openmindai Web",
         });
-        onLogin(result.user);
+        if (result.verification_required && result.challenge_id) {
+          setIpChallengeId(result.challenge_id);
+          setNotice("A one-time code was sent to your verified email. Enter it below to finish signing in.");
+        } else if (result.user) {
+          onLogin(result.user);
+        } else {
+          throw new Error("The login response was incomplete.");
+        }
       } else if (mode === "register") {
-        const result = await api<{ user: User }>("register", "POST", data);
-        onLogin(result.user);
+        const result = await api<{ user?: User; verification_required?: boolean }>("register", "POST", data);
+        if (result.verification_required) {
+          setMode("login");
+          setShowCode(false);
+          setNotice("Account created. Check your email for a verification link, then sign in.");
+        } else if (result.user) {
+          onLogin(result.user);
+        } else {
+          throw new Error("The registration response was incomplete.");
+        }
       } else {
         await api("forgot-password", "POST", data);
         setNotice("If an account exists, a password reset link has been sent.");
@@ -81,7 +107,9 @@ export default function AuthDialog({
   return (
     <Dialog
       title={
-        mode === "register"
+        ipChallengeId
+          ? "Verify new sign-in location"
+          : mode === "register"
           ? "Create your account"
           : mode === "forgot"
             ? "Reset your password"
@@ -92,14 +120,16 @@ export default function AuthDialog({
       }}
     >
       <p className="dialog-description">
-        {mode === "register"
-          ? "A space for your ideas. Your conversations, saved in one place."
+        {ipChallengeId
+          ? "We detected a login from a new network. Enter the six-digit email code to continue."
+          : mode === "register"
+          ? (registrationEmailVerification ? "Create an account, then verify your email address before signing in." : "A space for your ideas. Your conversations, saved in one place.")
           : mode === "forgot"
             ? "We'll send a reset link to your email address."
             : "Pick up where you left off."}
       </p>
       <form onSubmit={submit} className="form-stack">
-        {mode === "register" && (
+        {mode === "register" && !ipChallengeId && (
           <label>
             Full name
             <input
@@ -111,7 +141,7 @@ export default function AuthDialog({
             />
           </label>
         )}
-        <label>
+        {!ipChallengeId && <label>
           Email address
           <input
             name="email"
@@ -122,8 +152,8 @@ export default function AuthDialog({
             required
             autoFocus={mode !== "register"}
           />
-        </label>
-        {mode !== "forgot" && (
+        </label>}
+        {!ipChallengeId && mode !== "forgot" && (
           <label>
             Password
             <input
@@ -137,7 +167,7 @@ export default function AuthDialog({
             />
           </label>
         )}
-        {mode === "register" && (
+        {mode === "register" && !ipChallengeId && (
           <>
             <small className="muted">
               At least 6 characters.
@@ -154,7 +184,7 @@ export default function AuthDialog({
             </label>
           </>
         )}
-        {mode === "login" &&
+        {mode === "login" && !ipChallengeId &&
           (showCode ? (
             <label>
               Authenticator or recovery code
@@ -174,6 +204,21 @@ export default function AuthDialog({
               <ShieldCheck size={15} /> Use a two-factor code
             </button>
           ))}
+        {ipChallengeId && (
+          <label>
+            Email security code
+            <input
+              name="ip_code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              placeholder="6-digit code"
+              required
+              autoFocus
+            />
+          </label>
+        )}
         {error && (
           <p className="feedback error" role="alert">
             {error}
@@ -190,7 +235,9 @@ export default function AuthDialog({
             <LoaderCircle className="spin" size={18} />
           ) : (
             <>
-              {mode === "register"
+              {ipChallengeId
+                ? "Verify and sign in"
+                : mode === "register"
                 ? "Create account"
                 : mode === "forgot"
                   ? "Send reset link"
@@ -201,7 +248,9 @@ export default function AuthDialog({
         </button>
       </form>
       <div className="auth-links">
-        {mode === "login" ? (
+        {ipChallengeId ? (
+          <button className="text-button" type="button" disabled={busy} onClick={() => change("login")}>Back to sign in</button>
+        ) : mode === "login" ? (
           <>
             <button
               className="text-button"
