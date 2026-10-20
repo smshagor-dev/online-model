@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Assistant;
 use App\Models\Attachment;
 use App\Models\Canvas;
+use App\Models\ConnectorAccount;
+use App\Models\ConnectorCall;
 use App\Models\Conversation;
 use App\Models\ConversationShare;
 use App\Models\MediaTask;
@@ -29,7 +31,7 @@ class WorkspaceController
 
     public function capabilities()
     {
-        return ['streaming' => true, 'projects' => true, 'memory' => true, 'attachments' => ['text', 'markdown', 'csv', 'json', 'source-code'], 'media' => config('media.url') && config('media.key') ? array_values(array_intersect(config('media.kinds'), ['image', 'vision', 'transcription', 'speech', 'video', 'document', 'code'])) : [], 'image_generation' => (bool) (config('media.url') && config('media.key') && in_array('image', config('media.kinds'))), 'voice_transcription' => (bool) (config('media.url') && config('media.key') && in_array('transcription', config('media.kinds'))), 'web_search' => (bool) config('models.search_url'), 'deep_research' => (bool) config('models.search_url'), 'code_execution' => (bool) (config('media.url') && config('media.key') && in_array('code', config('media.kinds')))];
+        return ['teams' => true, 'connectors' => true, 'live_voice' => (bool) (config('media.live') && config('media.url') && config('media.key') && in_array('transcription', config('media.kinds'))), 'streaming' => true, 'projects' => true, 'memory' => true, 'attachments' => ['text', 'markdown', 'csv', 'json', 'source-code'], 'media' => config('media.url') && config('media.key') ? array_values(array_intersect(config('media.kinds'), ['image', 'vision', 'transcription', 'speech', 'video', 'document', 'code'])) : [], 'image_generation' => (bool) (config('media.url') && config('media.key') && in_array('image', config('media.kinds'))), 'voice_transcription' => (bool) (config('media.url') && config('media.key') && in_array('transcription', config('media.kinds'))), 'web_search' => (bool) config('models.search_url'), 'deep_research' => (bool) config('models.search_url'), 'code_execution' => (bool) (config('media.url') && config('media.key') && in_array('code', config('media.kinds')))];
     }
 
     public function preferences(Request $r)
@@ -195,7 +197,7 @@ class WorkspaceController
 
     public function export(Request $r)
     {
-        return ['canvas_versions' => DB::table('canvas_versions')->whereIn('canvas_id', Canvas::where('user_id', $r->user()->id)->select('id'))->get(), 'assistants' => Assistant::where('user_id', $r->user()->id)->get(), 'scheduled_tasks' => ScheduledTask::where('user_id', $r->user()->id)->get(), 'task_runs' => TaskRun::whereIn('scheduled_task_id', ScheduledTask::where('user_id', $r->user()->id)->select('id'))->get(), 'media_tasks' => MediaTask::where('user_id', $r->user()->id)->get(), 'canvases' => Canvas::where('user_id', $r->user()->id)->get(), 'preferences' => $this->preferences($r), 'exported_at' => now()->toIso8601String(), 'user' => $r->user()->only('name', 'email', 'avatar', 'custom_instructions', 'memory_enabled'), 'projects' => Project::where('user_id', $r->user()->id)->get(), 'memories' => Memory::where('user_id', $r->user()->id)->get(), 'conversations' => Conversation::where('user_id', $r->user()->id)->with('messages')->get(), 'attachments' => Attachment::where('user_id', $r->user()->id)->get()->makeVisible('content')];
+        return ['team_memberships' => DB::table('team_members')->join('teams', 'teams.id', '=', 'team_members.team_id')->where('team_members.user_id', $r->user()->id)->get(['teams.id', 'teams.name', 'team_members.role']), 'team_posts' => DB::table('team_posts')->where('user_id', $r->user()->id)->get(), 'connector_accounts' => ConnectorAccount::where('user_id', $r->user()->id)->get(['server', 'created_at', 'updated_at']), 'connector_calls' => ConnectorCall::where('user_id', $r->user()->id)->where('status', '!=', 'deleted')->get(), 'canvas_versions' => DB::table('canvas_versions')->whereIn('canvas_id', Canvas::where('user_id', $r->user()->id)->select('id'))->get(), 'assistants' => Assistant::where('user_id', $r->user()->id)->get(), 'scheduled_tasks' => ScheduledTask::where('user_id', $r->user()->id)->get(), 'task_runs' => TaskRun::whereIn('scheduled_task_id', ScheduledTask::where('user_id', $r->user()->id)->select('id'))->get(), 'media_tasks' => MediaTask::where('user_id', $r->user()->id)->get(), 'canvases' => Canvas::where('user_id', $r->user()->id)->get(), 'preferences' => $this->preferences($r), 'exported_at' => now()->toIso8601String(), 'user' => $r->user()->only('name', 'email', 'avatar', 'custom_instructions', 'memory_enabled'), 'projects' => Project::where('user_id', $r->user()->id)->get(), 'memories' => Memory::where('user_id', $r->user()->id)->get(), 'conversations' => Conversation::where('user_id', $r->user()->id)->with('messages')->get(), 'attachments' => Attachment::where('user_id', $r->user()->id)->get()->makeVisible('content')];
     }
 
     public function stop(Request $r, int $id, int $message)

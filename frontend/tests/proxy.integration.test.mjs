@@ -112,6 +112,17 @@ before(async () => {
         return res.end(JSON.stringify([{ version: 1 }]));
       if (req.url === "/api/v1/me")
         return res.end(JSON.stringify({ id: 1, name: "Test User" }));
+      if (
+        /^\/api\/v1\/(teams|team-invites|connectors|connector-calls|live)(\/|$)/.test(
+          req.url,
+        )
+      ) {
+        if (req.method === "DELETE") {
+          res.statusCode = 204;
+          return res.end();
+        }
+        return res.end(JSON.stringify({ ok: true }));
+      }
       res.statusCode = 404;
       res.end("{}");
     })
@@ -462,4 +473,108 @@ test("public assistant browsing omits tokens and copying requires authentication
     201,
   );
   assert.equal(lastRequest.authorization, "Bearer fixture-secret-token");
+});
+
+test("teams, approved connectors and live input remain authenticated and origin-protected", async () => {
+  for (const path of ["teams", "connectors"])
+    assert.equal((await request(path)).status, 401);
+  const auth = await login();
+  const cookie = auth.headers.get("set-cookie").split(";")[0];
+  for (const path of [
+    "teams",
+    "teams/2",
+    "teams/2/documents/3",
+    "teams/2/threads/4",
+    "connectors",
+  ]) {
+    const response = await request(path, { headers: { Cookie: cookie } });
+    assert.equal(response.status, 200);
+    assert.equal(lastRequest.authorization, "Bearer fixture-secret-token");
+  }
+  for (const path of [
+    "teams/2/preview",
+    "teams/2/invites",
+    "teams/2/documents",
+    "teams/2/threads/4",
+    "team-invites/3/accept",
+    "connectors/docs/connect",
+    "connectors/docs/tools",
+    "connectors/docs/call",
+    "live/start",
+    "live/stop",
+  ]) {
+    assert.equal(
+      (
+        await request(path, {
+          method: "POST",
+          headers: { ...headers(), Cookie: cookie },
+          body: "{}",
+        })
+      ).status,
+      200,
+    );
+    assert.equal(lastRequest.authorization, "Bearer fixture-secret-token");
+  }
+  for (const path of ["teams/2/members/3", "teams/2/documents/3"])
+    assert.equal(
+      (
+        await request(path, {
+          method: "PUT",
+          headers: { ...headers(), Cookie: cookie },
+          body: "{}",
+        })
+      ).status,
+      200,
+    );
+  assert.equal(
+    (
+      await request("live/input", {
+        method: "POST",
+        headers: { ...headers(), Cookie: cookie },
+        body: JSON.stringify({ input: "a".repeat(150000) }),
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await request("live/start", {
+        method: "POST",
+        headers: {
+          Cookie: cookie,
+          "Content-Type": "application/json",
+          Origin: "https://attacker.example",
+        },
+        body: "{}",
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await request("connectors/docs/endpoint", {
+        method: "POST",
+        headers: { ...headers(), Cookie: cookie },
+        body: "{}",
+      })
+    ).status,
+    404,
+  );
+  for (const path of [
+    "teams/2",
+    "teams/2/members/3",
+    "teams/2/invites/4",
+    "connectors/docs",
+    "connector-calls/8",
+  ])
+    assert.equal(
+      (
+        await request(path, {
+          method: "DELETE",
+          headers: { ...headers(), Cookie: cookie },
+          body: "{}",
+        })
+      ).status,
+      204,
+    );
 });

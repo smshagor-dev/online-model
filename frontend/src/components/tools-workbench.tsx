@@ -6,6 +6,9 @@ import ResponseMarkdown from "./response-markdown";
 import LibraryPanel from "./unified-library";
 import CodeRunner from "./code-runner";
 import VoicePanel from "./voice-panel";
+import TeamWorkspace from "./team-workspace";
+import ConnectorWorkspace from "./connector-workspace";
+import LiveConversation from "./live-conversation";
 import AssistantGallery from "./assistant-gallery";
 type Assistant = {
   id: number;
@@ -50,8 +53,10 @@ export default function ToolsWorkbench({
   onText,
   onAttachment,
   onResearch,
+  onConversation,
 }: {
   initial?: string;
+  onConversation: (id: number) => void;
   onResearch: () => void;
   onClose: () => void;
   onAssistant: (a: {
@@ -67,6 +72,9 @@ export default function ToolsWorkbench({
     <Dialog title="Openmindai workspace" onClose={onClose} wide>
       <div className="workspace-tabs">
         {[
+          "teams",
+          "connectors",
+          "live",
           "assistants",
           "explore",
           "tasks",
@@ -85,6 +93,9 @@ export default function ToolsWorkbench({
           </button>
         ))}
       </div>
+      {tab === "teams" && <TeamWorkspace onText={onText} />}
+      {tab === "connectors" && <ConnectorWorkspace onText={onText} />}
+      {tab === "live" && <LiveConversation onOpen={onConversation} />}
       {tab === "explore" && <AssistantGallery compact />}
       {tab === "assistants" && <AssistantBuilder onUse={onAssistant} />}
       {tab === "research" && (

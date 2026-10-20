@@ -94,3 +94,9 @@ The Python/API tests mock model inference and Docker calls. Actual GPU generatio
 Code artifact previews are produced outside the execution container from allowlisted ZIP entries without extracting files. PNG previews are capped at 500 KB and 16 megapixels, CSV preview at 101 rows including its header and 30 columns, text at 20,000 characters, and total serialized preview data at 1.5 MB. Laravel revalidates metadata before storing it. Full files remain in the ZIP; previews are samples. Rebuild/restart the media runtime and migrate Laravel to enable preview metadata for new tasks.
 
 Verified safetensors/config/tokenizer snapshots can also be provisioned from `/admin/model-bundles`. See [admin snapshot setup](../../docs/WORKSPACE_FEATURES.md). Copy the complete ready folder to the GPU host when it is separate from Laravel; the UI does not install or start inference.
+
+## Warm live speech and vision
+
+Set `MEDIA_LIVE_ENABLED=true` in the Python service and Laravel to enable the authenticated `/live` endpoint for provisioned transcription/vision models. It shares the existing GPU lock, validates bounded base64 inputs and keeps these pipelines warm between turns. Raw input remains temporary. FFmpeg/ffprobe are required; allocate enough memory for all warm models and check cold-start latency before enabling it for users.
+
+The Live frontend performs continuous VAD utterance capture and sampled frame requests, then uses the existing saved chat stream and browser speech playback. It is not a native duplex audio/video model. See [full setup and acceptance checks](../../docs/COLLABORATION_AND_LIVE.md).

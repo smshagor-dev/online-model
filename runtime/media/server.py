@@ -115,7 +115,38 @@ def run(task: Task):
         guard.release()
 
 
-def infer(task: Task, raw: bytes | None):
+LIVE_ENABLED = os.environ.get('MEDIA_LIVE_ENABLED') == 'true'
+_live_pipelines = {}
+
+
+def live_pipeline(kind, factory):
+    # Explicit operator opt-in: warm ASR/vision remain resident between live turns.
+    if kind not in _live_pipelines:
+        _live_pipelines[kind] = factory()
+    return _live_pipelines[kind]
+
+
+@app.post('/live', dependencies=[Depends(auth)])
+def live(task: Task):
+    if not LIVE_ENABLED or task.kind not in ('transcription', 'vision') or task.kind not in PATHS:
+        raise HTTPException(503, 'Live engine not configured')
+    if not task.input:
+        raise HTTPException(422, 'Input required')
+    if not guard.acquire(blocking=False):
+        raise HTTPException(429, 'Engine busy')
+    try:
+        raw = base64.b64decode(task.input, validate=True)
+        if not raw or len(raw) > 3_000_000:
+            raise ValueError('Live input exceeds limit')
+        return infer(task, raw, live_mode=True)
+    except Exception:
+        logging.exception('Live inference failed')
+        raise HTTPException(503, 'Live inference failed') from None
+    finally:
+        guard.release()
+
+
+def infer(task: Task, raw: bytes | None, live_mode=False):
     import torch
     from PIL import Image
     from transformers import pipeline
@@ -131,9 +162,10 @@ def infer(task: Task, raw: bytes | None):
             if source.width * source.height > 16_000_000:
                 raise ValueError('Image exceeds limit')
             image = source.convert('RGB')
-        pipe = pipeline('image-text-to-text', model=path, device=device, dtype=dtype, model_kwargs=common, trust_remote_code=False)
+        factory = lambda: pipeline('image-text-to-text', model=path, device=device, dtype=dtype, model_kwargs=common, trust_remote_code=False)
+        pipe = live_pipeline('vision', factory) if live_mode else factory()
         messages = [{'role': 'user', 'content': [{'type': 'image'}, {'type': 'text', 'text': task.prompt}]}]
-        result = pipe(text=messages, images=[image], max_new_tokens=1024, return_full_text=False)[0]['generated_text']
+        result = pipe(text=messages, images=[image], max_new_tokens=128 if live_mode else 1024, return_full_text=False)[0]['generated_text']
         return {'text': result}
     if task.kind == 'transcription':
         # Decode locally with FFmpeg; cap decoded duration before ASR.
@@ -144,10 +176,11 @@ def infer(task: Task, raw: bytes | None):
             wav = Path(folder) / 'input.wav'
             probe = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', str(source)], capture_output=True, timeout=15, check=True)
             duration = float(probe.stdout)
-            if not 0 < duration <= 120:
+            if not 0 < duration <= (30 if live_mode else 120):
                 raise ValueError('Audio must be at most 120 seconds')
             subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(source), '-t', '120', '-ac', '1', '-ar', '16000', str(wav)], capture_output=True, timeout=30, check=True)
-            pipe = pipeline('automatic-speech-recognition', model=path, device=device, dtype=dtype, model_kwargs=common, trust_remote_code=False)
+            factory = lambda: pipeline('automatic-speech-recognition', model=path, device=device, dtype=dtype, model_kwargs=common, trust_remote_code=False)
+            pipe = live_pipeline('transcription', factory) if live_mode else factory()
             return {'text': pipe(str(wav), chunk_length_s=30)['text']}
     if task.kind == 'speech':
         import numpy as np

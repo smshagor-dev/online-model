@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'live' => (bool) env('MEDIA_LIVE_ENABLED', false),
+    'live_daily_limit' => (int) env('LIVE_DAILY_LIMIT', 20),
     'url' => env('MEDIA_RUNTIME_URL'),
     'key' => env('MEDIA_RUNTIME_KEY'),
     'kinds' => array_values(array_filter(explode(',', env('MEDIA_ENABLED_KINDS', '')))),

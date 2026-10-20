@@ -1772,6 +1772,10 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
       )}
       {toolsOpen && user && (
         <ToolsWorkbench
+          onConversation={(id) => {
+            setToolsOpen(null);
+            void openChat(id);
+          }}
           initial={toolsOpen}
           onResearch={() => {
             if (!searchAvailable) {

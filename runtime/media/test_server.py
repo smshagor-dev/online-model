@@ -37,6 +37,39 @@ class RuntimeTests(unittest.TestCase):
     def tearDown(self):
         self.torch.stop()
 
+    def test_live_requires_authentication_opt_in_and_supported_engine(self):
+        data = {'kind': 'vision', 'prompt': 'Describe', 'input': base64.b64encode(b'frame').decode()}
+        self.assertEqual(self.client.post('/live', json=data).status_code, 401)
+        self.assertEqual(self.client.post('/live', headers=self.headers, json=data).status_code, 503)
+        with patch.object(self.module, 'LIVE_ENABLED', True), patch.object(self.module, 'infer', return_value={'text': 'Live frame'}) as infer:
+            result = self.client.post('/live', headers=self.headers, json=data)
+            self.assertEqual(result.json(), {'text': 'Live frame'})
+            self.assertTrue(infer.call_args.kwargs['live_mode'])
+            self.assertEqual(self.client.post('/live', headers=self.headers, json={'kind': 'image', 'prompt': 'Hi'}).status_code, 503)
+
+    def test_live_rejects_busy_engine_bad_base64_and_oversized_frames(self):
+        with patch.object(self.module, 'LIVE_ENABLED', True), patch.object(self.module, 'infer') as infer:
+            for value in ['invalid!', base64.b64encode(b'x' * 3_000_001).decode()]:
+                self.assertEqual(self.client.post('/live', headers=self.headers, json={'kind': 'vision', 'prompt': 'Describe', 'input': value}).status_code, 503)
+            infer.assert_not_called()
+            self.module.guard.acquire()
+            try:
+                self.assertEqual(self.client.post('/live', headers=self.headers, json={'kind': 'vision', 'prompt': 'Describe', 'input': 'YQ=='}).status_code, 429)
+            finally:
+                self.module.guard.release()
+
+    def test_live_pipeline_is_warm_and_separate_by_kind(self):
+        self.module._live_pipelines.clear()
+        calls = []
+        def load():
+            calls.append(True)
+            return object()
+        first = self.module.live_pipeline('transcription', load)
+        self.assertIs(first, self.module.live_pipeline('transcription', load))
+        self.assertIsNot(first, self.module.live_pipeline('vision', load))
+        self.assertEqual(len(calls), 2)
+        self.module._live_pipelines.clear()
+
     def test_authentication_and_offline_mode(self):
         self.assertEqual(self.client.get('/health').status_code, 401)
         self.assertEqual(self.client.get('/health', headers=self.headers).json()['kinds'], ['image', 'vision'])

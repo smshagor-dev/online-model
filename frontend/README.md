@@ -72,3 +72,9 @@ Set Laravel `APP_NAME=Openmindai`. Optional `SEARXNG_SEARCH_URL` must point to y
 ## NVIDIA Nemotron chat
 
 See [NVIDIA setup](../docs/NVIDIA_FRONTEND_CHAT.md) for direct Next.js server-to-NVIDIA chat with Laravel message persistence. This is an explicit chat provider selection. Keep the API key in server environment variables. Scheduled tools and media continue to use the self-hosted runtime.
+
+## Teams, connectors and live conversation
+
+Open the Workspace dialog and select Teams, Connectors or Live. Team discussion/document sharing has role checks and revision conflict handling. Connectors use the administrator's MCP catalogue and per-call approval, with credentials held by Laravel. Live requires the private warm transcription/vision service; it supports automatic microphone turns, streamed chat answers, browser speech and optional sampled camera/screen context.
+
+See [deployment and limitations](../docs/COLLABORATION_AND_LIVE.md). OAuth connectors and native duplex audio/video model streaming are not included. Billing remains excluded.

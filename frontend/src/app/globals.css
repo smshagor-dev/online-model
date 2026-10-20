@@ -2135,3 +2135,12 @@ html[data-theme="light"] .shared-message.user {
 .assistant-gallery p {
   line-height: 1.6;
 }
+
+.collaboration-panel { display: grid; gap: 1rem; min-width: 0; }
+.collaboration-panel form { display: grid; gap: .8rem; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; }
+.collaboration-panel label { display: grid; gap: .4rem; }
+.collaboration-panel input:not([type=checkbox]), .collaboration-panel textarea, .collaboration-panel select { width: 100%; min-width: 0; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: .65rem; }
+.collaboration-panel label:has(input[type=checkbox]) { display: flex; align-items: flex-start; gap: .6rem; }
+.collaboration-panel article, .tool-review { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; overflow-wrap: anywhere; }
+.connector-output { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 26rem; overflow: auto; font-size: .82rem; }
+.live-camera { width: 100%; max-height: 24rem; object-fit: contain; background: #111; border-radius: 12px; }

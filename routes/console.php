@@ -38,6 +38,7 @@ Schedule::command('sanctum:prune-expired --hours=24')->daily();
 
 Schedule::call(fn () => Message::where('status', 'generating')->where('updated_at', '<', now()->subMinutes(10))->update(['status' => 'failed']))->everyMinute();
 Schedule::call(fn () => ConversationShare::where('expires_at', '<', now())->delete())->daily();
+Schedule::call(fn () => DB::table('team_invites')->where('expires_at', '<', now())->delete())->daily();
 
 // A killed queue process cannot run its failure hook. Clean abandoned media inputs.
 Schedule::call(function () {

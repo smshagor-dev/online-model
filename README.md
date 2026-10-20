@@ -21,3 +21,9 @@ Daily quotas default to 200 chat requests and 20 background-task runs per user. 
 For long research, the Node host must support long-lived responses; static hosting cannot run this path. Set ingress/SSE timeouts and PHP/queue worker duration to suit your infrastructure. The frontend chat proxy has no fixed overall timer. NVIDIA calls have a 110-second timeout per individual planning/generation request. Background jobs declare no total application timeout; run the `tasks` worker with `--timeout=0 --tries=1` and configure queue visibility/retry_after longer than your operational job duration. A hosting platform may still terminate the process. No live search/NVIDIA verification was made without deployment credentials.
 
 Official search API: https://docs.searxng.org/dev/search_api.html
+
+## Team workspace, MCP and live conversation
+
+Workspace now includes Teams, Connectors and Live. Team documents/discussions use membership and revision checks; private chats require reviewed snapshot consent before sharing. MCP tools use operator-reviewed endpoints, encrypted personal credentials and per-call approval. Live uses continuous microphone speech detection, private ASR, streamed chat and browser speech with optional sampled camera/screen observations. Billing is excluded.
+
+See [setup, scope and verification](docs/COLLABORATION_AND_LIVE.md) before enabling the live runtime or external connectors.

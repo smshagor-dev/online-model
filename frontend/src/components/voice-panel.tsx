@@ -186,10 +186,10 @@ export default function VoicePanel({
       <h3>Voice input</h3>
       <p className="muted">
         Record up to 110 seconds, then transcribe with your private model.
-        Review the transcript before sending. This is turn-based input;
-        continuous realtime conversation and background listening are not
-        enabled. Screen preview below sends a frame only when you explicitly
-        choose it.
+        Review the transcript before sending. This is turn-based input; use the
+        Live workspace tab for continuous conversation. Background listening
+        stops when you close that tab. Screen preview below sends a frame only
+        when you explicitly choose it.
       </p>
       {!available && (
         <p role="status">
