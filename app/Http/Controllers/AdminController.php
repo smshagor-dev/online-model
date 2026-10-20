@@ -4,6 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Jobs\DownloadModel;
 use App\Models\AiModel;
+use App\Models\Conversation;
+use App\Models\MediaTask;
+use App\Models\Message;
+use App\Models\TaskRun;
+use App\Services\AdminSettings;
 use App\Models\User;
 use App\Services\HuggingFace;
 use App\Services\TwoFactor;
@@ -73,9 +78,36 @@ class AdminController
         return redirect('/admin/login');
     }
 
-    public function dashboard()
+    public function dashboard(AdminSettings $settings)
     {
-        return view('admin.dashboard', ['users' => User::count(), 'models' => AiModel::count(), 'ready' => AiModel::where('status', 'ready')->count(), 'failed' => AiModel::where('status', 'failed')->count()]);
+        $registrations = [];
+        for ($daysAgo = 6; $daysAgo >= 0; $daysAgo--) {
+            $date = now()->subDays($daysAgo);
+            $registrations[] = ['day' => $date->format('D'), 'count' => User::whereDate('created_at', $date->toDateString())->count()];
+        }
+
+        return view('admin.dashboard', [
+            'settings' => $settings->all(),
+            'stats' => [
+                'users' => User::count(),
+                'new_users' => User::where('created_at', '>=', now()->subDays(30))->count(),
+                'active_users' => User::where('is_active', true)->count(),
+                'suspended_users' => User::where('is_active', false)->count(),
+                'admins' => User::where('is_admin', true)->count(),
+                'conversations' => Conversation::count(),
+                'messages' => Message::count(),
+                'models' => AiModel::count(),
+                'ready_models' => AiModel::where('status', 'ready')->count(),
+                'enabled_models' => AiModel::where('status', 'ready')->where('enabled', true)->count(),
+                'failed_models' => AiModel::where('status', 'failed')->count(),
+                'pending_models' => AiModel::whereIn('status', ['queued', 'downloading'])->count(),
+                'running_media' => MediaTask::whereIn('status', ['queued', 'running'])->count(),
+                'running_tasks' => TaskRun::whereIn('status', ['queued', 'running'])->count(),
+            ],
+            'registrations' => $registrations,
+            'recentUsers' => User::latest('id')->limit(5)->get(),
+            'recentModels' => AiModel::latest('id')->limit(5)->get(),
+        ]);
     }
 
     public function users(Request $r)

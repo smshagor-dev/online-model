@@ -74,7 +74,7 @@ class ToolsController
         return Cache::lock('workspace-task:'.$id, 10)->block(2, fn () => DB::transaction(function () use ($t, $r) {
             $t = ScheduledTask::where('user_id', $r->user()->id)->lockForUpdate()->findOrFail($t->id);
             abort_if(TaskRun::where('scheduled_task_id', $t->id)->whereIn('status', ['queued', 'running'])->exists(), 409, 'This task is already active.');
-            abort_if(config('models.task_daily_limit') > 0 && TaskRun::whereIn('scheduled_task_id', ScheduledTask::where('user_id', $r->user()->id)->select('id'))->whereDate('created_at', today())->count() >= config('models.task_daily_limit'), 429, 'Daily task limit reached.');
+            abort_if(TaskRun::whereIn('scheduled_task_id', ScheduledTask::where('user_id', $r->user()->id)->select('id'))->whereDate('created_at', today())->count() >= app(\App\Services\AdminSettings::class)->limit('task_daily_limit'), 429, 'Daily task limit reached.');
             $run = TaskRun::create(['scheduled_task_id' => $t->id, 'steps' => [['label' => 'Waiting for worker', 'status' => 'queued']]]);
             RunWorkspaceTask::dispatch($run->id)->onQueue('tasks');
 

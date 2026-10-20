@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\AdminSettings;
 use App\Notifications\VerifyEmail;
 use App\Services\TwoFactor;
 use Illuminate\Http\Request;
@@ -15,6 +16,7 @@ class AuthController
 {
     public function register(Request $r)
     {
+        abort_unless(app(AdminSettings::class)->enabled('registration_enabled'), 403, 'Registration is currently closed.');
         $data = $r->validate(['name' => 'required|string|max:120', 'email' => 'required|email|max:254|unique:users', 'password' => ['required', 'confirmed', PasswordRule::min(6)]]);
         $u = User::create($data);
         $u->forceFill(['email_verified_at' => now()])->save();

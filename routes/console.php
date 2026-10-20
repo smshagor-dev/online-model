@@ -59,17 +59,18 @@ Schedule::call(function () {
                 }
                 $active = TaskRun::where('scheduled_task_id', $t->id)->whereIn('status', ['queued', 'running'])->exists();
                 $daily = TaskRun::whereIn('scheduled_task_id', ScheduledTask::where('user_id', $t->user_id)->select('id'))->whereDate('created_at', today())->count();
+                $dailyLimit = app(\App\Services\AdminSettings::class)->limit('task_daily_limit');
                 if ($active) {
                     $t->update(['next_run_at' => now()->addMinutes(5)]);
 
                     return;
                 }
-                if ($daily >= 20) {
+                if ($daily >= $dailyLimit) {
                     $t->update(['next_run_at' => now()->addDay()->startOfDay()]);
 
                     return;
                 }
-                if (! $active && $daily < 20) {
+                if (! $active && $daily < $dailyLimit) {
                     $run = TaskRun::create(['scheduled_task_id' => $t->id, 'steps' => [['label' => 'Scheduled run queued', 'status' => 'queued']]]);
                     RunWorkspaceTask::dispatch($run->id)->onQueue('tasks')->afterCommit();
                 }
