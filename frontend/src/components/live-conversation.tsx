@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, streamChat, type Model, type Message } from "@/lib/api";
 import { VoiceActivity, takeSentence } from "@/lib/live-voice";
+import { audioAsWavBase64 } from "@/lib/audio-file";
 import ResponseMarkdown from "./response-markdown";
 const encode = (blob: Blob) =>
   new Promise<string>((resolve, reject) => {
@@ -16,6 +17,7 @@ export default function LiveConversation({
   onOpen: (id: number) => void;
 }) {
   const [available, setAvailable] = useState(false),
+    [hostedVoice, setHostedVoice] = useState(false),
     [vision, setVision] = useState(false),
     [models, setModels] = useState<Model[]>([]),
     [model, setModel] = useState(0),
@@ -64,8 +66,9 @@ export default function LiveConversation({
         undefined,
         c.signal,
       ).then((v) => {
-        setAvailable(v.live_voice);
-        setVision(v.media.includes("vision"));
+        setAvailable(v.live_voice || v.media.includes("transcription"));
+        setHostedVoice(!v.live_voice && v.media.includes("transcription"));
+        setVision(v.live_voice && v.media.includes("vision"));
       }),
       api<Model[]>("models", "GET", undefined, c.signal).then((v) => {
         setModels(v);
@@ -170,19 +173,24 @@ export default function LiveConversation({
         const c = new AbortController();
         request.current = c;
         setPhase("Transcribing speech…");
-        const input = await encode(blob);
+        const input = hostedVoice ? await audioAsWavBase64(blob) : await encode(blob);
         if (c.signal.aborted || version !== epoch.current) return;
-        const result = await api<{ text: string }>(
-          "live/input",
-          "POST",
-          { session: session.current, kind: "transcription", input },
-          c.signal,
-        );
+        const result = hostedVoice
+          ? await api<{ result_text: string }>(
+              "media/transcription", "POST",
+              { kind: "transcription", prompt: "", input }, c.signal,
+            )
+          : await api<{ text: string }>(
+              "live/input", "POST",
+              { session: session.current, kind: "transcription", input },
+              c.signal,
+            );
         if (version !== epoch.current || c.signal.aborted) return;
-        if (!result.text.trim()) continue;
+        const transcript = "result_text" in result ? result.result_text : result.text;
+        if (!transcript?.trim()) continue;
         const image = visual.current;
         const text = (
-          result.text +
+          transcript +
           (image && Date.now() - image.at < 30000
             ? "\n\nUntrusted current camera/screen observation: " + image.text
             : "")
@@ -311,22 +319,19 @@ export default function LiveConversation({
       mic.current = media;
       const c = new AbortController();
       request.current = c;
-      const live = await api<{ session: string; vision: boolean }>(
-        "live/start",
-        "POST",
-        { consent },
-        c.signal,
-      );
-      if (version !== epoch.current) {
-        void api("live/stop", "POST", { session: live.session }).catch(
-          () => {},
+      if (!hostedVoice) {
+        const live = await api<{ session: string; vision: boolean }>(
+          "live/start", "POST", { consent }, c.signal,
         );
-        return;
+        if (version !== epoch.current) {
+          void api("live/stop", "POST", { session: live.session }).catch(() => {});
+          return;
+        }
+        session.current = live.session;
+        setVision(live.vision);
       }
-      session.current = live.session;
       activeRef.current = true;
       setActive(true);
-      setVision(live.vision);
       setMuted(false);
       setMessages([]);
       cid.current = null;
@@ -521,25 +526,10 @@ export default function LiveConversation({
       </p>
       {!available && (
         <p role="status">
-          Enable the private warm transcription runtime to start. Vision is
-          optional.
+          Configure speech transcription to start. Optional vision requires a separate runtime.
         </p>
       )}
       {error && <p role="alert">{error}</p>}
-      <label>
-        Chat model
-        <select
-          disabled={active || starting}
-          value={model}
-          onChange={(e) => setModel(Number(e.target.value))}
-        >
-          {models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-        </select>
-      </label>
       <label>
         <input
           type="checkbox"
@@ -547,9 +537,10 @@ export default function LiveConversation({
           disabled={active || starting}
           onChange={(e) => setConsent(e.target.checked)}
         />
-        Send detected speech and optional camera/screen frames to my private
-        runtime. Save transcripts, visual context and answers in my chat
-        history. Answer text is sent to the browser’s speech service.
+        Send detected speech to the configured transcription service and optional
+        camera/screen frames to the private vision runtime. Audio may be
+        processed by an external provider. Save transcripts and responses in
+        my chat history. Answer playback uses browser speech synthesis.
       </label>
       <p className="muted">
         Use headphones for reliable interruption. Daily chat limits apply to
