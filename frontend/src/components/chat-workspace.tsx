@@ -64,6 +64,15 @@ import {
   type User,
 } from "@/lib/api";
 
+function publicChatError(message: string): string {
+  // Keep actionable error details without exposing the hosted model's branding.
+  return message
+    .replace(/\bNVIDIA_MODEL\b/g, "hosted model configuration")
+    .replace(/\bNVIDIA_API_KEY\b/g, "hosted service credentials")
+    .replace(/\bNVIDIA(?:['’]s)?\b/gi, "hosted AI service")
+    .replace(/\bNemotron\b/gi, "hosted model");
+}
+
 const suggestions = [
   {
     icon: Code2,
@@ -226,7 +235,7 @@ export default function ChatWorkspace() {
     (e: unknown) => {
       if (e instanceof Error && e.name === "AbortError") return;
       if (e instanceof ApiError && e.status === 401) clearSession();
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(publicChatError(e instanceof Error ? e.message : "Something went wrong."));
     },
     [clearSession],
   );
@@ -656,7 +665,7 @@ export default function ChatWorkspace() {
                   : m,
               ),
             );
-          if (event === "error") setError(String(data.message));
+          if (event === "error") setError(publicChatError(String(data.message)));
           if (
             event === "done" &&
             data.status === "complete" &&
