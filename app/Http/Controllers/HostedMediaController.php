@@ -22,10 +22,10 @@ class HostedMediaController
     {
         $this->authorizeBridge($r);
         $data = $r->validate([
-            'kind' => ['required', Rule::in(['transcription', 'speech', 'document', 'video'])],
+            'kind' => ['required', Rule::in(['transcription', 'speech', 'document_create', 'video'])],
             'prompt' => 'present|string|max:4000',
         ]);
-        if (in_array($data['kind'], ['speech', 'document', 'video'], true)) {
+        if (in_array($data['kind'], ['speech', 'document_create', 'video'], true)) {
             abort_if(trim($data['prompt']) === '', 422, 'Enter a description.');
         }
 
@@ -64,7 +64,7 @@ class HostedMediaController
         ]);
         return DB::transaction(function () use ($r, $id, $data) {
             $task = MediaTask::where('user_id', $r->user()->id)->lockForUpdate()->findOrFail($id);
-            abort_unless(in_array($task->kind, ['transcription', 'speech', 'document', 'video'], true) && $task->status === 'running', 409, 'Task is no longer active.');
+            abort_unless(in_array($task->kind, ['transcription', 'speech', 'document_create', 'video'], true) && $task->status === 'running', 409, 'Task is no longer active.');
             $path = null;
             $mime = null;
             $text = null;
@@ -81,7 +81,7 @@ class HostedMediaController
                 $expected = [
                     'speech' => ['audio/wav'],
                     'video' => ['video/mp4'],
-                    'document' => ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+                    'document_create' => ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
                 ][$task->kind];
                 abort_unless(in_array($mime, $expected, true), 422, 'Unsupported output type.');
 
@@ -130,7 +130,7 @@ class HostedMediaController
     {
         $this->authorizeBridge($r);
         $task = MediaTask::where('user_id', $r->user()->id)->findOrFail($id);
-        abort_unless(in_array($task->kind, ['transcription', 'speech', 'document', 'video'], true), 404);
+        abort_unless(in_array($task->kind, ['transcription', 'speech', 'document_create', 'video'], true), 404);
         MediaTask::whereKey($id)->where('status', 'running')->update([
             'status' => 'failed',
             'error' => 'The requested media task could not be completed. Please try again later.',
