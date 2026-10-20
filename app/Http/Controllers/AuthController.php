@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\AdminSettings;
+use App\Services\UnfamiliarLogin;
 use App\Notifications\VerifyEmail;
 use App\Services\TwoFactor;
 use Illuminate\Http\Request;
@@ -14,29 +15,78 @@ use Illuminate\Validation\Rules\Password as PasswordRule;
 
 class AuthController
 {
-    public function register(Request $r)
+    public function register(Request $r, UnfamiliarLogin $login)
     {
-        abort_unless(app(AdminSettings::class)->enabled('registration_enabled'), 403, 'Registration is currently closed.');
-        $data = $r->validate(['name' => 'required|string|max:120', 'email' => 'required|email|max:254|unique:users', 'password' => ['required', 'confirmed', PasswordRule::min(6)]]);
+        $settings = app(AdminSettings::class);
+        abort_unless($settings->enabled('registration_enabled'), 403, 'Registration is currently closed.');
+        $data = $r->validate([
+            'name' => 'required|string|max:120',
+            'email' => 'required|email|max:254|unique:users',
+            'password' => ['required', 'confirmed', PasswordRule::min(6)],
+        ]);
         $u = User::create($data);
-        $u->forceFill(['email_verified_at' => now()])->save();
 
-        return response()->json(['user' => $u, 'token' => $u->createToken('Openmindai Web', ['user'], now()->addDays(30))->plainTextToken, 'token_type' => 'Bearer', 'message' => 'Account created successfully.'], 201);
+        if ($settings->enabled('registration_email_verification_enabled')) {
+            try {
+                $u->notify(new VerifyEmail);
+            } catch (\Throwable $exception) {
+                // Never leave an inaccessible new account if the first verification email cannot be sent.
+                $u->delete();
+                abort(503, 'Verification email could not be sent. Please try again later.');
+            }
+
+            return response()->json([
+                'verification_required' => true,
+                'message' => 'Check your inbox for a verification link, then sign in.',
+            ], 201);
+        }
+
+        $u->forceFill(['email_verified_at' => now()])->save();
+        $token = $u->createToken('Openmindai Web', ['user'], now()->addDays(30))->plainTextToken;
+        if ($settings->enabled('unusual_ip_verification_enabled')) {
+            $login->trust($u, (string) $r->ip());
+        }
+
+        return response()->json([
+            'user' => $u,
+            'token' => $token,
+            'token_type' => 'Bearer',
+            'message' => 'Account created successfully.',
+        ], 201);
     }
 
-    public function login(Request $r, TwoFactor $two)
+    public function login(Request $r, TwoFactor $two, UnfamiliarLogin $login)
     {
-        $d = $r->validate(['email' => 'required|email', 'password' => 'required|string|max:1024', 'code' => 'nullable|string|max:64', 'device_name' => 'required|string|max:80']);
+        $d = $r->validate([
+            'email' => 'required|email', 'password' => 'required|string|max:1024',
+            'code' => 'nullable|string|max:64', 'device_name' => 'required|string|max:80',
+        ]);
         $u = User::where('email', $d['email'])->first();
         abort_unless($u && Hash::check($d['password'], $u->password), 422, 'Invalid credentials.');
         abort_unless($u->is_active, 403, 'Account disabled.');
         abort_unless($u->email_verified_at, 403, 'Verify your email first.');
+
         if ($u->two_factor_confirmed_at) {
             abort_unless($two->verify($u, $d['code'] ?? ''), 422, 'A valid two-factor or recovery code is required.');
         }
         abort_if($u->tokens()->count() >= 10, 422, 'Revoke an existing device first.');
 
-        return ['token' => $u->createToken($d['device_name'], ['user'], now()->addDays(30))->plainTextToken, 'token_type' => 'Bearer', 'user' => $u];
+        $challenge = $login->challenge($u, $r, $d['device_name']);
+        if ($challenge) {
+            return response()->json($challenge, 202);
+        }
+
+        $token = $u->createToken($d['device_name'], ['user'], now()->addDays(30))->plainTextToken;
+        if (app(AdminSettings::class)->enabled('unusual_ip_verification_enabled')) {
+            $login->trust($u, (string) $r->ip());
+        }
+
+        return ['token' => $token, 'token_type' => 'Bearer', 'user' => $u];
+    }
+
+    public function verifyLoginIp(Request $request, UnfamiliarLogin $login)
+    {
+        return $login->verify($request);
     }
 
     public function logout(Request $r)
