@@ -399,3 +399,60 @@ html[data-theme="light"] .workspace .user-bubble {
   .workspace .suggestions button:hover,
   .workspace .new-chat-action:hover { transform: none; }
 }
+
+/* Consistent dialogs, sign-in forms, and settings panels. */
+html:not([data-theme="dark"]) .dialog,
+html[data-theme="dark"] .dialog {
+  background: var(--ui-elevated);
+  color: var(--text);
+  border: 1px solid var(--ui-outline);
+  border-radius: 20px;
+  box-shadow: 0 24px 90px rgba(28, 39, 88, .22);
+}
+.dialog::backdrop { background: rgba(17, 23, 48, .55); backdrop-filter: blur(5px); }
+.dialog .dialog-header h2 { color: var(--text); font-weight: 750; }
+.dialog .dialog-description,
+.dialog .muted { color: var(--ui-soft-text); }
+.dialog .form-stack label { color: var(--text); font-size: 12px; font-weight: 650; }
+.dialog .form-stack input,
+.dialog .form-stack textarea,
+.dialog .form-stack select,
+.dialog .share-url input {
+  background: var(--ui-elevated);
+  color: var(--text);
+  border: 1px solid var(--ui-outline);
+  border-radius: 11px;
+}
+.dialog .form-stack input:focus,
+.dialog .form-stack textarea:focus,
+.dialog .form-stack select:focus {
+  border-color: var(--ui-primary);
+  outline: 3px solid color-mix(in srgb, var(--ui-primary) 13%, transparent);
+}
+.dialog .primary-button,
+.dialog .secondary-button,
+.dialog .danger-button { border-radius: 11px; }
+.dialog .primary-button {
+  background: linear-gradient(115deg, #526ff2, #7456df);
+  color: #fff;
+  font-weight: 700;
+  border: 0;
+}
+.dialog .primary-button:hover { background: linear-gradient(115deg, #425edb, #6145ce); }
+.dialog .secondary-button { background: var(--ui-tint); color: var(--text); border-color: var(--ui-outline); }
+.dialog .secondary-button:hover { background: var(--ui-hover); }
+.dialog .text-button { color: var(--ui-primary-strong); }
+.dialog .auth-links { border-color: var(--border); }
+.dialog .icon-button { border-radius: 11px; color: var(--ui-soft-text); }
+.dialog .icon-button:hover { background: var(--ui-hover); color: var(--text); }
+.dialog .settings-nav button.selected,
+html[data-theme="light"] .dialog .settings-nav button.selected {
+  background: var(--ui-tint);
+  color: var(--ui-primary-strong);
+}
+.dialog .settings-nav button:hover { background: var(--ui-hover); }
+.dialog .settings-content h3 { color: var(--text); }
+.dialog .feedback { border-radius: 11px; }
+@media (max-width: 760px) {
+  .dialog .dialog-inner { padding: 23px 20px; }
+}
