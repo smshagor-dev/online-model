@@ -168,7 +168,6 @@ export default function ChatWorkspace() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [modelOpen, setModelOpen] = useState(false);
   const [accountMenu, setAccountMenu] = useState(false);
   const [historyMenuId, setHistoryMenuId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -183,7 +182,6 @@ export default function ChatWorkspace() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const chatRequest = useRef<AbortController | null>(null);
   const historyRequest = useRef<AbortController | null>(null);
-  const modelMenuRef = useRef<HTMLDivElement>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const composerToolsRef = useRef<HTMLDetailsElement>(null);
 
@@ -354,8 +352,6 @@ export default function ChatWorkspace() {
   }, [messages.length, busy, loadingChat]);
   useEffect(() => {
     function dismiss(event: MouseEvent) {
-      if (!modelMenuRef.current?.contains(event.target as Node))
-        setModelOpen(false);
       if (!accountMenuRef.current?.contains(event.target as Node))
         setAccountMenu(false);
       if (
@@ -384,7 +380,6 @@ export default function ChatWorkspace() {
       if (event.key === "Escape") {
         setHistoryMenuId(null);
         composerToolsRef.current?.removeAttribute("open");
-        setModelOpen(false);
         setAccountMenu(false);
         setSidebarOpen(false);
       }
@@ -422,7 +417,6 @@ export default function ChatWorkspace() {
   useEffect(() => {
     setReadAloud(typeof speechSynthesis !== "undefined");
   }, []);
-  const selectedModel = models.find((model) => model.id === modelId);
   const filteredHistory = conversations;
   function newChat() {
     if (busy) return;
@@ -1238,60 +1232,7 @@ export default function ChatWorkspace() {
                 <Menu size={21} />
               </button>
             )}
-            <div className="model-menu-wrapper" ref={modelMenuRef}>
-              <button
-                className="model-picker"
-                onClick={() => setModelOpen(!modelOpen)}
-                aria-expanded={modelOpen}
-                disabled={busy}
-              >
-                <span>OpenMindAI</span>
-                <ChevronDown size={17} />
-              </button>
-              {selectedModel && (
-                <span className="active-model-label">{selectedModel.name}</span>
-              )}
-              {modelOpen && (
-                <div className="model-menu popover">
-                  <div className="popover-heading">
-                    Choose a model<small>Available chat models</small>
-                  </div>
-                  {!user ? (
-                    <button
-                      onClick={() => {
-                        setAuthOpen(true);
-                        setModelOpen(false);
-                      }}
-                    >
-                      <LogIn size={17} /> Sign in to view models
-                    </button>
-                  ) : models.length ? (
-                    models.map((model) => (
-                      <button
-                        key={model.id}
-                        onClick={() => {
-                          setModelId(model.id);
-                          setModelOpen(false);
-                        }}
-                      >
-                        <span className="model-glyph">
-                          <Sparkles size={17} />
-                        </span>
-                        <span>
-                          <strong>{model.name}</strong>
-                          <small>{model.family}</small>
-                        </span>
-                        {modelId === model.id && <Check size={17} />}
-                      </button>
-                    ))
-                  ) : (
-                    <p className="muted model-empty">
-                      No enabled models. Ask your administrator to add one.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+            <span className="topbar-brand">OpenMindAI</span>
           </div>
           <div className="topbar-right">
             <button
@@ -1657,15 +1598,16 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
               temporary chat messages.
             </p>
           )}
-          {selectedModel?.id === -1 && mediaMode === "chat" && (
+          {modelId === -1 && mediaMode === "chat" && (
             <p className="muted provider-notice">
-              NVIDIA hosted chat: your message, included history, selected files
-              and personalization are sent to NVIDIA.{" "}
+              This chat uses an external AI service. Your messages, conversation
+              context, selected files, and personalization may be sent to the
+              provider for processing.{" "}
               {temporary
-                ? "Temporary mode prevents chat storage in this app; NVIDIA’s policies still apply."
+                ? "Temporary mode prevents chat storage here; the provider’s privacy and retention policies still apply."
                 : "Your conversation is saved in your account."}
             </p>
-          )}
+          )
           <form
             className="composer"
             onSubmit={send}
