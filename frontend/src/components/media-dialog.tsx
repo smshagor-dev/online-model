@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, type Page } from "@/lib/api";
+import { audioAsWavBase64 } from "@/lib/audio-file";
 import ArtifactPreviews, { type Artifact } from "./artifact-previews";
 import Dialog from "./dialog";
 import ResponseMarkdown from "./response-markdown";
@@ -12,6 +13,7 @@ type Kind =
   | "speech"
   | "video"
   | "document"
+  | "document_create"
   | "code";
 type Task = {
   id: number;
@@ -26,6 +28,7 @@ type Task = {
 const labels: Record<Kind, string> = {
   code: "Python run",
   document: "Read PDF or DOCX",
+  document_create: "Create PDF or Word document",
   image: "Create image",
   vision: "Ask about an image",
   transcription: "Transcribe audio",
@@ -44,6 +47,7 @@ export default function MediaDialog({
 }) {
   const [kinds, setKinds] = useState<Kind[]>([]);
   const [kind, setKind] = useState<Kind>(initialKind);
+  const [format, setFormat] = useState<"pdf" | "docx">("docx");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
@@ -148,7 +152,7 @@ export default function MediaDialog({
           throw new Error(
             "Choose a file up to 8 MB. Audio must be at most 2 minutes.",
           );
-        input = await new Promise<string>((resolve, reject) => {
+        input = kind === "transcription" ? await audioAsWavBase64(file) : await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(String(reader.result).split(",")[1]);
           reader.onerror = () => reject(new Error("Unable to read this file."));
@@ -157,9 +161,11 @@ export default function MediaDialog({
       }
       if (c.signal.aborted) return;
       const result = await api<Task>(
-        kind === "image" ? "media/image" : "media",
+        ["image", "transcription", "speech", "video", "document_create"].includes(kind)
+          ? "media/" + kind
+          : "media",
         "POST",
-        { kind, prompt, input },
+        { kind, prompt, input, ...(kind === "document_create" ? { format } : {}) },
         c.signal,
       );
       if (!c.signal.aborted) {
@@ -229,6 +235,15 @@ export default function MediaDialog({
               ))}
             </select>
           </label>
+          {kind === "document_create" && (
+            <label>
+              File format
+              <select value={format} onChange={(e) => setFormat(e.target.value as "pdf" | "docx")}>
+                <option value="docx">Word (.docx)</option>
+                <option value="pdf">PDF (.pdf)</option>
+              </select>
+            </label>
+          )}
           <label>
             {kind === "speech" ? "Text to speak" : "Prompt"}
             <textarea
@@ -334,13 +349,16 @@ export default function MediaDialog({
             {preview && task.output_mime === "audio/wav" && (
               <audio controls src={preview} />
             )}
+            {preview && task.output_mime === "application/pdf" && (
+              <iframe title="Generated PDF" className="pdf-preview" src={preview} />
+            )}
             {preview && task.output_mime === "video/mp4" && (
               <video className="media-preview" controls src={preview} />
             )}
             {preview && (
               <a
                 href={preview}
-                download={`openmindai-${task.id}.${task.output_mime === "image/jpeg" ? "jpg" : task.kind === "image" ? "png" : task.kind === "speech" ? "wav" : task.kind === "code" ? "zip" : "mp4"}`}
+                download={`openmindai-${task.id}.${task.output_mime === "application/pdf" ? "pdf" : task.output_mime?.includes("wordprocessingml") ? "docx" : task.output_mime === "image/jpeg" ? "jpg" : task.kind === "image" ? "png" : task.kind === "speech" ? "wav" : task.kind === "code" ? "zip" : "mp4"}`}
               >
                 Download result
               </a>
