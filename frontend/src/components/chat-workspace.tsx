@@ -40,6 +40,8 @@ import {
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Dialog from "./dialog";
+import WelcomeToolsMenu, { type WelcomeToolAction } from "./welcome-tools-menu";
+import BrowserTabLinksDialog from "./browser-tab-links-dialog";
 import { applyAppearance, type Preferences } from "@/lib/settings";
 const ToolsWorkbench = dynamic(() => import("./tools-workbench"));
 const FilePreview = dynamic(() => import("./file-preview"));
@@ -134,6 +136,8 @@ export default function ChatWorkspace() {
   const [canvasInitial, setCanvasInitial] = useState<string | null>(null);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [projectToolOpen, setProjectToolOpen] = useState(false);
+  const [browserTabLinksOpen, setBrowserTabLinksOpen] = useState(false);
   const [toolsChat, setToolsChat] = useState<Conversation | null>(null);
   const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
   const [projectId, setProjectId] = useState<number | null>(null);
@@ -198,6 +202,8 @@ export default function ChatWorkspace() {
     generationRef.current?.abort();
     uploadRequest.current?.abort();
     setWorkspaceOpen(false);
+    setProjectToolOpen(false);
+    setBrowserTabLinksOpen(false);
     setMediaOpen(false);
     setToolsOpen(null);
     setFilePreview(null);
@@ -779,6 +785,44 @@ export default function ChatWorkspace() {
       report(e);
     }
   }
+  function selectWelcomeTool(action: WelcomeToolAction) {
+    composerToolsRef.current?.removeAttribute("open");
+    if (action === "tabs") {
+      setBrowserTabLinksOpen(true);
+      return;
+    }
+    if (!user) {
+      setAuthOpen(true);
+      return;
+    }
+    if (action === "files") fileRef.current?.click();
+    if (action === "library") setToolsOpen("library");
+    if (action === "image") {
+      if (mediaKinds.includes("image")) setMediaOpen(true);
+      else setError("Image generation needs a configured image runtime.");
+    }
+    if (action === "project") {
+      setProjectToolOpen(true);
+      setWorkspaceOpen(true);
+    }
+    if (action === "web" || action === "research") {
+      if (!searchAvailable) {
+        setError("Web search requires a configured search provider.");
+        return;
+      }
+      const turningOff = action === "research"
+        ? deepResearch
+        : webSearch && !deepResearch;
+      setWebSearch(!turningOff);
+      setDeepResearch(action === "research" && !turningOff);
+      setMediaMode("chat");
+      inputRef.current?.focus();
+    }
+    if (action === "voice") setToolsOpen("voice");
+    if (action === "code") setToolsOpen("code");
+    if (action === "planner") setToolsOpen("research");
+  }
+
   function handleFile(file: File) {
     if (!user) {
       setAuthOpen(true);
@@ -1710,102 +1754,19 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                   <SlidersHorizontal size={17} />
                   <span>Tools</span>
                 </summary>
-                <div className="composer-tools-menu">
-                  <p className="popover-heading">Create & explore</p>
-                  <div className="composer-modes">
-                    <select
-                      aria-label="Message mode"
-                      value={mediaMode}
-                      onChange={(e) => setMediaMode(e.target.value)}
-                    >
-                      <option value="chat">Chat</option>
-                      {["image", "speech", "video"]
-                        .filter((k) => mediaKinds.includes(k))
-                        .map((k) => (
-                          <option key={k} value={k}>
-                            Create {k}
-                          </option>
-                        ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        composerToolsRef.current?.removeAttribute("open");
-                        setToolsOpen("voice");
-                      }}
-                    >
-                      Voice
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        composerToolsRef.current?.removeAttribute("open");
-                        setToolsOpen("research");
-                      }}
-                    >
-                      Research
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        composerToolsRef.current?.removeAttribute("open");
-                        setToolsOpen("code");
-                      }}
-                    >
-                      Run Python
-                    </button>
-                  </div>
-
-                  {searchAvailable && (
-                    <button
-                      type="button"
-                      className={`temporary-toggle ${webSearch ? "enabled" : ""}`}
-                      disabled={busy}
-                      aria-pressed={webSearch && !deepResearch}
-                      onClick={() => {
-                        setWebSearch(!webSearch || deepResearch);
-                        setDeepResearch(false);
-                      }}
-                    >
-                      <Search size={13} />
-                      {webSearch && !deepResearch
-                        ? "Web search on"
-                        : "Web search"}
-                    </button>
-                  )}
-                  {searchAvailable && (
-                    <>
-                      <button
-                        type="button"
-                        className={`temporary-toggle ${deepResearch ? "enabled" : ""}`}
-                        disabled={busy}
-                        aria-pressed={deepResearch}
-                        onClick={() => {
-                          setDeepResearch(!deepResearch);
-                          setWebSearch(!deepResearch);
-                        }}
-                      >
-                        Deep research
-                      </button>
-                      {webSearch && (
-                        <select
-                          aria-label="Search freshness"
-                          value={searchTimeRange}
-                          disabled={busy}
-                          onChange={(event) =>
-                            setSearchTimeRange(event.target.value)
-                          }
-                        >
-                          <option value="">Any time</option>
-                          <option value="day">Past day</option>
-                          <option value="week">Past week</option>
-                          <option value="month">Past month</option>
-                          <option value="year">Past year</option>
-                        </select>
-                      )}
-                    </>
-                  )}
-                </div>
+                <WelcomeToolsMenu
+                  busy={busy || uploading}
+                  searchAvailable={searchAvailable}
+                  imageAvailable={mediaKinds.includes("image")}
+                  mediaKinds={mediaKinds}
+                  mediaMode={mediaMode}
+                  onMediaMode={setMediaMode}
+                  webSearch={webSearch}
+                  deepResearch={deepResearch}
+                  searchTimeRange={searchTimeRange}
+                  onSearchTimeRange={setSearchTimeRange}
+                  onSelect={selectWelcomeTool}
+                />
               </details>
               {(webSearch || mediaMode !== "chat") && (
                 <span className="composer-active-mode">
@@ -1887,6 +1848,24 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
           </p>
         </div>
       </main>
+      {browserTabLinksOpen && (
+        <BrowserTabLinksDialog
+          onClose={() => setBrowserTabLinksOpen(false)}
+          onAdd={(links) => {
+            setDraft((previous) =>
+              (previous.trimEnd() ? previous.trimEnd() + "\n\n" : "") +
+              "Use these browser tab links as context:\n" + links.join("\n"),
+            );
+            if (searchAvailable) {
+              setWebSearch(true);
+              setDeepResearch(false);
+              setMediaMode("chat");
+            }
+            setBrowserTabLinksOpen(false);
+            requestAnimationFrame(() => inputRef.current?.focus());
+          }}
+        />
+      )}
       {canvasInitial !== null && (
         <CanvasDialog
           initial={canvasInitial}
@@ -1967,6 +1946,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
       )}
       {mediaOpen && (
         <MediaDialog
+          initialKind="image"
           onClose={() => setMediaOpen(false)}
           onUse={(text) => {
             setDraft(text);
@@ -1981,12 +1961,13 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
       )}
       {workspaceOpen && (
         <WorkspaceDialog
+          initialTab={projectToolOpen ? "projects" : "instructions"}
           onAttachment={(a) =>
             setAttachments((previous) =>
               [...previous.filter((f) => f.id !== a.id), a].slice(-5),
             )
           }
-          onClose={() => setWorkspaceOpen(false)}
+          onClose={() => { setWorkspaceOpen(false); setProjectToolOpen(false); }}
           onProject={(id) => {
             setProjectId(id);
             newChat();
