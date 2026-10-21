@@ -25,6 +25,7 @@ import {
   Lightbulb,
   LoaderCircle,
   LogIn,
+  UserRound,
   LogOut,
   Menu,
   MessageCircle,
@@ -1607,11 +1608,22 @@ export default function ChatWorkspace() {
                     message.role === "user" ? "Your message" : "Model response"
                   }
                 >
+                  {message.role === "user" && (
+                    <span className="chat-user-avatar" aria-label={user?.name || "You"}>
+                      {user?.avatar ? (
+                        <img src={user.avatar} alt="Your profile photo" />
+                      ) : user?.name ? (
+                        user.name.charAt(0).toUpperCase()
+                      ) : (
+                        <UserRound size={18} aria-hidden="true" />
+                      )}
+                    </span>
+                  )}
                   {message.role === "assistant" && (
                     <span className="assistant-avatar">
                       <Image
                         src="/openmindai-logo.png"
-                        alt=""
+                        alt="OpenMindAI"
                         width={23}
                         height={23}
                       />
