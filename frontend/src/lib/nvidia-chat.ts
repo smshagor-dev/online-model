@@ -84,7 +84,7 @@ export async function nvidiaChat(
       JSON.parse(body).resume_message_id ? "resume" : "begin",
       JSON.parse(body).resume_message_id
         ? { message_id: JSON.parse(body).resume_message_id }
-        : JSON.parse(body),
+        : { ...JSON.parse(body), provider_model: config.model },
       JSON.parse(body).deep_research ? 80000 : 15000,
     );
     if (!prepared.ok) {

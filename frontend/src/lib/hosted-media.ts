@@ -143,7 +143,7 @@ export async function hostedMediaRequest(
     : (config.chatModel || "nvidia/nemotron-3.5-lightning-30b-a3b");
   let taskId: number | null = null;
   try {
-    const begin = await bridge("media/hosted/task/begin", { kind: job.kind, prompt: job.prompt });
+    const begin = await bridge("media/hosted/task/begin", { kind: job.kind, prompt: job.prompt, provider_model: providerModel });
     if (!begin.ok) throw new WorkError(begin.status === 429
       ? "Daily media request limit reached."
       : "Cannot start a media task.", begin.status === 429 ? 429 : 503);

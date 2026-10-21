@@ -25,6 +25,10 @@ class HostedImageController
         $this->guard($r);
         $d = $r->validate(['prompt' => 'required|string|max:4000']);
         abort_if(trim($d['prompt']) === '', 422, 'Enter an image description.');
+        if ($r->filled('provider_model')) {
+            $r->validate(['provider_model' => 'string|max:190']);
+            app(ApiCreditUsage::class)->connection('nvidia', $r->input('provider_model'), 'image');
+        }
 
         return Cache::lock('media-user:'.$r->user()->id, 15)->block(3, fn () => DB::transaction(function () use ($r, $d) {
             $userId = $r->user()->id;

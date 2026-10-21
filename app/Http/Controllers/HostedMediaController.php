@@ -25,7 +25,11 @@ class HostedMediaController
         $data = $r->validate([
             'kind' => ['required', Rule::in(['transcription', 'speech', 'document_create', 'video'])],
             'prompt' => 'present|string|max:4000',
+            'provider_model' => 'sometimes|string|max:190',
         ]);
+        if (! empty($data['provider_model'])) {
+            app(ApiCreditUsage::class)->connection('nvidia', $data['provider_model'], $data['kind']);
+        }
         if (in_array($data['kind'], ['speech', 'document_create', 'video'], true)) {
             abort_if(trim($data['prompt']) === '', 422, 'Enter a description.');
         }

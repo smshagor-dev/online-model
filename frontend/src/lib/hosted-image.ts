@@ -71,7 +71,7 @@ export async function generateHostedImage(
 
   let taskId: number | undefined;
   try {
-    const start = await requestBackend("media/hosted/begin", { prompt: prompt.trim() });
+    const start = await requestBackend("media/hosted/begin", { prompt: prompt.trim(), provider_model: IMAGE_MODEL });
     if (!start.ok) {
       const status = [401, 403, 422, 429, 503].includes(start.status) ? start.status : 502;
       throw new ImageFailure(

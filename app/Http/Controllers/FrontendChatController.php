@@ -31,7 +31,10 @@ class FrontendChatController
     public function begin(Request $r, ChatContext $context)
     {
         $this->guard($r);
-        $d = $r->validate(['message' => 'required|string|max:16000', 'conversation_id' => 'nullable|integer', 'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('user_id', $r->user()->id)], 'assistant_id' => ['nullable', 'integer', Rule::exists('assistants', 'id')->where('user_id', $r->user()->id)], 'attachment_ids' => 'sometimes|array|max:5', 'attachment_ids.*' => 'integer', 'temporary' => 'sometimes|boolean', 'web_search' => 'sometimes|boolean', 'deep_research' => 'sometimes|boolean', 'search_time_range' => 'sometimes|in:day,week,month,year', 'history' => 'sometimes|array|max:20', 'history.*.role' => 'required|in:user,assistant', 'history.*.content' => 'required|string|max:16000']);
+        $d = $r->validate(['message' => 'required|string|max:16000', 'conversation_id' => 'nullable|integer', 'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('user_id', $r->user()->id)], 'assistant_id' => ['nullable', 'integer', Rule::exists('assistants', 'id')->where('user_id', $r->user()->id)], 'attachment_ids' => 'sometimes|array|max:5', 'attachment_ids.*' => 'integer', 'temporary' => 'sometimes|boolean', 'web_search' => 'sometimes|boolean', 'deep_research' => 'sometimes|boolean', 'search_time_range' => 'sometimes|in:day,week,month,year', 'history' => 'sometimes|array|max:20', 'history.*.role' => 'required|in:user,assistant', 'history.*.content' => 'required|string|max:16000', 'provider_model' => 'sometimes|string|max:190']);
+        if (! empty($d['provider_model'])) {
+            app(ApiCreditUsage::class)->connection('nvidia', $d['provider_model'], 'chat');
+        }
         $temporary = ! empty($d['temporary']);
         abort_if($temporary && ! empty($d['conversation_id']), 422, 'Temporary chats cannot continue saved conversations.');
         $c = ! empty($d['conversation_id']) ? Conversation::where('user_id', $r->user()->id)->findOrFail($d['conversation_id']) : new Conversation(['user_id' => $r->user()->id, 'title' => mb_substr($d['message'], 0, 80), 'project_id' => $d['project_id'] ?? null, 'assistant_id' => $d['assistant_id'] ?? null]);
