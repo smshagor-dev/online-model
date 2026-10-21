@@ -75,7 +75,7 @@ test("automatic DOCX generation reuses Laravel media begin/complete and emits pr
       return Response.json({choices:[{message:{content:"Example report\n\nProject summary."}}]});
     throw Error("Unexpected provider URL: " + url);
   };
-  const r = await nvidiaChat(JSON.stringify({model_id:-1, message:"Create a DOCX document about our project"}),
+  const r = await nvidiaChat(JSON.stringify({model_id:-4, message:"Create a DOCX document about our project"}),
     "user-token", "https://backend/api/v1", new AbortController().signal,
     {fetcher, config:{apiKey:cfg.apiKey, bridgeKey:"k".repeat(32), model:cfg.fastModel}});
   assert.equal(r.status, 200);
@@ -115,7 +115,7 @@ test("provider rate limiting triggers one pre-stream fallback and saves the sele
     );
   };
   const response = await nvidiaChat(
-    JSON.stringify({message:"Debug my Laravel controller",model_id:-1}),
+    JSON.stringify({message:"Debug my Laravel controller",model_id:-4}),
     "user", "https://backend/api/v1", new AbortController().signal,
     {fetcher, config:{apiKey:cfg.apiKey,bridgeKey:"x".repeat(32),model:cfg.fastModel}},
   );
@@ -124,4 +124,51 @@ test("provider rate limiting triggers one pre-stream fallback and saves the sele
   assert.match(text, /"saved":true/);
   assert.deepEqual(requests, [cfg.reasoningModel,cfg.fastModel]);
   assert.equal(saved.modelId, cfg.fastModel);
+});
+
+test("automatic tools distinguish actual outputs from code, negation and explanations", async () => {
+  for (const prompt of [
+    "Make a HTML CSS water bottle website with 3D animation",
+    "Create a React component for an image gallery",
+    "Do not generate an image, explain the idea",
+    "ছবি বানাবে না শুধু বুঝিয়ে বলো",
+    "image generate korba na just explain",
+    "How do I make a video?",
+    "Summarize this instruction: generate an image of a forest",
+    "Translate this sentence: create a logo",
+  ]) assert.equal((await classify(prompt)).kind, "chat", prompt);
+  assert.equal((await classify("ekta pdf report daw")).kind, "document_create");
+  assert.equal((await classify("Create a PDF report about Python")).kind, "document_create");
+  assert.equal((await classify("Read this aloud: welcome to OpenMindAI")).kind, "speech");
+  assert.equal((await classify("Create a photo of a forest", {allowTools:false})).kind, "chat");
+});
+
+test("fresh information and deep research activate backend tools automatically", async () => {
+  assert.equal((await classify("What are the latest AI news today?")).webSearch, true);
+  assert.equal((await classify("ajker khobor bolo")).webSearch, true);
+  const deep = await classify("Do a systematic review of UAV mesh security with references");
+  assert.equal(deep.deepResearch, true);
+  assert.equal(deep.webSearch, true);
+  assert.equal(deep.model, cfg.reasoningModel);
+  assert.equal((await classify("Without web search explain the latest concepts")).webSearch, undefined);
+  assert.equal((await classify("Build a latest news API in Laravel")).webSearch, undefined);
+  assert.equal((await classify("latest AI news", {allowTools:false})).webSearch, undefined);
+});
+
+test("specialist routing only chooses models present in the enabled catalog", async () => {
+  const {catalogRouterConfig} = await import("../src/lib/prompt-router.ts");
+  const models = [
+    {slug:"openmindai-lite",provider:cfg.fastModel},
+    {slug:"nvidia-laguna-xs-2.1",provider:"provider/code"},
+    {slug:"nvidia-riva-translate-4b-instruct-v2",provider:"provider/translate"},
+    {slug:"nvidia-gpt-oss-20b",provider:"provider/math"},
+  ];
+  const enabled = catalogRouterConfig(cfg, models);
+  const route = (prompt) => routePrompt(prompt, enabled, {enableClassifier:false});
+  assert.equal((await route("Implement a React component")).model, "provider/code");
+  assert.equal((await route("Translate hello into Bengali")).model, "provider/translate");
+  assert.equal((await route("অনুবাদ করো: hello")).model, "provider/translate");
+  assert.equal((await route("Solve this integral")).model, "provider/math");
+  const limited = catalogRouterConfig(cfg, models.slice(0,1));
+  assert.equal((await routePrompt("Implement a React component", limited, {enableClassifier:false})).model, cfg.fastModel);
 });
