@@ -53,7 +53,7 @@ function fixture({
         ],
       });
     return new Response(
-      'data: {"choices":[{"delta":{"reasoning_content":"hidden reasoning"}}]}\n\ndata: {"choices":[{"delta":{"content":"Hello"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"reasoning_content":"hidden reasoning"}}]}\n\ndata: {"choices":[{"delta":{"content":"Hello"},"finish_reason":"stop"}]}\n\n' +
         (truncated ? "" : "data: [DONE]\n\n"),
       {
         status: upstreamStatus,
@@ -145,7 +145,7 @@ test("Next server connects directly to NVIDIA and persists only final answer to 
 test("truncated provider response saves partial answer with failed status", async () => {
   const f = fixture({ truncated: true });
   const r = await nvidiaChat(
-    '{"message":"Hi"}',
+    '{"message":"Hi","model_id":-1}',
     "u",
     "https://backend/api/v1",
     new AbortController().signal,
@@ -160,7 +160,7 @@ test("truncated provider response saves partial answer with failed status", asyn
 test("provider throttling is recorded as failed without leaking provider body", async () => {
   const f = fixture({ upstreamStatus: 429 });
   const r = await nvidiaChat(
-    '{"message":"Hi"}',
+    '{"message":"Hi","model_id":-1}',
     "u",
     "https://backend/api/v1",
     new AbortController().signal,
@@ -182,7 +182,7 @@ test("retired model reports an actionable error and saves the failed turn", asyn
       : response;
   };
   const r = await nvidiaChat(
-    '{"message":"Hi"}',
+    '{"message":"Hi","model_id":-1}',
     "u",
     "https://backend/api/v1",
     new AbortController().signal,
@@ -201,7 +201,7 @@ test("retired model reports an actionable error and saves the failed turn", asyn
 test("persistence errors retry and never report successful save", async () => {
   const f = fixture({ saveFails: true });
   const r = await nvidiaChat(
-    '{"message":"Hi"}',
+    '{"message":"Hi","model_id":-1}',
     "u",
     "https://backend/api/v1",
     new AbortController().signal,
@@ -267,7 +267,7 @@ test("opted-in NVIDIA memory is extracted from user text only after chat persist
     return f.fetcher(url, options);
   };
   const result = await nvidiaChat(
-    '{"message":"I prefer Bangla"}',
+    '{"message":"I prefer Bangla","model_id":-1}',
     "user-token",
     "https://backend/api/v1",
     new AbortController().signal,
@@ -291,7 +291,7 @@ test("interrupted NVIDIA answer resumes durable context without creating another
   };
   await (
     await nvidiaChat(
-      '{"message":"Hi"}',
+      '{"message":"Hi","model_id":-1}',
       "token",
       "https://backend/api/v1",
       new AbortController().signal,
@@ -427,5 +427,37 @@ test("a catalog model selected in the picker reaches backend inference with its 
   } finally {
     if (previousBridge === undefined) delete process.env.FRONTEND_CHAT_BRIDGE_KEY;
     else process.env.FRONTEND_CHAT_BRIDGE_KEY = previousBridge;
+  }
+});
+
+test("missing model selection defaults to Auto, while explicit choices suppress automatic tools", async () => {
+  const previous = process.env.FRONTEND_CHAT_BRIDGE_KEY;
+  process.env.FRONTEND_CHAT_BRIDGE_KEY = "k".repeat(32);
+  const rows = [{id:"openmindai-lite"}, {id:"openmindai-ultra"}, {id:"nvidia-laguna-xs-2.1",name:"Code",provider_model:"provider/code"}];
+  try {
+    for (const scenario of [
+      {message:"Debug my app", expected:"nvidia/nemotron-3-ultra-550b-a55b", tools:true},
+      {message:"latest news", expected:"nvidia/nemotron-3-ultra-550b-a55b", tools:true},
+      {message:"deep research on UAV security", expected:"nvidia/nemotron-3-ultra-550b-a55b", tools:true},
+      {message:"Create a photo", model_id:-1, expected:config.model},
+    ]) {
+      const f = fixture({providerUrl:"https://backend/api/v1/chat/provider", providerAuthorization:"Bearer user-token"});
+      const fetcher = async (url, init) => {
+        if (url.endsWith("/public-config")) return Response.json({frontend_inference_route:"backend"});
+        if (url.endsWith("/chat/hosted-models")) return Response.json({data:rows});
+        return f.fetcher(url, init);
+      };
+      const result = await nvidiaChat(JSON.stringify(scenario), "user-token", "https://backend/api/v1", new AbortController().signal, {fetcher});
+      assert.match(await result.text(), /Hello/);
+      const generation = f.calls.find(call => call.url.endsWith("/chat/provider"));
+      assert.equal(generation.body.model, scenario.expected);
+      const begin = f.calls.find(call => call.url.endsWith("/begin"));
+      assert.equal(Boolean(begin.body.conversation_tools), Boolean(scenario.tools));
+      assert.equal(Boolean(generation.body.tools), Boolean(scenario.tools));
+      assert.equal(f.calls.some(call => call.url.includes("nvidia.com")), false);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.FRONTEND_CHAT_BRIDGE_KEY;
+    else process.env.FRONTEND_CHAT_BRIDGE_KEY = previous;
   }
 });
