@@ -1,8 +1,8 @@
 import {
   nvidiaChat,
   nvidiaEnabled,
-  nvidiaModel,
-  NVIDIA_MODEL_ID,
+  nvidiaModels,
+  isNvidiaModelId,
 } from "@/lib/nvidia-chat";
 import { generateHostedImage, hostedImageEnabled } from "@/lib/hosted-image";
 import { hostedMediaRequest, hostedMediaEnabled } from "@/lib/hosted-media";
@@ -23,12 +23,12 @@ const publicPaths = new Set([
   "email/change/confirm",
 ]);
 const routes: Record<string, RegExp> = {
-  GET: /^(public-config|teams(?:\/\d+(?:\/(documents|threads)\/\d+)?)?|connectors|explore\/assistants(?:\/[a-f0-9-]{36})?|assistants|tasks(?:\/\d+\/runs)?|canvases\/\d+\/versions(?:\/\d+)?|conversations\/\d+\/branches|media(?:\/\d+(?:\/output)?)?|me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
-  POST: /^(teams(?:\/\d+\/(preview|invites|documents|threads(?:\/\d+)?))?|team-invites\/\d+\/accept|connectors\/[a-zA-Z0-9_-]{1,80}\/(connect|tools|call)|live\/(start|input|stop)|explore\/assistants\/[a-f0-9-]{36}\/copy|assistants(?:\/\d+\/publish)?|tasks(?:\/\d+\/runs(?:\/\d+\/resume)?)?|me\/(avatar|email)|email\/change\/confirm|settings\/data|media(?:\/(?:image|transcription|speech|video|document_create))?|login(?:\/verify-ip)?|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/(stream|resume))?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
+  GET: /^(public-config|teams(?:\/\d+(?:\/(documents|threads)\/\d+)?)?|connectors|explore\/assistants(?:\/[a-f0-9-]{36})?|assistants|tasks(?:\/\d+\/runs)?|canvases\/\d+\/versions(?:\/\d+)?|conversations\/\d+\/branches|media(?:\/\d+(?:\/output)?)?|me|models|tokens|developer\\/keys|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
+  POST: /^(teams(?:\/\d+\/(preview|invites|documents|threads(?:\/\d+)?))?|team-invites\/\d+\/accept|connectors\/[a-zA-Z0-9_-]{1,80}\/(connect|tools|call)|live\/(start|input|stop)|explore\/assistants\/[a-f0-9-]{36}\/copy|assistants(?:\/\d+\/publish)?|tasks(?:\/\d+\/runs(?:\/\d+\/resume)?)?|me\/(avatar|email)|email\/change\/confirm|settings\/data|media(?:\/(?:image|transcription|speech|video|document_create))?|login(?:\/verify-ip)?|register|forgot-password|reset-password|email\/resend|developer\\/keys|logout|logout-all|web-search|chat(?:\/(stream|resume))?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
   PATCH: /^(me|preferences|conversations\/\d+)$/,
   PUT: /^(teams\/\d+\/(members|documents)\/\d+|assistants\/\d+|tasks\/\d+|me\/password|projects\/\d+|canvases\/\d+|memories\/\d+|conversations\/\d+\/messages\/\d+\/feedback)$/,
   DELETE:
-    /^(teams\/\d+(?:\/(invites|members|documents|threads)\/\d+)?|connectors\/[a-zA-Z0-9_-]{1,80}|connector-calls\/\d+|assistants\/\d+(?:\/publish)?|tasks\/\d+(?:\/runs\/\d+)?|me\/(avatar|email)|media\/\d+|me|2fa|tokens\/\d+|conversations\/\d+|projects\/\d+|canvases\/\d+|memories\/\d+|attachments\/\d+|shares\/\d+)$/,
+    /^(teams\/\d+(?:\/(invites|members|documents|threads)\/\d+)?|connectors\/[a-zA-Z0-9_-]{1,80}|connector-calls\/\d+|assistants\/\d+(?:\/publish)?|tasks\/\d+(?:\/runs\/\d+)?|me\/(avatar|email)|media\/\d+|me|2fa|tokens\/\d+|developer\\/keys\/\d+|conversations\/\d+|projects\/\d+|canvases\/\d+|memories\/\d+|attachments\/\d+|shares\/\d+)$/,
 };
 async function proxy(
   request: NextRequest,
@@ -125,7 +125,7 @@ async function proxy(
     request.method === "POST" &&
     nvidiaEnabled() &&
     (endpoint === "chat/resume" ||
-      Number(JSON.parse(body!)?.model_id) === NVIDIA_MODEL_ID)
+      isNvidiaModelId(Number(JSON.parse(body!)?.model_id)))
   ) {
     const response = await nvidiaChat(body!, token!, base, request.signal);
     if (response.status === 401) jar.delete(cookieName);
@@ -150,8 +150,15 @@ async function proxy(
           { status: response.status },
         );
       const local = await response.json();
+      const catalogResponse = await fetch(`${base.replace(/\/$/, "")}/openmindai/models`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        cache: "no-store", redirect: "error",
+        signal: AbortSignal.timeout(10000),
+      });
+      const catalog = catalogResponse.ok ? await catalogResponse.json() : { data: [] };
+      const allowed = Array.isArray(catalog.data) ? catalog.data.map((model: {id:string}) => model.id) : [];
       return NextResponse.json(
-        [nvidiaModel(), ...(Array.isArray(local) ? local : [])],
+        [...nvidiaModels(allowed), ...(Array.isArray(local) ? local : [])],
         { headers: { "Cache-Control": "no-store" } },
       );
     } catch {
