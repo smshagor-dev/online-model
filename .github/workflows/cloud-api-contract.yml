@@ -8,6 +8,7 @@ on:
       - 'app/Http/Controllers/OpenMindAiGatewayController.php'
       - 'tests/Feature/CloudApiAuthResponseTest.php'
       - 'tests/Feature/OpenMindAiGatewayTest.php'
+      - 'tests/Feature/CloudToolCallingTest.php'
       - '.github/workflows/cloud-api-contract.yml'
   pull_request:
     paths:
@@ -16,6 +17,7 @@ on:
       - 'app/Http/Controllers/OpenMindAiGatewayController.php'
       - 'tests/Feature/CloudApiAuthResponseTest.php'
       - 'tests/Feature/OpenMindAiGatewayTest.php'
+      - 'tests/Feature/CloudToolCallingTest.php'
       - '.github/workflows/cloud-api-contract.yml'
 
 jobs:
@@ -33,5 +35,5 @@ jobs:
           coverage: none
       - run: composer install --no-interaction --prefer-dist
       - run: cp .env.example .env
-      - run: php artisan test --filter='CloudApiAuthResponseTest|OpenMindAiGatewayTest'
+      - run: php artisan test --filter='CloudApiAuthResponseTest|OpenMindAiGatewayTest|CloudToolCallingTest'
       - run: php artisan route:cache

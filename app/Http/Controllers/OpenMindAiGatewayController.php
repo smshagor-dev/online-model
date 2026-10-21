@@ -181,18 +181,21 @@ class OpenMindAiGatewayController
     private function completion(Request $request, bool $firstParty, HostedCodeAgents $agents, ApiCreditUsage $credits)
     {
         $user = $this->actor($request, $firstParty);
+        // Accept the full desktop tool registry (19 tools today) while
+        // keeping total request size and individual tool-call counts bounded.
+        abort_if(strlen($request->getContent()) > 1048576, 413, 'Chat request exceeds the 1 MiB gateway limit.');
         $data = $request->validate([
             'model' => 'required|string|max:60',
             'messages' => 'required|array|min:1|max:40',
             'messages.*.role' => 'required|in:system,user,assistant,tool',
             'messages.*.content' => 'sometimes|nullable|string|max:16000',
             'messages.*.tool_call_id' => 'sometimes|string|max:120',
-            'messages.*.tool_calls' => 'sometimes|array|max:12',
+            'messages.*.tool_calls' => 'sometimes|array|max:64',
             'messages.*.tool_calls.*.id' => 'required|string|max:120',
             'messages.*.tool_calls.*.type' => 'required|in:function',
             'messages.*.tool_calls.*.function.name' => 'required|string|max:120',
             'messages.*.tool_calls.*.function.arguments' => 'required|string|max:32000',
-            'tools' => 'sometimes|array|max:12',
+            'tools' => 'sometimes|array|max:64',
             'tools.*.type' => 'required|in:function',
             'tools.*.function.name' => 'required|string|max:120',
             'tools.*.function.description' => 'sometimes|string|max:1000',
@@ -248,7 +251,21 @@ class OpenMindAiGatewayController
                 ->post('https://integrate.api.nvidia.com/v1/chat/completions', $payload);
             if (! $upstream->successful()) {
                 $code = $upstream->status();
-                return response()->json(['error' => ['message' => $code === 429 ? 'Provider is rate limited.' : 'Model provider is temporarily unavailable.', 'type' => 'upstream_error']], $code === 429 ? 429 : 502);
+                // A provider-level 400/422 is different from our own former
+                // 12-tool validation cap. Return a safe, actionable error
+                // without echoing upstream data or private NVIDIA credentials.
+                $validationError = in_array($code, [400, 422], true);
+                return response()->json([
+                    'error' => [
+                        'message' => $code === 429
+                            ? 'Provider is rate limited.'
+                            : ($validationError
+                                ? 'NVIDIA rejected the request format or tool definitions for this model.'
+                                : 'Model provider is temporarily unavailable.'),
+                        'type' => 'upstream_error',
+                        'upstream_status' => $code,
+                    ],
+                ], $validationError ? 422 : ($code === 429 ? 429 : 502));
             }
 
             $usageKey = 'gateway:'.bin2hex(random_bytes(16));
