@@ -429,3 +429,35 @@ test("a catalog model selected in the picker reaches backend inference with its 
     else process.env.FRONTEND_CHAT_BRIDGE_KEY = previousBridge;
   }
 });
+
+test("missing model selection defaults to Auto, while explicit choices suppress automatic tools", async () => {
+  const previous = process.env.FRONTEND_CHAT_BRIDGE_KEY;
+  process.env.FRONTEND_CHAT_BRIDGE_KEY = "k".repeat(32);
+  const rows = [{id:"openmindai-lite"}, {id:"openmindai-ultra"}, {id:"nvidia-laguna-xs-2.1",name:"Code",provider_model:"provider/code"}];
+  try {
+    for (const scenario of [
+      {message:"Debug my app", expected:"provider/code"},
+      {message:"latest news", expected:config.model, search:true},
+      {message:"deep research on UAV security", expected:"nvidia/nemotron-3-ultra-550b-a55b", search:true, deep:true},
+      {message:"Create a photo", model_id:-1, expected:config.model},
+    ]) {
+      const f = fixture({providerUrl:"https://backend/api/v1/chat/provider", providerAuthorization:"Bearer user-token"});
+      const fetcher = async (url, init) => {
+        if (url.endsWith("/public-config")) return Response.json({frontend_inference_route:"backend"});
+        if (url.endsWith("/chat/hosted-models")) return Response.json({data:rows});
+        return f.fetcher(url, init);
+      };
+      const result = await nvidiaChat(JSON.stringify(scenario), "user-token", "https://backend/api/v1", new AbortController().signal, {fetcher});
+      assert.match(await result.text(), /Hello/);
+      const generation = f.calls.find(call => call.url.endsWith("/chat/provider"));
+      assert.equal(generation.body.model, scenario.expected);
+      const begin = f.calls.find(call => call.url.endsWith("/begin"));
+      assert.equal(Boolean(begin.body.web_search), Boolean(scenario.search));
+      assert.equal(Boolean(begin.body.deep_research), Boolean(scenario.deep));
+      assert.equal(f.calls.some(call => call.url.includes("nvidia.com")), false);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.FRONTEND_CHAT_BRIDGE_KEY;
+    else process.env.FRONTEND_CHAT_BRIDGE_KEY = previous;
+  }
+});
