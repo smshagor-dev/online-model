@@ -21,7 +21,7 @@ test("research continues beyond the initial query/source batch until coverage is
       ],
     }),
   });
-  assert.equal(decisions, 13);
+  assert.equal(decisions, 14);
   assert.equal(result.sources.length, 12);
   assert.equal(result.conclusion, "Every requested part has evidence");
 });
@@ -225,4 +225,27 @@ test("research checkpoint replays only pending tool and preserves completed evid
   assert.equal(result.sources[0].read_status, "read");
   assert.equal(checkpoint.pending, null);
   assert.equal(checkpoint.actions.length, 1);
+});
+
+test("research cannot finish before inspecting a snippet source and reports limited coverage",async()=>{
+ const actions=[];
+ const result=await researchLoop({sources:[{url:"https://example.org/paper",title:"Paper",read_status:"snippet_only"}],signal:new AbortController().signal,progress(){},
+ decide:async()=>JSON.stringify({action:"finish",reason:"Done"}),
+ tool:async action=>{actions.push(action);return {url:action.url,read_status:"unavailable"};}});
+ assert.equal(actions[0].action,"read");
+ assert.equal(result.coverage.pagesRead,0);
+ assert.match(result.limitations.join(" "),/limited to search snippets/);
+});
+test("research stops at a finite budget rather than expanding forever",async()=>{
+ let calls=0;
+ const result=await researchLoop({sources:[],signal:new AbortController().signal,progress(){},limits:{actions:3},
+ decide:async()=>JSON.stringify({action:"search",query:"query "+calls}),tool:async()=>{calls++;return {sources:[]};}});
+ assert.equal(calls,3);assert.equal(result.complete,false);assert.match(result.limitations.join(" "),/execution budget/);
+});
+test("research bounds page evidence and rejects malformed source URLs",async()=>{
+ let calls=0;
+ const result=await researchLoop({sources:[],signal:new AbortController().signal,progress(){},
+ decide:async()=>JSON.stringify(++calls===1?{action:"search",query:"Evidence"}:calls===2?{action:"read",url:"https://example.org"}:{action:"finish",reason:"Done"}),
+ tool:async action=>action.action==="search"?{sources:[{url:"javascript:alert(1)",title:"bad"},{url:"https://example.org",title:"Valid"}]}:{url:action.url,read_status:"read",page_text:"x".repeat(100000)}});
+ assert.equal(result.sources.length,1);assert.equal(result.evidence[0].page_text.length,8000);
 });
