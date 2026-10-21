@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
+import TypingIndicator from "./typing-indicator";
 import Dialog from "./dialog";
 import WelcomeToolsMenu, { type WelcomeToolAction } from "./welcome-tools-menu";
 import BrowserTabLinksDialog from "./browser-tab-links-dialog";
@@ -206,6 +207,7 @@ export default function ChatWorkspace() {
   const skipScroll = useRef(false);
   const [copied, setCopied] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const followOutput = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const chatRequest = useRef<AbortController | null>(null);
   const historyRequest = useRef<AbortController | null>(null);
@@ -500,11 +502,9 @@ export default function ChatWorkspace() {
   }, [toolMenuOpen]);
 
   const scrollBottom = useCallback(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: preferences?.reduced_motion ? "instant" : "smooth",
-    });
-  }, [preferences?.reduced_motion]);
+    if (!followOutput.current) return;
+    scrollRef.current?.scrollTo({top: scrollRef.current.scrollHeight, behavior: "instant"});
+  }, []);
   useEffect(() => {
     filtersRef.current = { search, projectId, archived };
     if (!user) return;
@@ -592,7 +592,7 @@ export default function ChatWorkspace() {
       guestSlug.current = slug;
       try {
         const saved = JSON.parse(localStorage.getItem(`openmindai.guest.v1.${slug}`) || "[]");
-        setMessages(Array.isArray(saved) ? saved.filter((m) => ["user", "assistant"].includes(m.role) && typeof m.content === "string").slice(-40) : []);
+        setMessages(Array.isArray(saved) ? saved.filter((m) => ["user", "assistant"].includes(m.role) && typeof m.content === "string").slice(-40).map((m) => ({...m, animate: false})) : []);
       } catch { setError("This browser could not restore the guest chat."); }
       return;
     }
@@ -654,6 +654,7 @@ export default function ChatWorkspace() {
     const text = (override?.text ?? draft).trim() ||
       (!override && inlineImage ? "Describe this image." : "");
     if (!text || busy || loadingChat || initializing) return;
+    followOutput.current = true;
     if (!user) {
       const controller = new AbortController();
       generationRef.current = controller;
@@ -661,22 +662,25 @@ export default function ChatWorkspace() {
       const slug = guestSlug.current || `guest-${crypto.randomUUID()}`;
       guestSlug.current = slug;
       changeUrl(`/c/${slug}`);
-      setMessages([...history, {role: "user", content: text}]);
+      setMessages([...history, {role: "user", content: text, animate: true}, {role: "assistant", content: "", status: "generating", animate: true}]);
       setDraft(""); setBusy(true); setError("");
       try {
         const response = await api<{content: string; remaining: number}>("guest/chat", "POST", {
           message: text, history: history.slice(-4).map(({role, content}) => ({role, content: content.slice(0, 4000)})),
         }, controller.signal);
         if (controller.signal.aborted) return;
-        setMessages([...history, {role: "user", content: text}, {role: "assistant", content: response.content, status: "complete"}]);
+        setMessages([...history, {role: "user", content: text, animate: true}, {role: "assistant", content: response.content, status: "complete", animate: true}]);
         setGuestRemaining(response.remaining);
       } catch (e) {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) {
+          if (generationRef.current === controller) setMessages((previous) => previous.map((message, index) => index === previous.length - 1 ? {...message, status: "cancelled"} : message));
+          return;
+        }
         setMessages(history); setDraft(text);
         if (e instanceof ApiError && [403, 429].includes(e.status)) setAuthOpen(true);
         report(e);
       } finally {
-        if (!controller.signal.aborted) setBusy(false);
+        if (generationRef.current === controller) {setBusy(false); generationRef.current = null;}
       }
       return;
     }
@@ -726,7 +730,7 @@ export default function ChatWorkspace() {
     setMessages(
       override?.resumeId
         ? history
-        : [...history, { role: "user", content: text }],
+        : [...history, { role: "user", content: text, animate: true }],
     );
     const controller = new AbortController();
     generationRef.current = controller;
@@ -785,6 +789,7 @@ export default function ChatWorkspace() {
                         ...m,
                         content: String(data.content || ""),
                         status: "generating",
+                        animate: true,
                         resumable: true,
                         sources: data.sources as Message["sources"],
                       }
@@ -803,6 +808,7 @@ export default function ChatWorkspace() {
                   role: "assistant",
                   content: "",
                   status: "generating",
+                  animate: true,
                   resumable: Boolean(data.resumable),
                   sources: data.sources as Message["sources"],
                 },
@@ -1568,7 +1574,10 @@ export default function ChatWorkspace() {
             )}
           </div>
         </header>
-        <div className="chat-scroll" ref={scrollRef}>
+        <div className="chat-scroll" ref={scrollRef} onScroll={(event) => {
+          const container = event.currentTarget;
+          followOutput.current = container.scrollHeight - container.scrollTop - container.clientHeight < 160;
+        }}>
           {messages.length === 0 && !loadingChat ? (
             <section className="welcome">
               <div className="welcome-identity">
@@ -1590,7 +1599,7 @@ export default function ChatWorkspace() {
               )}
               {messages.map((message, index) => (
                 <article
-                  className={`message ${message.role}`}
+                  className={`message ${message.role}${message.animate ? " message-new" : ""}`}
                   key={message.id ?? `message-${index}`}
                   aria-label={
                     message.role === "user" ? "Your message" : "Model response"
@@ -1625,6 +1634,9 @@ export default function ChatWorkspace() {
                       <>
                         <ResponseMarkdown
                           content={message.content}
+                          animate={Boolean(message.animate) && index === messages.length - 1}
+                          streaming={message.status === "generating" && busy && index === messages.length - 1}
+                          reducedMotion={Boolean(preferences?.reduced_motion)}
                           onRendered={
                             index === messages.length - 1
                               ? scrollBottom
@@ -1785,23 +1797,8 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                   </div>
                 </article>
               ))}
-              {busy && messages[messages.length - 1]?.content === "" && (
-                <div className="thinking" role="status">
-                  <span className="assistant-avatar">
-                    <Image
-                      src="/openmindai-logo.png"
-                      alt=""
-                      width={23}
-                      height={23}
-                    />
-                  </span>
-                  <span className="thinking-dots">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <span className="sr-only">Waiting for your model…</span>
-                </div>
+              {busy && messages[messages.length - 1]?.role === "user" && (
+                <div className="thinking"><span className="assistant-avatar"><Image src="/openmindai-logo.png" alt="" width={23} height={23} /></span><TypingIndicator /></div>
               )}
             </div>
           )}

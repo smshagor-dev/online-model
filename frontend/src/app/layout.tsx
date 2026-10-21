@@ -3,6 +3,7 @@ import "@fontsource-variable/dm-sans";
 import "@fontsource-variable/manrope";
 import "./globals.css";
 import "./chat-theme.css";
+import "./motion.css";
 export const metadata: Metadata = {
   title: "OpenMindAI | Your AI Workspace",
   icons: { icon: "/openmindai-logo.png", apple: "/openmindai-logo.png" },

@@ -1,0 +1,255 @@
+/* Shared motion for chat interactions. No content is delayed in saved history. */
+.workspace {
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.workspace :is(button, a, summary),
+.dialog :is(button, a, summary) {
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease,
+    transform 160ms var(--motion-ease, ease);
+}
+.workspace button:active:not(:disabled),
+.dialog button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.workspace :is(input, textarea, select),
+.dialog :is(input, textarea, select) {
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.workspace .composer {
+  transition:
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease;
+}
+.workspace .composer:focus-within {
+  box-shadow: 0 3px 16px #00000009;
+}
+.workspace .welcome,
+.workspace .suggestions {
+  animation: chat-rise 320ms var(--motion-ease) both;
+}
+.workspace .suggestions {
+  animation-delay: 70ms;
+}
+.workspace .message {
+  animation: chat-rise 240ms var(--motion-ease) both;
+}
+.workspace .message-new.user {
+  animation: message-send 240ms var(--motion-ease) both;
+}
+.workspace .message-new.assistant {
+  animation-duration: 300ms;
+}
+.workspace .message-actions {
+  transition: opacity 180ms ease;
+}
+.workspace .response-streaming > :not(.response-cursor, .typing-indicator) {
+  animation: response-appear 180ms ease both;
+}
+.workspace .response-streaming > p:last-of-type {
+  display: inline;
+}
+.workspace
+  :is(
+    .popover,
+    .composer-tools-menu,
+    .attachment-chips,
+    .error-banner,
+    .inline-media
+  ),
+.workspace details[open] > :not(summary) {
+  animation: chat-rise 180ms var(--motion-ease) both;
+}
+.workspace .send-button > svg {
+  animation: control-in 160ms ease both;
+}
+.workspace .sidebar-overlay {
+  animation: backdrop-in 180ms ease both;
+}
+.dialog[open] {
+  animation: dialog-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.dialog[open]::backdrop {
+  animation: backdrop-in 200ms ease both;
+}
+.dialog
+  :is(.settings-content, .manage-card, .document-preview, .preview-actions) {
+  animation: response-appear 180ms ease both;
+}
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 0;
+}
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.typing-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.4;
+  animation: typing-bounce 1100ms ease-in-out infinite;
+}
+.typing-dots i:nth-child(2) {
+  animation-delay: 140ms;
+}
+.typing-dots i:nth-child(3) {
+  animation-delay: 280ms;
+}
+.response-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-inline-start: 5px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: currentColor;
+  animation: cursor-breathe 900ms ease-in-out infinite;
+}
+.workspace .thinking {
+  animation: response-appear 200ms ease both;
+}
+@media (min-width: 761px) {
+  .workspace .sidebar {
+    transition:
+      width 240ms var(--motion-ease),
+      padding 240ms var(--motion-ease),
+      opacity 160ms ease,
+      visibility 0s;
+  }
+  .workspace.sidebar-collapsed .sidebar {
+    display: flex;
+    width: 0;
+    min-width: 0;
+    padding-inline: 0;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      width 240ms var(--motion-ease),
+      padding 240ms var(--motion-ease),
+      opacity 160ms ease,
+      visibility 0s 240ms;
+  }
+}
+@media (max-width: 760px) {
+  .workspace .sidebar {
+    transition: transform 240ms var(--motion-ease);
+  }
+}
+@keyframes chat-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes message-send {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes response-appear {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes control-in {
+  from {
+    opacity: 0;
+    transform: scale(0.75);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+@keyframes cursor-breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace *,
+  .workspace *::before,
+  .workspace *::after,
+  .dialog,
+  .dialog *,
+  .dialog::backdrop {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+:root[data-reduced-motion="true"] :is(.workspace, .dialog) *,
+:root[data-reduced-motion="true"] .dialog,
+:root[data-reduced-motion="true"] .dialog::backdrop {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+.workspace .message.assistant:has(.response-streaming) .message-actions {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}

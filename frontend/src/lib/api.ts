@@ -103,6 +103,7 @@ export type Conversation = {
 };
 export type Message = {
   id?: number;
+  animate?: boolean;
   status?: string;
   resumable?: boolean;
   attachment_ids?: number[];
