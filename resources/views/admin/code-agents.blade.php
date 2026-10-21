@@ -23,6 +23,55 @@
   <p class="entity-meta">GET /models · POST /chat/completions · Authorization: Bearer YOUR_DEVELOPER_KEY</p>
   <p class="entity-meta">User keys are generated in OpenMindAI Account → Developer API. Keys are shown once, expire after 90 days and can be revoked.</p>
 </section>
+<div class="section-separator"><h2>Developer API Keys for OpenMind Studio</h2><p>Individual user credentials for installed desktop applications.</p></div>
+<section class="admin-card" style="margin-bottom:24px">
+  <h2>Your Developer API Keys</h2>
+  <p class="entity-meta">Generate a personal Bearer API key here for OpenMind Studio. This is <strong>not</strong> your First-party App ID or Private Signing Secret. Each key belongs only to your administrator account and is authorized for the OpenMindAI model gateway.</p>
+  <p class="entity-meta">Keys expire in 90 days and can be revoked. Existing key values are hashed and cannot be retrieved. Create a replacement if you have lost one.</p>
+  <form id="new-developer-key-form" action="/admin/code-agents/developer-keys" method="post" data-admin-devkey-form>
+    @csrf
+    <div class="field"><label for="devkey-name">Key label</label><input id="devkey-name" name="name" placeholder="OpenMind Studio Desktop" required minlength="3" maxlength="64" autocomplete="off"></div>
+    <div class="field"><label for="devkey-password">Admin password</label><input id="devkey-password" type="password" name="current_password" required autocomplete="current-password"></div>
+    @if(auth()->user()->two_factor_confirmed_at)
+      <div class="field"><label for="devkey-code">2FA code</label><input id="devkey-code" name="code" required autocomplete="one-time-code"></div>
+    @endif
+    <div class="form-actions"><button class="btn-primary-admin" type="submit">Generate Developer API Key</button></div>
+  </form>
+  <p class="entity-meta" role="status" aria-live="polite" data-devkey-message></p>
+  <div data-devkey-created hidden style="margin-top:18px">
+    <div class="field">
+      <label for="created-devkey">New Developer API Key — shown only once</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="created-devkey" data-devkey-secret type="password" readonly autocomplete="off" spellcheck="false" style="flex:1;min-width:200px">
+        <button class="btn-primary-admin" type="button" data-devkey-copy>Copy API Key</button>
+        <button class="btn-primary-admin" type="button" data-devkey-hide>Hide</button>
+      </div>
+      <small>Copy it into OpenMind Studio → Agent Settings → OpenMindAI Cloud. This view clears the key after 60 seconds. Do not enter it in a distributed app's source code.</small>
+    </div>
+  </div>
+  <div class="section-separator"><h3>Existing Developer API Keys</h3></div>
+  <div data-devkey-list>
+    @forelse($developerKeys as $key)
+    <div class="registered-app" style="padding:12px 0;border-bottom:1px solid var(--tblr-border-color, #ddd)">
+      <strong>{{ preg_replace('/^developer:/', '', $key->name) }}</strong>
+      <p class="entity-meta">Created {{ $key->created_at }} · Expires {{ $key->expires_at ?: 'Never' }} · Last used {{ $key->last_used_at ?: 'Never' }}</p>
+      <p class="entity-meta">Stored securely — original key cannot be revealed. Revoke and generate a replacement if needed.</p>
+      <details>
+        <summary>Revoke this API key</summary>
+        <form method="post" action="/admin/code-agents/developer-keys/{{ $key->id }}" data-devkey-revoke>
+          @csrf @method('DELETE')
+          <div class="field"><label>Admin password</label><input name="current_password" type="password" required autocomplete="current-password"></div>
+          @if(auth()->user()->two_factor_confirmed_at)<div class="field"><label>2FA code</label><input name="code" required autocomplete="one-time-code"></div>@endif
+          <div class="form-actions"><button class="btn-primary-admin" type="submit">Revoke Developer API Key</button></div>
+        </form>
+      </details>
+    </div>
+    @empty
+    <p class="entity-meta">No Developer API Keys for this administrator yet.</p>
+    @endforelse
+  </div>
+</section>
+<script src="{{ asset('js/admin-developer-keys.js') }}" defer></script>
 <div class="section-separator"><h2>Trusted OpenMindAI apps</h2><p>Your own server can sign requests without asking each end user for an API key. A secret is still required on each trusted app server.</p></div>
 <div class="card-grid">
 <section class="admin-card">

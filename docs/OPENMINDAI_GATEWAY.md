@@ -72,3 +72,9 @@ The backend removes any caller-supplied `model` or `stream`, optionally inserts 
 ### Always-visible model catalog
 
 All seeded NVIDIA Build models appear in both model discovery endpoints. A follow-up migration restores previously disabled rows and configures the common chat-completions path for chat models, so `enabled` is not a client-visibility toggle. The backend still returns unavailable/404 for unsupported specialized inference operations until their request format and NVIDIA path are configured. Free endpoint status, actual uptime, rate limits and account-level NVIDIA access remain external to OpenMindAI; listing a model does not promise successful inference.
+
+## Generate Desktop Developer API Keys in Admin
+
+Admin → Code agents → **Developer API Keys for OpenMind Studio** lets the currently signed-in administrator generate an ordinary **per-account Sanctum Developer API Key** with the `openmindai:invoke` ability and a 90-day expiry. The admin must re-enter their password and, when enabled, a valid 2FA code. The generated token is shown in the browser only once and cleared after 60 seconds. A refresh or later visit cannot reveal it: Sanctum stores only a hash of the token. Existing keys show metadata and support password/2FA-protected revocation.
+
+This is the same credential type as Account → Developer API, and follows the same maximum of 10 active keys per user. The admin UI manages **only the signed-in administrator's own keys**, not all users' keys. Use this Bearer key in OpenMind Studio's encrypted cloud API-key setting. First-party App IDs and signing secrets are exclusively for trusted server-to-server integrations; never distribute these secrets in an installer.
