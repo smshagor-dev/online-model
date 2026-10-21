@@ -81,6 +81,27 @@ test("audio generation sends text and stores validated WAV", async () => {
   assert.equal(complete.mime, "audio/wav");
   assert.deepEqual(Buffer.from(complete.data, "base64"), wav);
 });
+test("hosted speech uses documented Spanish and French voice selections", async () => {
+  for (const [language, voice] of [
+    ["es-US", "Magpie-Multilingual.ES-US.Diego"],
+    ["fr-FR", "Magpie-Multilingual.FR-FR.Louise"],
+  ]) {
+    const s = scenario();
+    const result = await run(s, "speech", { language });
+    assert.equal(result.status, 201);
+    const form = s.calls[1].init.body;
+    assert.equal(form.get("language"), language);
+    assert.equal(form.get("voice"), voice);
+  }
+});
+
+test("invalid speech language is rejected before reserving task quota", async () => {
+  const s = scenario();
+  const result = await run(s, "speech", { language: "xx-XX" });
+  assert.equal(result.status, 422);
+  assert.equal(s.calls.length, 0);
+});
+
 test("video generation follows documented text-to-video API contract", async () => {
   const s = scenario();
   const result = await run(s, "video");
