@@ -138,7 +138,7 @@ async function proxy(
     (endpoint === "chat/stream" || endpoint === "chat/resume") &&
     request.method === "POST" &&
     nvidiaEnabled() &&
-    (endpoint === "chat/resume" ||
+    (endpoint === "chat/resume" || JSON.parse(body!)?.model_id == null ||
       isNvidiaModelId(Number(JSON.parse(body!)?.model_id)))
   ) {
     const response = await nvidiaChat(body!, token!, base, request.signal);

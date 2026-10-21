@@ -2191,3 +2191,6 @@ html[data-theme="dark"] .hljs-title, html[data-theme="dark"] .hljs-name, html[da
 .model-picker-footer { padding:12px 22px; border-top:1px solid var(--border); font-size:11px; color:var(--muted); }
 .model-picker-empty { text-align:center; padding:26px 12px; color:var(--muted); font-size:13px; }
 @media (prefers-reduced-motion:no-preference) { .model-picker-dialog[open] { animation:model-picker-enter .15s ease-out; } @keyframes model-picker-enter { from { opacity:0; transform:translateY(6px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } } }
+
+.tool-progress { display:flex; align-items:center; gap:8px; font-size:12px; line-height:1.5; }
+.tool-progress svg { flex-shrink:0; }

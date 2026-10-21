@@ -1,5 +1,6 @@
-import { routePrompt, serverRouterConfig } from "./prompt-router.ts";
-import { dispatchPromptMedia } from "./auto-dispatch.ts";
+import { runConversationTools } from "./conversation-tools.ts";
+import { generateHostedImage } from "./hosted-image.ts";
+import { hostedMediaRequest } from "./hosted-media.ts";
 import { parseInlineImage, imageMessage } from "./vision-input.ts";
 import {
   plannerInstruction,
@@ -74,6 +75,7 @@ type Checkpoint = {
   content?: string;
   previousPart?: string;
   finished?: boolean;
+  toolRunStarted?: boolean;
   modelId?: string;
   imageRequired?: boolean;
   sources?: Source[];
@@ -158,7 +160,7 @@ export async function nvidiaChat(
     }
   }
   const selected = catalog.find((model) => model.id === Number(input.model_id));
-  const isAuto = Number(input.model_id) === NVIDIA_AUTO_MODEL_ID;
+  const isAuto = input.model_id == null || Number(input.model_id) === NVIDIA_AUTO_MODEL_ID;
   if (!selected && !isAuto && !input.resume_message_id && !options.config)
     return Response.json({message: "Unknown hosted model."}, {status: 404});
   let permittedSlugs: string[] | null = null;
@@ -182,58 +184,17 @@ export async function nvidiaChat(
     fallbackModel = permittedSlugs.includes("openmindai-lite") ? NVIDIA_HOSTED_MODELS[2].provider :
       permittedSlugs.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : (catalog.find((model) => model.slug === permittedSlugs?.[0])?.provider || config.model);
   }
-  // The classifier is a paid upstream call: confirm the Laravel session first.
-  // Existing injected test fixtures already exercise authenticated bridge responses.
-  if (!options.config && !input.resume_message_id &&
-      typeof input.message === "string" && input.message.length >= 40 &&
-      process.env.NVIDIA_ROUTER_CLASSIFIER !== "false") {
-    try {
-      const identity = await fetcher(base.replace(/\/$/, "") + "/me", {
-        headers: {Authorization: "Bearer " + token, Accept: "application/json"},
-        cache: "no-store", redirect: "error",
-        signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
-      });
-      if (!identity.ok)
-        return Response.json({message: "Please sign in again."},
-          {status: identity.status === 401 || identity.status === 403 ? identity.status : 503});
-    } catch {
-      return Response.json({message: "Cannot verify your session."}, {status: 503});
-    }
-  }
-  if (!input.resume_message_id && typeof input.message === "string") {
-    const available = permittedSlugs || [];
-    const routing = serverRouterConfig(inferenceRoute === "backend" ? "backend-managed" : config.apiKey, config.model);
-    if (isAuto && permittedSlugs) {
-      const fast = available.includes("openmindai-lite") ? NVIDIA_HOSTED_MODELS[2].provider :
-        available.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : (catalog.find((model) => model.slug === available[0])?.provider || config.model);
-      const reasoning = available.includes("openmindai-ultra") ? NVIDIA_HOSTED_MODELS[1].provider :
-        available.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : fast;
-      routing.fastModel = fast;
-      routing.reasoningModel = reasoning;
-      routing.visionModel = NVIDIA_HOSTED_MODELS[0].provider;
-      routing.classifierModel = fast; // honor admin availability for classification too
-      fallbackModel = fast;
-    }
-    const decision = await routePrompt(input.message, routing, {
-      fetcher,
-      signal,
-      hasAttachments: Array.isArray(input.attachment_ids) && input.attachment_ids.length > 0,
-      hasImage: Boolean(inlineImage),
-      deepResearch: Boolean(input.deep_research),
-      webSearch: Boolean(input.web_search),
-      // Fixture calls inject config and exercise the stream without an additional classifier request.
-      enableClassifier: !options.config && process.env.NVIDIA_ROUTER_CLASSIFIER !== "false",
-    });
-    routedModel = decision.model;
-    if (decision.kind !== "chat") {
-      return dispatchPromptMedia(decision, input.message, token, base, signal, {
-        fetcher, apiKey: config.apiKey, bridgeKey: config.bridgeKey, chatModel: config.model,
-      });
-    }
-  }
   // An explicit model selection is honored for ordinary text chat;
   // automatic requests use the prompt's result. Images always require Super VL.
-  if (selected && !inlineImage && !options.config) routedModel = selected.provider;
+  if (selected && !inlineImage) { routedModel = selected.provider; fallbackModel = selected.provider; }
+  if (inlineImage) routedModel = catalog.find(m => m.slug === "openmindai-super")?.provider || NVIDIA_HOSTED_MODELS[0].provider;
+  const conversationTools = isAuto && !input.resume_message_id && !inlineImage && !input.web_search && !input.deep_research;
+  if (conversationTools) {
+    backendInput.conversation_tools = true;
+    routedModel = catalog.find(m => m.slug === "openmindai-super")?.provider ||
+      catalog.find(m => m.slug === "openmindai-ultra")?.provider ||
+      catalog.find(m => m.slug === "openmindai-lite")?.provider || catalog[0]?.provider || config.model;
+  }
   const backend = async (
     path: string,
     data: unknown,
@@ -263,7 +224,7 @@ export async function nvidiaChat(
       JSON.parse(body).resume_message_id
         ? { message_id: JSON.parse(body).resume_message_id }
         : { ...backendInput, provider_model: routedModel },
-      JSON.parse(body).deep_research ? 80000 : 15000,
+      backendInput.deep_research ? 80000 : 15000,
     );
     if (!prepared.ok) {
       let data;
@@ -295,6 +256,11 @@ export async function nvidiaChat(
       { status: 503 },
     );
   }
+  // Interrupted tool runs cannot safely replay side effects such as file generation.
+  if (input.resume_message_id && lease.checkpoint?.toolRunStarted && !lease.checkpoint.finished) {
+    await backend("finish", {ticket:lease.ticket, content:lease.checkpoint.content || "", status:"failed", sources:lease.sources, provider_model:lease.checkpoint.modelId || config.model});
+    return Response.json({message:"This tool run was interrupted. Check generated files before starting a new request; it cannot be automatically replayed."}, {status:409});
+  }
   // Resume never silently continues without its original image bytes.
   if (lease.checkpoint?.imageRequired && !inlineImage) {
     const result = await backend("finish", {
@@ -308,7 +274,7 @@ export async function nvidiaChat(
       message: "The previous image is no longer attached. Start a new message and attach it again.",
     }, {status: 409});
   }
-  const deep = Boolean(lease.deep_research ?? JSON.parse(body).deep_research);
+  const deep = Boolean(lease.deep_research ?? backendInput.deep_research);
   // Resume uses the model stored with the checkpoint, not a fresh classification.
   let activeModel = lease.checkpoint?.modelId || routedModel;
   const encoder = new TextEncoder();
@@ -382,7 +348,7 @@ export async function nvidiaChat(
           sources: lease.sources,
           provider: "nvidia",
           content,
-          resumable: Boolean(lease.message_id) && !inlineImage,
+          resumable: Boolean(lease.message_id) && !inlineImage && !conversationTools,
         });
         if (cancelled) throw new Error("Cancelled");
         // Mark image turns non-resumable before inference so a failed request
@@ -409,6 +375,51 @@ export async function nvidiaChat(
             polling = false;
           }
         }, options.pollMs || 5000);
+        if (conversationTools && !checkpoint.finished) {
+          checkpoint.toolRunStarted = true;
+          await saveCheckpoint();
+          const generatedFiles: {id:number;kind:string}[] = [];
+          await runConversationTools({
+            model:activeModel, apiKey:config.apiKey, fetcher, messages:generationMessages,
+            signal:AbortSignal.any([upstreamAbort.signal, AbortSignal.timeout(240000)]), specialists:catalog,
+            progress: label => emit("research", {label, sources:lease.sources}),
+            delta: text => {content += text; emit("delta", {content:text});},
+            web: async action => {
+              const response = await backend("tool", {ticket:lease.ticket, ...action}, 20000, upstreamAbort.signal);
+              if (!response.ok) throw new Error("Tool unavailable");
+              const data = await response.json();
+              if (Array.isArray(data.sources)) {
+                const sources = new Map(lease.sources.map(source=>[source.url,source]));
+                for (const source of data.sources) {
+                  if (typeof source.url === "string") sources.set(source.url, {url:source.url,title:String(source.title || source.url).slice(0,200),snippet:String(source.snippet || "").slice(0,2000)});
+                }
+                lease.sources = [...sources.values()].slice(0,40).map((source,index)=>({...source,citation:index+1}));
+              }
+              emit("research", {label:action.action === "search" ? "Reviewing search results" : "Reading sources", sources:lease.sources});
+              return data;
+            },
+            artifact: async work => {
+              if (!config.apiKey && work.kind !== "document_create") return {ok:false,message:"This media service has not been configured on the server."};
+              const request = work.kind === "image"
+                ? generateHostedImage(JSON.stringify({prompt:work.prompt}),token,base,upstreamAbort.signal,{fetcher,config:{apiKey:config.apiKey,bridgeKey:config.bridgeKey}})
+                : hostedMediaRequest(JSON.stringify(work),token,base,upstreamAbort.signal,{fetcher,config:{apiKey:config.apiKey || "backend-managed",bridgeKey:config.bridgeKey,chatModel:activeModel}});
+              const response = await request;
+              if (!response.ok) return {ok:false,message:"The requested file could not be generated."};
+              const saved = await response.json();
+              if (!Number.isSafeInteger(saved.id) || saved.id < 1 || saved.status !== "complete") return {ok:false,message:"The generated output was not saved."};
+              generatedFiles.push({id:saved.id,kind:work.kind});
+              emit("artifact", {id:saved.id,kind:work.kind});
+              return {ok:true,id:saved.id,kind:work.kind,status:"complete",message:"The saved file is displayed in this chat. Refer to it without inventing a download URL."};
+            },
+          });
+          for (const file of generatedFiles) {
+            const link = `\n\n[Download generated ${file.kind === "document_create" ? "document" : file.kind}](/api/backend/media/${file.id}/output)`;
+            content += link;
+            emit("delta", {content:link});
+          }
+          checkpoint.finished = true;
+          await saveCheckpoint();
+        }
         if (deep && checkpoint.stage === "research") {
           const initial = lease.messages;
           const result = await researchLoop({
