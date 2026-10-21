@@ -115,6 +115,22 @@ test("generates a PDF with header and cross-reference table", async () => {
   assert.ok(pdf.toString("latin1").includes("xref"));
   assert.throws(() => renderPdf("বাংলা"), /Choose DOCX/);
 });
+test("PDF output keeps WinAnsi Euro, ellipsis and trademark glyphs", () => {
+  const pdf = renderPdf("Price €20 … brand™");
+  const result = pdf.toString("latin1");
+  assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-");
+  // The built-in Helvetica font uses Windows-1252 single-byte glyph codes.
+  assert.ok(result.includes(String.fromCharCode(0x80)), "Euro");
+  assert.ok(result.includes(String.fromCharCode(0x85)), "Ellipsis");
+  assert.ok(result.includes(String.fromCharCode(0x99)), "Trademark");
+});
+
+test("PDF breaks long URLs and unspaced words within the page width", () => {
+  const pdf = renderPdf("X".repeat(240));
+  const commands = [...pdf.toString("latin1").matchAll(/Tm \\(([^)]*)\\) Tj/g)];
+  assert.deepEqual(commands.map(match => match[1].length), [87, 87, 66]);
+});
+
 test("invalid requests and absent server credentials never contact provider", async () => {
   const s = scenario();
   const first = await hostedMediaRequest(
