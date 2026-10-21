@@ -161,13 +161,15 @@ async function proxy(
           { status: response.status },
         );
       const local = await response.json();
-      const catalogResponse = await fetch(`${base.replace(/\/$/, "")}/openmindai/models`, {
+      const catalogResponse = await fetch(`${base.replace(/\/$/, "")}/chat/hosted-models`, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
         cache: "no-store", redirect: "error",
         signal: AbortSignal.timeout(10000),
       });
-      const catalog = catalogResponse.ok ? await catalogResponse.json() : { data: [] };
-      const allowed = Array.isArray(catalog.data) ? catalog.data.map((model: {id:string}) => model.id) : [];
+      if (!catalogResponse.ok) return NextResponse.json({ message: "Cannot verify enabled hosted models." }, { status: catalogResponse.status === 401 ? 401 : 503 });
+      const catalog = await catalogResponse.json();
+      if (!Array.isArray(catalog.data)) return NextResponse.json({ message: "Invalid hosted model catalog." }, { status: 503 });
+      const allowed = catalog.data.map((model: {id:string}) => model.id);
       return NextResponse.json(
         [...nvidiaModels(allowed), ...(Array.isArray(local) ? local : [])],
         { headers: { "Cache-Control": "no-store" } },
