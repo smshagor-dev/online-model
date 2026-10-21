@@ -44,7 +44,7 @@ class RunCloudImage implements ShouldQueue
             $engine->options($mode, $ratio);
             $result = $engine->render($task);
 
-            DB::transaction(function () use ($task, $path, $result, $mode) {
+            DB::transaction(function () use ($task, $path, $result) {
                 $current = MediaTask::whereKey($task->id)->lockForUpdate()->first();
                 if (! $current || $current->status !== 'running') {
                     return;
