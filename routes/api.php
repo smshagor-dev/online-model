@@ -73,8 +73,12 @@ Route::prefix('v1')->group(function () {
         Route::post('email/change/confirm', [SettingsController::class, 'confirmEmail']);
         Route::post('register', [AuthController::class, 'register']);
         Route::post('login', [AuthController::class, 'login']);
-        Route::post('login/verify-ip', [AuthController::class, 'verifyLoginIp']);
         Route::post('forgot-password', [AuthController::class, 'forgot']);
+    });
+    // OTP verification has a separate, still bounded limiter so successful
+    // registration verification cannot exhaust the login rate bucket.
+    Route::middleware('throttle:auth-otp')->group(function () {
+        Route::post('login/verify-ip', [AuthController::class, 'verifyLoginIp']);
         Route::post('reset-password', [AuthController::class, 'reset']);
         Route::post('email/resend', [AuthController::class, 'resend']);
         Route::post('email/verify-code', [AuthController::class, 'verifyCode']);
