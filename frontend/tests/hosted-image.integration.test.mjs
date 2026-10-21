@@ -111,6 +111,56 @@ test("image is not reported complete when backend persistence fails", async () =
   assert.equal(f.calls[3].url.endsWith("/fail"), true);
 });
 
+test("cancelled image request does not start hosted inference", async () => {
+  const controller = new AbortController();
+  const f = backendScenario();
+  const response = await generateHostedImage(
+    JSON.stringify({ prompt: "Sunrise over a forest" }),
+    "user-token",
+    "https://private-backend/api/v1",
+    controller.signal,
+    {
+      config,
+      fetcher: async (url, init) => {
+        const result = await f.fetcher(url, init);
+        if (url.endsWith("/media/hosted/begin")) controller.abort();
+        return result;
+      },
+    },
+  );
+  assert.equal(response.status, 499);
+  assert.deepEqual(f.calls.map(x => x.url.split("/").at(-1)), ["begin", "fail"]);
+});
+
+test("image cancelled during provider generation does not persist output", async () => {
+  const controller = new AbortController();
+  const f = backendScenario();
+  const response = await generateHostedImage(
+    JSON.stringify({ prompt: "Sunrise over a forest" }),
+    "user-token",
+    "https://private-backend/api/v1",
+    controller.signal,
+    {
+      config,
+      fetcher: async (url, init) => {
+        const result = await f.fetcher(url, init);
+        if (url.endsWith("/flux.1-schnell")) controller.abort();
+        return result;
+      },
+    },
+  );
+  assert.equal(response.status, 499);
+  assert.deepEqual(f.calls.map(x => x.url.split("/").at(-1)), ["begin", "flux.1-schnell", "fail"]);
+});
+
+test("deleted image task cannot be reported as successful output", async () => {
+  const f = backendScenario({ finishStatus: 404 });
+  const response = await generate(f);
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).message, /deleted or cancelled/);
+  assert.equal(f.calls.at(-1).url.endsWith("/fail"), true);
+});
+
 test("missing credentials and invalid prompts do not call the backend", async () => {
   const f = backendScenario();
   const missing = await generate(f, { config: { apiKey: "", bridgeKey: "s".repeat(32) } });
