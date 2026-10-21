@@ -1,4 +1,5 @@
 import { routePrompt, serverRouterConfig } from "./prompt-router.ts";
+import { backendProviderFetcher } from "./backend-provider.ts";
 import { dispatchPromptMedia } from "./auto-dispatch.ts";
 import { parseInlineImage, imageMessage } from "./vision-input.ts";
 import {
@@ -65,16 +66,18 @@ export async function nvidiaChat(
   options: { fetcher?: typeof fetch; config?: Config; pollMs?: number } = {},
 ) {
   const config = options.config || {
-    apiKey: process.env.NVIDIA_API_KEY || "",
+    apiKey: "backend-managed",
     bridgeKey: process.env.FRONTEND_CHAT_BRIDGE_KEY || "",
     model: process.env.NVIDIA_MODEL || "nvidia/nemotron-3.5-lightning-30b-a3b",
   };
   if (!config.apiKey || config.bridgeKey.length < 32)
     return Response.json(
-      { message: "NVIDIA chat is not configured on the frontend server." },
+      { message: "Hosted chat is not configured on the backend." },
       { status: 503 },
     );
-  const fetcher = options.fetcher || fetch;
+  const fetcher = options.config
+    ? (options.fetcher || fetch) // Only unit-test fixtures override the server transport.
+    : backendProviderFetcher(base, token, config.bridgeKey, options.fetcher || fetch);
   const input = JSON.parse(body);
   let inlineImage: ReturnType<typeof parseInlineImage>;
   try {
