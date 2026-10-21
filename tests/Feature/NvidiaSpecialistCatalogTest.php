@@ -25,7 +25,8 @@ class NvidiaSpecialistCatalogTest extends TestCase
         $this->assertCount(11, $models);
         foreach ($models as $slug => $info) {
             $this->assertDatabaseHas('hosted_code_agents', [
-                'slug' => $slug, 'enabled' => true, 'api_ready' => false,
+                'slug' => $slug, 'enabled' => true,
+                'api_ready' => isset(config('maxine.models', [])[$slug]),
             ]);
             $this->assertNotEmpty($info['transport']);
             $this->assertStringStartsWith('https://build.nvidia.com/', $info['reference']);
@@ -43,7 +44,7 @@ class NvidiaSpecialistCatalogTest extends TestCase
         $this->patchJson('/admin/nvidia-models/'.$slug, [
             'api_ready' => true, 'api_path' => '/v1/embeddings',
         ])->assertUnprocessable();
-        $this->assertDatabaseHas('hosted_code_agents', ['slug' => $slug, 'api_ready' => false]);
+        $this->assertDatabaseHas('hosted_code_agents', ['slug' => $slug, 'api_ready' => true]);
     }
 
     public function test_catalog_reports_protocol_and_access_requirements(): void

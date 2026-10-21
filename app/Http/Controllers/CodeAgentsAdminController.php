@@ -69,15 +69,30 @@ class CodeAgentsAdminController
         $model = DB::table('hosted_code_agents')->where('slug', $slug)->first();
         abort_unless($model, 404);
         abort_if(isset(config('nvidia_specialists.models', [])[$slug])
+            && !isset(config('maxine.models', [])[$slug])
             && (($data['api_ready'] ?? false) || (($data['api_protocol'] ?? $model->api_protocol) === 'chat')),
             422, 'This model needs a dedicated provider integration before activation.');
-        if (array_key_exists('api_ready', $data) && $data['api_ready']) {
+        if (isset(config('maxine.models', [])[$slug])) {
+            abort_if((isset($data['api_path']) && $data['api_path'] !== '')
+                || (isset($data['provider_model']) && $data['provider_model'] !== $model->provider_model)
+                || (isset($data['api_protocol']) && $data['api_protocol'] !== 'json'),
+                422, 'Maxine gRPC media uses a fixed, reviewed integration.');
+        }
+        if (!isset(config('maxine.models', [])[$slug]) && array_key_exists('api_ready', $data) && $data['api_ready']) {
             $path = $data['api_path'] ?? $model->api_path;
             abort_unless($path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$~D', $path) && ! str_contains($path, '..'),
                 422, 'Configure a verified NVIDIA /v1/ API path before enabling inference.');
             if (($data['api_protocol'] ?? $model->api_protocol) === 'chat') {
                 abort_unless($path === '/v1/chat/completions', 422, 'Chat models must use the chat completions endpoint.');
             }
+        }
+        if (isset(config('maxine.models', [])[$slug])) {
+            // Media gRPC models use the separate trusted worker, not a raw
+            // Laravel JSON relay selected from admin-provided API paths.
+            $data['api_ready'] = true;
+            $data['api_protocol'] = 'json';
+            $data['api_path'] = null;
+            $data['include_model'] = false;
         }
         if ($slug === 'nvidia-cosmos3-nano') {
             // Cosmos is a dedicated queued-media integration, never a generic

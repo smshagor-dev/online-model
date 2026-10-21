@@ -112,3 +112,24 @@ Schedule::call(function () {
         }
     });
 })->hourly();
+
+// NVIDIA Maxine media artifacts are private, short-lived and need cleanup
+// even when a worker is terminated by a shared-hosting process limit.
+Schedule::call(function () {
+    DB::table('maxine_jobs')->where('status', 'running')
+        ->where('updated_at', '<', now()->subMinutes(25))->update([
+            'status' => 'failed', 'error_code' => 'worker_interrupted', 'updated_at' => now(),
+        ]);
+    DB::table('maxine_jobs')->where('status', 'queued')
+        ->where('created_at', '<', now()->subDay())->update([
+            'status' => 'failed', 'error_code' => 'worker_not_started', 'updated_at' => now(),
+        ]);
+    DB::table('maxine_jobs')->where('created_at', '<',
+        now()->subHours((int) config('maxine.retention_hours', 24)))->orderBy('created_at')
+        ->chunk(100, function ($items) {
+            foreach ($items as $item) {
+                Storage::disk('local')->delete(array_filter([$item->input_path, $item->aux_path, $item->output_path]));
+                DB::table('maxine_jobs')->where('id', $item->id)->delete();
+            }
+        });
+})->hourly();

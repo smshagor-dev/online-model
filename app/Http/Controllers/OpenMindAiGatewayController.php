@@ -85,6 +85,8 @@ class OpenMindAiGatewayController
     private function invokeModel(Request $request, string $slug, bool $firstParty, HostedCodeAgents $agents, ApiCreditUsage $credits)
     {
         $user = $this->actor($request, $firstParty);
+        abort_if(isset(config('maxine.models', [])[$slug]), 422,
+            'Use /api/v1/openmindai/maxine/{model}/jobs for queued NVIDIA gRPC inference.');
         abort_if($slug === 'nvidia-cosmos3-nano', 422,
             'Use /api/v1/openmindai/cosmos/generations for queued Cosmos image/video generation.');
         $model = $agents->find($slug);
