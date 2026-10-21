@@ -11,7 +11,6 @@ import PasswordInput from "./password-input";
 import Keys from "./keys";
 import Catalog from "./catalog";
 import Docs from "./docs";
-import PasswordInput from "./password-input";
 
 export type View = "home" | "login" | "register" | "forgot" | "dashboard" | "keys" | "models" | "docs";
 const secureViews: View[] = ["dashboard", "keys", "models"];
