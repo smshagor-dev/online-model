@@ -169,3 +169,23 @@ Schedule::call(function () {
             }
         });
 })->hourly();
+
+// Short retention for private text-to-speech prompts, reference WAVs and results.
+Schedule::call(function () {
+    DB::table('magpie_generations')->where('status', 'running')
+        ->where('updated_at', '<', now()->subMinutes(25))
+        ->update(['status' => 'failed', 'error_code' => 'worker_interrupted',
+            'encrypted_request' => '', 'updated_at' => now()]);
+    DB::table('magpie_generations')->where('status', 'queued')
+        ->where('created_at', '<', now()->subDay())
+        ->update(['status' => 'failed', 'error_code' => 'worker_not_started',
+            'encrypted_request' => '', 'updated_at' => now()]);
+    DB::table('magpie_generations')->where('created_at', '<',
+        now()->subHours((int) config('magpie.retention_hours', 24)))
+        ->orderBy('created_at')->chunk(100, function ($rows) {
+            foreach ($rows as $row) {
+                Storage::disk('local')->delete(array_filter([$row->voice_path, $row->output_path]));
+                DB::table('magpie_generations')->where('id', $row->id)->delete();
+            }
+        });
+})->hourly();
