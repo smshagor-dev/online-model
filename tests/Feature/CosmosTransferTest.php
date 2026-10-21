@@ -149,7 +149,7 @@ class CosmosTransferTest extends TestCase
         $this->withToken($key)->post('/api/v1/openmindai/transfer/generations', [
             'prompt' => 'Robot moves boxes', 'control_type' => 'depth',
             'video' => UploadedFile::fake()->createWithContent('input.mp4', $this->mp4()),
-            'control_video' => UploadedFile::fake()->createWithContent('control.mp4',$this->mp4()),
+            'control_video' => UploadedFile::fake()->createWithContent('control.mp4', $this->mp4()),
         ])->assertStatus(429);
     }
 }
