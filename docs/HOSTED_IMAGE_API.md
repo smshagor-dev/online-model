@@ -12,7 +12,7 @@ Credentials never enter the browser.
 Set `NVIDIA_API_KEY` and `CLOUD_IMAGE_ENABLED=true` **on Laravel**. Deploy the
 `2026_10_21_110000_add_cloud_image_options` migration with
 `php artisan migrate --force`, rebuild config, and **run a persistent worker**
-`php artisan queue:work database --queue=media --tries=1 --timeout=180`.
+`php artisan queue:work media --queue=media --tries=1 --timeout=180`.
 The process manager must restart the worker on failure and after deployments.
 Never use `QUEUE_CONNECTION=sync` in production: it negates asynchronous
 generation and can cause HTTP timeouts. Verify the worker's database jobs table.
