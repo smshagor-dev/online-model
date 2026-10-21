@@ -95,7 +95,7 @@ export async function nvidiaChat(
   // Respect Laravel's existing admin-managed availability without changing its controllers.
   if ((selected || isAuto) && !options.config && !input.resume_message_id) {
     try {
-      const response = await fetcher(base.replace(/\/$/, "") + "/openmindai/models", {
+      const response = await fetcher(base.replace(/\/$/, "") + "/chat/hosted-models", {
         headers: {Authorization: "Bearer " + token, Accept: "application/json"},
         cache: "no-store", redirect: "error",
         signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
