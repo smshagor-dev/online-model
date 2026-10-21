@@ -55,7 +55,7 @@ class OpenMindAiGatewayController
             'model' => 'required|string|max:60',
             'messages' => 'required|array|min:1|max:40',
             'messages.*.role' => 'required|in:system,user,assistant,tool',
-            'messages.*.content' => 'present|string|max:16000',
+            'messages.*.content' => 'sometimes|nullable|string|max:16000',
             'messages.*.tool_call_id' => 'sometimes|string|max:120',
             'messages.*.tool_calls' => 'sometimes|array|max:12',
             'messages.*.tool_calls.*.id' => 'required|string|max:120',
@@ -71,6 +71,18 @@ class OpenMindAiGatewayController
             'max_tokens' => 'sometimes|integer|min:1|max:8192',
             'temperature' => 'sometimes|numeric|min:0|max:1',
         ]);
+        foreach ($data['messages'] as $message) {
+            $hasText = is_string($message['content'] ?? null) && trim($message['content']) !== '';
+            if (in_array($message['role'], ['system', 'user'], true) && ! $hasText) {
+                abort(422, 'User and system messages require content.');
+            }
+            if ($message['role'] === 'assistant' && ! $hasText && empty($message['tool_calls'])) {
+                abort(422, 'Assistant messages require content or tool calls.');
+            }
+            if ($message['role'] === 'tool' && (! $hasText || empty($message['tool_call_id']))) {
+                abort(422, 'Tool responses require a tool call ID and content.');
+            }
+        }
         $agent = $agents->find($data['model']);
         abort_unless($agent, 404, 'This model is not enabled.');
         $key = (string) config('models.nvidia_key');
