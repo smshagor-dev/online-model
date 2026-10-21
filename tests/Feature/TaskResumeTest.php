@@ -64,6 +64,22 @@ class TaskResumeTest extends TestCase
         $this->postJson('/api/v1/tasks/'.$task->id.'/runs')->assertStatus(429);
     }
 
+    public function test_unlimited_daily_tasks_allow_multiple_manual_runs(): void
+    {
+        $task = $this->task();
+        app(AdminSettings::class)->save(['task_daily_limit' => '0']);
+
+        $first = $this->postJson('/api/v1/tasks/'.$task->id.'/runs')
+            ->assertStatus(202)->json('id');
+        TaskRun::findOrFail($first)->update(['status' => 'complete', 'result' => 'Finished']);
+
+        $second = $this->postJson('/api/v1/tasks/'.$task->id.'/runs')
+            ->assertStatus(202)->json('id');
+
+        $this->assertNotSame($first, $second);
+        $this->assertDatabaseCount('task_runs', 2);
+    }
+
     public function test_modified_task_definition_cannot_silently_resume_old_context(): void
     {
         $task = $this->task();
