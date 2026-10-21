@@ -94,9 +94,43 @@ class OpenMindAiGatewayController
         abort_if(count($payload) > 64, 422, 'Too many input fields.');
         // Prevent callers from selecting arbitrary paid or unauthorized models.
         unset($payload['model'], $payload['stream']);
+
+        // NVIDIA's specialized inference services do not share one payload
+        // schema. Normalize only confirmed protocols; retain a JSON envelope
+        // for other explicitly administrator-configured services.
+        if ($model->api_path === '/v1/embeddings') {
+            abort_unless(isset($payload['input']) && (is_string($payload['input']) || is_array($payload['input'])), 422, 'Embeddings require text or image input.');
+            abort_if(is_string($payload['input']) && trim($payload['input']) === '', 422, 'Embedding input is empty.');
+            abort_if(isset($payload['input_type']) && !in_array($payload['input_type'], ['query', 'passage'], true), 422, 'Invalid embedding input_type.');
+            $payload['input_type'] ??= 'query';
+        } elseif ($model->slug === 'nvidia-nemotron-3.5-rerank-8b') {
+            abort_unless(isset($payload['query'], $payload['passages']) &&
+                is_array($payload['query']) && is_array($payload['passages']) &&
+                count($payload['passages']) >= 1 && count($payload['passages']) <= 512,
+                422, 'Reranking requires a query object and 1–512 passages.');
+        } elseif (in_array($model->slug, ['nvidia-kumo-tabular', 'nvidia-kumo-relational'], true)) {
+            foreach (['task', 'schema', 'context', 'predict', 'output'] as $requiredField) {
+                abort_unless(isset($payload[$requiredField]) && is_array($payload[$requiredField]),
+                    422, 'Kumo requires task, schema, context, predict and output objects.');
+            }
+            // Kumo expects the model family instead of the NVIDIA catalog ID.
+            $payload['model'] = $model->slug === 'nvidia-kumo-tabular' ? 'kumo-tabular' : 'kumo-relational';
+        } elseif ($model->slug === 'nvidia-rfd4-proteina') {
+            abort_unless(isset($payload['input']) && isset($payload['task']) &&
+                in_array($payload['task'], ['generation', 'motif_scaffolding', 'enzyme_design',
+                    'small_molecule_binder', 'antibody_design', 'partial_diffusion', 'inverse_folding'], true),
+                422, 'Provide a valid RFD4 design task and input.');
+        }
         if ($model->include_model) {
             $payload['model'] = $model->provider_model;
         }
+        // Exact HTTPS hosts only: no client-supplied URLs or redirect following.
+        $origin = $model->api_origin;
+        abort_unless(in_array($origin, [
+            'integrate.api.nvidia.com',
+            'ai.api.nvidia.com',
+            'health.api.nvidia.com',
+        ], true), 503, 'This NVIDIA endpoint origin is unsupported.');
         $key = (string) config('models.nvidia_key');
         abort_unless(strlen($key) >= 12, 503, 'NVIDIA_API_KEY is not configured on the Laravel server.');
 
@@ -116,7 +150,14 @@ class OpenMindAiGatewayController
 
             $upstream = Http::withToken($key)->acceptJson()->connectTimeout(10)->timeout(120)
                 ->withOptions(['allow_redirects' => false])
-                ->post('https://integrate.api.nvidia.com'.$model->api_path, $payload);
+                ->post('https://'.$origin.$model->api_path, $payload);
+            if ($upstream->status() === 202) {
+                return response()->json([
+                    'model' => $model->slug,
+                    'status' => 'pending',
+                    'output' => $upstream->json(),
+                ], 202)->header('Cache-Control', 'no-store');
+            }
             if (! $upstream->successful()) {
                 return response()->json(['error' => [
                     'type' => 'upstream_error',
