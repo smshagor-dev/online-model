@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import PasswordInput from "./password-input";
 import {
   Check,
   Copy,
@@ -271,18 +272,18 @@ export default function AccountDialog({
               >
                 <label>
                   Current password
-                  <input
+                  <PasswordInput
                     name="current_password"
-                    type="password"
+                    
                     autoComplete="current-password"
                     required
                   />
                 </label>
                 <label>
                   New password
-                  <input
+                  <PasswordInput
                     name="password"
-                    type="password"
+                    
                     autoComplete="new-password"
                     required
                     minLength={6}
@@ -290,9 +291,9 @@ export default function AccountDialog({
                 </label>
                 <label>
                   Confirm new password
-                  <input
+                  <PasswordInput
                     name="password_confirmation"
-                    type="password"
+                    
                     autoComplete="new-password"
                     required
                     minLength={6}
@@ -342,9 +343,9 @@ export default function AccountDialog({
                 >
                   <label>
                     Confirm your password
-                    <input
+                    <PasswordInput
                       name="password"
-                      type="password"
+                      
                       required
                       autoComplete="current-password"
                     />
@@ -464,9 +465,9 @@ export default function AccountDialog({
                   >
                     <label>
                       Password
-                      <input
+                      <PasswordInput
                         name="password"
-                        type="password"
+                        
                         required
                         autoComplete="current-password"
                       />
@@ -499,9 +500,9 @@ export default function AccountDialog({
                   >
                     <label>
                       Password
-                      <input
+                      <PasswordInput
                         name="password"
-                        type="password"
+                        
                         required
                         autoComplete="current-password"
                       />
