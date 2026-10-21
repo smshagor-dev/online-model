@@ -53,10 +53,10 @@ return [
             'reference' => 'https://build.nvidia.com/nvidia/cosmos-transfer2_5-2b/modelcard',
         ],
         'nvidia-streampetr' => [
-            'transport' => 'physical_ai',
-            'requirement' => 'Multi-frame automotive inference adapter',
-            'note' => 'Camera scene context and 3D detector output decoding are not integrated.',
-            'reference' => 'https://build.nvidia.com/nvidia/streampetr',
+            'transport' => 'av_scene',
+            'requirement' => 'Queue-backed hosted scene inference and ZIP results',
+            'note' => 'NVIDIA offers predefined nuScenes scene IDs with ZIP or signed-S3 download responses. Live entitlement remains unverified.',
+            'reference' => 'https://docs.api.nvidia.com/nim/reference/nvidia-streampetr-infer',
         ],
         'nvidia-sparsedrive' => [
             'transport' => 'physical_ai',

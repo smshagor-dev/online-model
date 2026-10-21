@@ -133,3 +133,20 @@ Schedule::call(function () {
             }
         });
 })->hourly();
+
+// Remove expired private AV ZIP files and mark interrupted jobs failed.
+Schedule::call(function () {
+    DB::table('av_scene_jobs')->where('status', 'running')->where('updated_at', '<', now()->subMinutes(25))
+        ->update(['status' => 'failed', 'error_code' => 'worker_interrupted', 'updated_at' => now()]);
+    DB::table('av_scene_jobs')->where('status', 'queued')->where('created_at', '<', now()->subDay())
+        ->update(['status' => 'failed', 'error_code' => 'worker_not_started', 'updated_at' => now()]);
+    DB::table('av_scene_jobs')->where('created_at', '<', now()->subHours(24))->orderBy('created_at')
+        ->chunk(100, function ($rows) {
+            foreach ($rows as $row) {
+                if ($row->output_path) {
+                    Storage::disk('local')->delete($row->output_path);
+                }
+                DB::table('av_scene_jobs')->where('id', $row->id)->delete();
+            }
+        });
+})->hourly();

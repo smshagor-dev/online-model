@@ -15,6 +15,7 @@ use App\Http\Controllers\HostedMediaController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\NvidiaCosmosController;
 use App\Http\Controllers\NvidiaMaxineController;
+use App\Http\Controllers\NvidiaAvSceneController;
 use App\Http\Controllers\OpenMindAiGatewayController;
 use App\Http\Controllers\RealtimeController;
 use App\Http\Controllers\SettingsController;
@@ -40,6 +41,9 @@ Route::prefix('v1')->group(function () {
         Route::post('openmindai/maxine/{slug}/jobs', [NvidiaMaxineController::class, 'create'])->middleware('throttle:chat');
         Route::get('openmindai/maxine/jobs/{id}', [NvidiaMaxineController::class, 'status']);
         Route::get('openmindai/maxine/jobs/{id}/download', [NvidiaMaxineController::class, 'download']);
+        Route::post('openmindai/av/streampetr/jobs', [NvidiaAvSceneController::class, 'create'])->middleware('throttle:chat');
+        Route::get('openmindai/av/jobs/{id}', [NvidiaAvSceneController::class, 'status']);
+        Route::get('openmindai/av/jobs/{id}/download', [NvidiaAvSceneController::class, 'download']);
         Route::post('openmindai/models/{slug}/invoke', [OpenMindAiGatewayController::class, 'invoke'])->middleware('throttle:chat');
         Route::post('openmindai/chat/completions', [OpenMindAiGatewayController::class, 'chat'])->middleware('throttle:chat');
     });

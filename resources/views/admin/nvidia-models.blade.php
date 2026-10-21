@@ -27,7 +27,7 @@
 <div class="card-grid" style="margin-bottom:26px">
 @foreach($models as $model)
 <section class="admin-card">
- <div class="entity-card-header"><div><h2 style="word-break:break-word">{{ $model->name }}</h2><p class="entity-meta">{{ isset(config('maxine.models', [])[$model->slug]) ? 'Queued gRPC media processing' : ($model->slug === 'nvidia-cosmos3-nano' ? 'Queued image/video generation' : ($model->api_protocol === 'chat' ? 'Chat completions' : 'Specialized JSON request')) }}</p></div><span class="status-pill {{ $model->last_test_status === 'success' ? 'success' : 'warning' }}">{{ $model->last_test_status === 'success' ? 'Verified live' : ($model->api_ready ? 'API configured · not verified' : 'Custom protocol required') }}</span></div>
+ <div class="entity-card-header"><div><h2 style="word-break:break-word">{{ $model->name }}</h2><p class="entity-meta">{{ $model->slug === 'nvidia-streampetr' ? 'Queued AV scene inference' : (isset(config('maxine.models', [])[$model->slug]) ? 'Queued gRPC media processing' : ($model->slug === 'nvidia-cosmos3-nano' ? 'Queued image/video generation' : ($model->api_protocol === 'chat' ? 'Chat completions' : 'Specialized JSON request'))) }}</p></div><span class="status-pill {{ $model->last_test_status === 'success' ? 'success' : 'warning' }}">{{ $model->last_test_status === 'success' ? 'Verified live' : ($model->api_ready ? 'API configured · not verified' : 'Custom protocol required') }}</span></div>
  <p class="entity-meta">{{ $model->summary }}</p>
  <p class="entity-meta"><a href="{{ $model->catalog_url }}" target="_blank" rel="noopener noreferrer">NVIDIA model card</a> · Free Endpoint (catalog)</p>
  @if(isset($specialistModels[$model->slug]))
@@ -52,6 +52,9 @@
   <div class="field"><label for="ready-{{ $model->id }}">Inference integration</label><select id="ready-{{ $model->id }}" name="api_ready"><option value="0" @selected(!$model->api_ready)>Not verified</option><option value="1" @selected($model->api_ready)>Verified (JSON API)</option></select></div>
   <div class="field"><label for="model-field-{{ $model->id }}">Add model field to requests</label><select id="model-field-{{ $model->id }}" name="include_model"><option value="1" @selected($model->include_model)>Yes</option><option value="0" @selected(!$model->include_model)>No</option></select></div>
   <p class="entity-meta">Always visible to authenticated API clients. Provider-side access is verified separately.</p>
+  @if($model->slug === 'nvidia-streampetr')
+    <p class="entity-meta">Scene API: <code>POST /api/v1/openmindai/av/streampetr/jobs</code>, then poll and download a private ZIP. Accepts `scene-0103` and other `scene-####` identifiers. Requires NVIDIA provider access and queue worker.</p>
+  @endif
   @if(isset(config('maxine.models', [])[$model->slug]))
     <p class="entity-meta">Dedicated gRPC inference: <code>POST /api/v1/openmindai/maxine/{{ $model->slug }}/jobs</code> (multipart file) → status → private download. Requires the separately deployed Maxine worker and NVIDIA account access.</p>
   @endif
