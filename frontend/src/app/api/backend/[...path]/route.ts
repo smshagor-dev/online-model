@@ -91,7 +91,7 @@ async function proxy(
         size += value.byteLength;
         if (
           size >
-          (endpoint === "media" || endpoint === "live/input" || endpoint === "media/transcription"
+          (endpoint === "media" || endpoint === "media/image" || endpoint === "live/input" || endpoint === "media/transcription"
             ? 11_000_000
             : endpoint === "chat/stream" && nvidiaEnabled()
               ? 6_000_000 // one 4 MB image plus conversation metadata
