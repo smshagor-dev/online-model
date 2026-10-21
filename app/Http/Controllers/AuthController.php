@@ -153,7 +153,7 @@ class AuthController
         $user = User::where('email', $r->email)->whereNull('email_verified_at')->first();
         if ($user) {
             try {
-                $otp->send($user, 'registration');
+                $otp->send($user, 'registration', true);
             } catch (ValidationException $e) {
                 throw $e;
             } catch (\Throwable $e) {
