@@ -34,6 +34,7 @@ class DeveloperPortalTest extends TestCase
             ])->assertCreated()->assertJsonStructure(['api_key', 'base_url', 'expires_at']);
 
         $gatewayToken = $issued->json('api_key');
+        $this->app['auth']->forgetGuards();
         $this->withToken($gatewayToken)
             ->getJson('/api/v1/openmindai/models')
             ->assertOk();
