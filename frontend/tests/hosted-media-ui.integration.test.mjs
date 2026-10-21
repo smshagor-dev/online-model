@@ -41,10 +41,11 @@ test("generated files can be privately downloaded and previewed from media studi
   const api = read("app/api/backend/[...path]/route.ts");
   assert.match(studio, /application\/pdf/);
   assert.match(studio, /wordprocessingml/);
-  assert.match(library, /application\/pdf/);
+  assert.match(library, /DocumentPreview file=\{preview.file\}/);
+  assert.match(read("lib/preview-file.ts"), /application\/pdf/);
   assert.match(library, /"document_create"/);
   const inline = read("components/inline-media.tsx");
-  assert.match(inline, /Generated document/);
+  assert.match(inline, /DocumentPreview file=\{documentFile\}/);
   assert.match(inline, /application\/pdf/);
   assert.match(api, /application\/pdf/);
   assert.match(api, /application\/vnd\.openxmlformats-officedocument/);

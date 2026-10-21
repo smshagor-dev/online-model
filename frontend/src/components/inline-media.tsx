@@ -1,4 +1,6 @@
 "use client";
+import DocumentPreview from "./document-preview";
+import ResponseMarkdown from "./response-markdown";
 import { useEffect, useState } from "react";
 import ArtifactPreviews, { type Artifact } from "./artifact-previews";
 import { api } from "@/lib/api";
@@ -19,6 +21,7 @@ export default function InlineMedia({
     artifacts?: Artifact[];
   } | null>(null);
   const [error, setError] = useState("");
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
   useEffect(() => {
     const c = new AbortController();
@@ -56,6 +59,10 @@ export default function InlineMedia({
           if (!r.ok) throw new Error("Media unavailable.");
           const blob = await r.blob();
           if (!c.signal.aborted) {
+            if (["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/markdown", "text/plain", "application/msword"].includes(blob.type)) {
+              const ext = blob.type === "application/pdf" ? "pdf" : blob.type.includes("wordprocessingml") ? "docx" : blob.type === "application/msword" ? "doc" : "md";
+              setDocumentFile(new File([blob], `document.${ext}`, {type: blob.type}));
+            }
             u = URL.createObjectURL(blob);
             setUrl(u);
           }
@@ -83,9 +90,7 @@ export default function InlineMedia({
           />
         </a>
       )}
-      {url && task?.output_mime === "application/pdf" && (
-        <iframe title="Generated document" className="pdf-preview" src={url} />
-      )}
+      {documentFile && <DocumentPreview file={documentFile} />}
       {url && task?.output_mime === "audio/wav" && <audio controls src={url} />}{" "}
       {url && task?.output_mime === "video/mp4" && (
         <video className="media-preview" controls src={url} />
@@ -93,7 +98,7 @@ export default function InlineMedia({
       {!!task?.artifacts?.length && <ArtifactPreviews items={task.artifacts} />}
       {task?.result_text && (
         <>
-          <pre className="file-text-preview">{task.result_text}</pre>
+          <ResponseMarkdown content={task.result_text} />
           <button onClick={() => onText(task.result_text!)}>
             Use text in message
           </button>

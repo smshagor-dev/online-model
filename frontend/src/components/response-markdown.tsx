@@ -1,5 +1,6 @@
 "use client";
-import { useEffect } from "react";
+import { isValidElement, useEffect } from "react";
+import CodeBlock from "./code-block";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 export default function ResponseMarkdown({
@@ -22,7 +23,12 @@ export default function ResponseMarkdown({
               {children}
             </a>
           ),
-          pre: ({ children }) => <pre tabIndex={0}>{children}</pre>,
+          pre: ({ children }) => {
+            if (isValidElement<{children?: string; className?: string}>(children)) {
+              return <CodeBlock content={String(children.props.children ?? "").replace(/\n$/, "")} language={children.props.className?.replace("language-", "") || "code"} />;
+            }
+            return <pre tabIndex={0}>{children}</pre>;
+          },
         }}
       >
         {content}

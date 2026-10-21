@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import {
   nvidiaChat,
   nvidiaEnabled,
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 const cookieName = "openmindai_token";
 const publicPaths = new Set([
+  "guest/chat",
   "login",
   "login/verify-ip",
   "register",
@@ -28,7 +30,7 @@ const publicPaths = new Set([
 ]);
 const routes: Record<string, RegExp> = {
   GET: /^(developer\/keys|public-config|teams(?:\/\d+(?:\/(documents|threads)\/\d+)?)?|connectors|explore\/assistants(?:\/[a-f0-9-]{36})?|assistants|tasks(?:\/\d+\/runs)?|canvases\/\d+\/versions(?:\/\d+)?|conversations\/\d+\/branches|media(?:\/\d+(?:\/output)?)?|me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
-  POST: /^(developer\/keys|teams(?:\/\d+\/(preview|invites|documents|threads(?:\/\d+)?))?|team-invites\/\d+\/accept|connectors\/[a-zA-Z0-9_-]{1,80}\/(connect|tools|call)|live\/(start|input|stop)|explore\/assistants\/[a-f0-9-]{36}\/copy|assistants(?:\/\d+\/publish)?|tasks(?:\/\d+\/runs(?:\/\d+\/resume)?)?|me\/(avatar|email)|email\/change\/confirm|settings\/data|media(?:\/(?:image|transcription|speech|video|document_create))?|login(?:\/verify-ip)?|register|forgot-password|reset-password|email\/resend|email\/verify-code|logout|logout-all|web-search|chat(?:\/(stream|resume))?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
+  POST: /^(guest\/chat|developer\/keys|teams(?:\/\d+\/(preview|invites|documents|threads(?:\/\d+)?))?|team-invites\/\d+\/accept|connectors\/[a-zA-Z0-9_-]{1,80}\/(connect|tools|call)|live\/(start|input|stop)|explore\/assistants\/[a-f0-9-]{36}\/copy|assistants(?:\/\d+\/publish)?|tasks(?:\/\d+\/runs(?:\/\d+\/resume)?)?|me\/(avatar|email)|email\/change\/confirm|settings\/data|media(?:\/(?:image|transcription|speech|video|document_create))?|login(?:\/verify-ip)?|register|forgot-password|reset-password|email\/resend|email\/verify-code|logout|logout-all|web-search|chat(?:\/(stream|resume))?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
   PATCH: /^(me|preferences|conversations\/\d+)$/,
   PUT: /^(teams\/\d+\/(members|documents)\/\d+|assistants\/\d+|tasks\/\d+|me\/password|projects\/\d+|canvases\/\d+|memories\/\d+|conversations\/\d+\/messages\/\d+\/feedback)$/,
   DELETE:
@@ -202,9 +204,15 @@ async function proxy(
         request.headers.get("x-forwarded-for")
           ? { "X-Forwarded-For": request.headers.get("x-forwarded-for")! }
           : {}),
+        ...(endpoint === "guest/chat" && process.env.FRONTEND_CHAT_BRIDGE_KEY &&
+          (process.env.VERCEL === "1" || process.env.TRUST_PROXY_HEADERS === "true")
+          ? (() => {
+              const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "";
+              return { "X-Guest-IP": ip, "X-Guest-Signature": createHmac("sha256", process.env.FRONTEND_CHAT_BRIDGE_KEY!).update(ip).digest("hex") };
+            })() : {}),
         ...(token && !isPublic ? { Authorization: `Bearer ${token}` } : {}),
       },
-      signal: endpoint.startsWith("chat")
+      signal: endpoint.startsWith("chat") || endpoint === "guest/chat"
         ? request.signal
         : AbortSignal.timeout(30_000),
     });

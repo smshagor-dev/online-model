@@ -57,6 +57,7 @@ before(async () => {
         return res.end(
           JSON.stringify({ title: "Public snapshot", messages: [] }),
         );
+      if (req.url === "/api/v1/guest/chat") return res.end(JSON.stringify({content: "Guest fixture response", remaining: 4}));
       if (req.url === "/api/v1/chat")
         return res.end(
           JSON.stringify({
@@ -641,4 +642,21 @@ test("teams, approved connectors and live input remain authenticated and origin-
       ).status,
       204,
     );
+});
+
+test("guest chat works without a token, still rejects cross-origin requests and supports conversation URLs", async () => {
+  const r = await request("guest/chat", {method: "POST", headers: headers(), body: JSON.stringify({message: "Hello"})});
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).remaining, 4);
+  assert.equal(lastRequest.authorization, undefined);
+  const crossOrigin = await request("guest/chat", {method: "POST", headers: {"Content-Type": "application/json", Origin: "https://other.example"}, body: JSON.stringify({message: "Hello"})});
+  assert.equal(crossOrigin.status, 403);
+  const conversation = await fetch(`${origin}/c/7-example-chat`);
+  assert.equal(conversation.status, 200);
+  assert.match(await conversation.text(), /OpenMindAI/);
+});
+
+test("legacy document preview requires an authenticated same-origin request", async () => {
+  const response = await fetch(`${origin}/api/document-preview`, {method: "POST", headers: headers(), body: JSON.stringify({data: "eA=="})});
+  assert.equal(response.status, 401);
 });

@@ -14,6 +14,8 @@ class AdminSettings
         'registration_enabled' => '1',
         'registration_email_verification_enabled' => '0',
         'unusual_ip_verification_enabled' => '0',
+        'guest_chat_daily_limit' => '5',
+        'frontend_inference_route' => 'backend',
         'chat_daily_limit' => '200',
         'task_daily_limit' => '20',
     ];

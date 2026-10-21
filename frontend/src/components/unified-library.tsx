@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type Page } from "@/lib/api";
 import ArtifactPreviews, { type Artifact } from "./artifact-previews";
+import DocumentPreview from "./document-preview";
+import { documentFile } from "@/lib/preview-file";
 import Dialog from "./dialog";
 type FileItem = { id: number; name: string; bytes: number };
 type Media = {
@@ -31,6 +33,7 @@ export default function LibraryPanel({
     text?: string;
     url?: string;
     mime?: string;
+    file?: File;
     artifacts?: Artifact[];
   } | null>(null);
   const [revision, setRevision] = useState(0);
@@ -219,6 +222,7 @@ export default function LibraryPanel({
                             title: m.prompt || m.kind,
                             url: URL.createObjectURL(blob),
                             mime: m.output_mime,
+                            file: documentFile(blob, m.output_mime),
                           });
                       } else
                         setPreview({
@@ -291,9 +295,7 @@ export default function LibraryPanel({
               alt={preview.title}
             />
           )}{" "}
-          {preview.url && preview.mime === "application/pdf" && (
-            <iframe title="Generated PDF" className="pdf-preview" src={preview.url} />
-          )}
+          {preview.file && <DocumentPreview file={preview.file} />}
           {preview.url && preview.mime === "audio/wav" && (
             <audio controls src={preview.url} />
           )}{" "}

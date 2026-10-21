@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { api, type Page } from "@/lib/api";
 import { audioAsWavBase64 } from "@/lib/audio-file";
 import ArtifactPreviews, { type Artifact } from "./artifact-previews";
+import DocumentPreview from "./document-preview";
+import { documentFile } from "@/lib/preview-file";
 import Dialog from "./dialog";
 import ResponseMarkdown from "./response-markdown";
 
@@ -58,6 +60,7 @@ export default function MediaDialog({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [previewFile, setPreviewFile] = useState<File | undefined>();
   const [preview, setPreview] = useState("");
   const [revision, setRevision] = useState(0);
   const controller = useRef<AbortController | null>(null);
@@ -108,6 +111,7 @@ export default function MediaDialog({
   }, [page, revision]);
   useEffect(() => {
     const c = new AbortController();
+    setPreviewFile(undefined);
     let url = "";
     setPreview("");
     setArtifacts([]);
@@ -127,6 +131,7 @@ export default function MediaDialog({
             throw new Error("Unable to load this private result.");
           const blob = await response.blob();
           if (!c.signal.aborted) {
+            setPreviewFile(documentFile(blob, task.output_mime || blob.type));
             url = URL.createObjectURL(blob);
             setPreview(url);
           }
@@ -364,9 +369,7 @@ export default function MediaDialog({
             {preview && task.output_mime === "audio/wav" && (
               <audio controls src={preview} />
             )}
-            {preview && task.output_mime === "application/pdf" && (
-              <iframe title="Generated PDF" className="pdf-preview" src={preview} />
-            )}
+            {previewFile && <DocumentPreview file={previewFile} />}
             {preview && task.output_mime === "video/mp4" && (
               <video className="media-preview" controls src={preview} />
             )}

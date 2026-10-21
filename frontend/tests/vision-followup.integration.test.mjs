@@ -13,7 +13,7 @@ test("image remains available to the next prompt in the same chat", () => {
 test("user can remove image and chat switching discards transient bytes", () => {
   assert.match(workspace, /aria-label="Remove attached image"/);
   assert.match(workspace, /onClick=\{\(\) => setInlineImage\(null\)\}/);
-  assert.match(workspace, /function newChat\(\) \{[\s\S]{0,400}setInlineImage\(null\)/);
-  assert.match(workspace, /async function openChat\(id: number\) \{[\s\S]{0,1200}setInlineImage\(null\)/);
+  assert.match(workspace, /function newChat\(updateUrl = true\) \{[\s\S]{0,400}setInlineImage\(null\)/);
+  assert.match(workspace, /async function openChat\(id: number, fromRoute = false\) \{[\s\S]{0,1200}setInlineImage\(null\)/);
   assert.match(workspace, /const clearSession = useCallback\(\(\) => \{[\s\S]{0,700}setInlineImage\(null\)/);
 });

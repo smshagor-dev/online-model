@@ -69,12 +69,34 @@ export async function nvidiaChat(
     bridgeKey: process.env.FRONTEND_CHAT_BRIDGE_KEY || "",
     model: process.env.NVIDIA_MODEL || "nvidia/nemotron-3.5-lightning-30b-a3b",
   };
-  if (!config.apiKey || config.bridgeKey.length < 32)
+  const rawFetch = options.fetcher || fetch;
+  let inferenceRoute = "direct";
+  if (!options.config) {
+    try {
+      const response = await rawFetch(base.replace(/\/$/, "") + "/public-config", {
+        cache: "no-store", redirect: "error", signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
+      });
+      if (!response.ok) throw new Error("Configuration unavailable");
+      // Older backends have no routing setting; preserve their existing server-direct path during rollout.
+      inferenceRoute = (await response.json()).frontend_inference_route === "backend" ? "backend" : "direct";
+    } catch {
+      return Response.json({message: "Cannot load chat routing settings."}, {status: 503});
+    }
+  }
+  if ((inferenceRoute === "direct" && !config.apiKey) || config.bridgeKey.length < 32)
     return Response.json(
       { message: "Hosted chat is not configured on the frontend server." },
       { status: 503 },
     );
-  const fetcher = options.fetcher || fetch;
+  const fetcher: typeof fetch = (url, init) => {
+    if (inferenceRoute === "backend" && String(url) === endpoint) {
+      return rawFetch(base.replace(/\/$/, "") + "/chat/provider", {
+        ...init, headers: {"Content-Type": "application/json", Accept: new Headers(init?.headers).get("Accept") || "application/json",
+          Authorization: "Bearer " + token, "X-Chat-Bridge-Key": config.bridgeKey},
+      });
+    }
+    return rawFetch(url, init);
+  };
   const input = JSON.parse(body);
   let inlineImage: ReturnType<typeof parseInlineImage>;
   try {
@@ -145,7 +167,7 @@ export async function nvidiaChat(
   }
   if (!input.resume_message_id && typeof input.message === "string") {
     const available = permittedSlugs || [];
-    const routing = serverRouterConfig(config.apiKey, config.model);
+    const routing = serverRouterConfig(inferenceRoute === "backend" ? "backend-managed" : config.apiKey, config.model);
     if (isAuto && permittedSlugs) {
       const fast = available.includes("openmindai-lite") ? NVIDIA_HOSTED_MODELS[2].provider :
         available.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : NVIDIA_HOSTED_MODELS[1].provider;

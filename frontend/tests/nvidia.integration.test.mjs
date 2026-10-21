@@ -11,6 +11,8 @@ function fixture({
   truncated = false,
   saveFails = false,
   automaticMemory = false,
+  providerUrl = "https://integrate.api.nvidia.com/v1/chat/completions",
+  providerAuthorization = "Bearer secret-nvidia-key",
 } = {}) {
   const calls = [];
   const fetcher = async (url, options) => {
@@ -35,8 +37,8 @@ function fixture({
       );
     if (url.endsWith("/checkpoint")) return Response.json({ stored: true });
     if (url.endsWith("/status")) return Response.json({ cancelled: false });
-    assert.equal(url, "https://integrate.api.nvidia.com/v1/chat/completions");
-    assert.equal(options.headers.Authorization, "Bearer secret-nvidia-key");
+    assert.equal(url, providerUrl);
+    assert.equal(options.headers.Authorization, providerAuthorization);
     if (JSON.parse(options.body).stream === false)
       return Response.json({
         choices: [
@@ -69,6 +71,7 @@ test("production-mode hosted chat sends inference from Next.js and saves through
     process.env.FRONTEND_CHAT_BRIDGE_KEY = "k".repeat(32);
     const f = fixture();
     const fetcher = (url, options) => {
+      if (url.endsWith("/public-config")) return Promise.resolve(Response.json({frontend_inference_route: "direct"}));
       if (url.endsWith("/chat/hosted-models"))
         return Promise.resolve(Response.json({ data: [{ id: "openmindai-lite" }] }));
       return f.fetcher(url, options);
@@ -341,4 +344,31 @@ test("interrupted NVIDIA answer resumes durable context without creating another
   assert.equal(saved.status, "complete");
   assert.match(output, /"content":"Hello"/);
   assert.ok(!output.includes("PRIVATE CONTEXT"));
+});
+
+test("backend routing uses Laravel credentials and never requires a frontend provider key", async () => {
+  const oldKey = process.env.NVIDIA_API_KEY;
+  const oldBridge = process.env.FRONTEND_CHAT_BRIDGE_KEY;
+  try {
+    delete process.env.NVIDIA_API_KEY;
+    process.env.FRONTEND_CHAT_BRIDGE_KEY = "k".repeat(32);
+    const f = fixture({providerUrl: "https://backend/api/v1/chat/provider", providerAuthorization: "Bearer user-token"});
+    const result = await nvidiaChat(JSON.stringify({message: "Hi", model_id: -1}), "user-token", "https://backend/api/v1", new AbortController().signal, {
+      fetcher: (url, options) => {
+        if (url.endsWith("/public-config")) return Promise.resolve(Response.json({frontend_inference_route: "backend"}));
+        if (url.endsWith("/chat/hosted-models")) return Promise.resolve(Response.json({data: [{id: "openmindai-lite"}]}));
+        return f.fetcher(url, options);
+      },
+    });
+    const output = await result.text();
+    assert.match(output, /Hello/);
+    assert.match(output, /"saved":true/);
+    assert.equal(f.calls.some(call => call.url.includes("nvidia.com")), false);
+    const inference = f.calls.find(call => call.url.endsWith("/chat/provider"));
+    assert.equal(inference.options.headers["X-Chat-Bridge-Key"], "k".repeat(32));
+    assert.equal(f.calls.filter(call => call.url.endsWith("/finish")).length, 1);
+  } finally {
+    if (oldKey === undefined) delete process.env.NVIDIA_API_KEY; else process.env.NVIDIA_API_KEY = oldKey;
+    if (oldBridge === undefined) delete process.env.FRONTEND_CHAT_BRIDGE_KEY; else process.env.FRONTEND_CHAT_BRIDGE_KEY = oldBridge;
+  }
 });

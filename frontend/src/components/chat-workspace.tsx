@@ -112,6 +112,17 @@ const suggestions = [
   },
 ];
 export default function ChatWorkspace() {
+  const [guestRemaining, setGuestRemaining] = useState<number | null>(null);
+  const guestSlug = useRef<string | null>(null);
+  const restoredRoute = useRef(false);
+  const routeHandler = useRef<() => void>(() => {});
+  function chatUrl(id: number, title: string) {
+    const label = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "chat";
+    return `/c/${id}-${label}`;
+  }
+  function changeUrl(path: string) {
+    if (window.location.pathname !== path) window.history.pushState(null, "", path);
+  }
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [toolsOpen, setToolsOpen] = useState<string | null>(null);
@@ -221,6 +232,8 @@ export default function ChatWorkspace() {
     setCanvasInitial(null);
     setToolsChat(null);
     setUser(null);
+    guestSlug.current = null;
+    if (window.location.pathname !== "/") window.history.replaceState(null, "", "/");
     setPreferences(null);
     delete document.documentElement.dataset.accent;
     delete document.documentElement.dataset.textSize;
@@ -486,11 +499,13 @@ export default function ChatWorkspace() {
     setReadAloud(typeof speechSynthesis !== "undefined");
   }, []);
   const filteredHistory = conversations;
-  function newChat() {
-    if (busy) return;
+  function newChat(updateUrl = true) {
+    if (busy && updateUrl) return;
     chatRequest.current?.abort();
     setLoadingChat(false);
     setConversationId(null);
+    guestSlug.current = null;
+    if (updateUrl) changeUrl("/");
     setAssistant(null);
     setMediaMode("chat");
     setInlineImage(null);
@@ -504,8 +519,8 @@ export default function ChatWorkspace() {
     setSidebarOpen(false);
     inputRef.current?.focus();
   }
-  async function openChat(id: number) {
-    if (busy || deleteId) return;
+  async function openChat(id: number, fromRoute = false) {
+    if ((!fromRoute && busy) || deleteId) return;
     chatRequest.current?.abort();
     const controller = new AbortController();
     chatRequest.current = controller;
@@ -528,6 +543,7 @@ export default function ChatWorkspace() {
         );
       if (controller.signal.aborted) return;
       setConversationId(id);
+      changeUrl(chatUrl(id, result.conversation.title));
       setInlineMedia([]);
       setInlineImage(null);
       setAssistant(
@@ -548,6 +564,43 @@ export default function ChatWorkspace() {
       if (!controller.signal.aborted) setLoadingChat(false);
     }
   }
+  routeHandler.current = () => {
+    generationRef.current?.abort();
+    generationRef.current = null;
+    setBusy(false);
+    setInlineMedia([]); setInlineImage(null); setAttachments([]); setDraft("");
+    const slug = /^\/c\/([^/]+)\/?$/.exec(window.location.pathname)?.[1];
+    if (!slug) { newChat(false); return; }
+    if (slug.startsWith("guest-")) {
+      if (user) { changeUrl("/"); setMessages([]); return; }
+      guestSlug.current = slug;
+      try {
+        const saved = JSON.parse(localStorage.getItem(`openmindai.guest.v1.${slug}`) || "[]");
+        setMessages(Array.isArray(saved) ? saved.filter((m) => ["user", "assistant"].includes(m.role) && typeof m.content === "string").slice(-40) : []);
+      } catch { setError("This browser could not restore the guest chat."); }
+      return;
+    }
+    const id = /^(\d+)-/.exec(slug)?.[1];
+    if (id && user) void openChat(Number(id), true);
+    else if (!user) setAuthOpen(true);
+    else setError("Conversation not found.");
+  };
+  useEffect(() => {
+    if (initializing) return;
+    if (!restoredRoute.current) {
+      restoredRoute.current = true;
+      routeHandler.current();
+    }
+    const restore = () => routeHandler.current();
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, [initializing, user?.id]);
+  useEffect(() => {
+    if (!user && guestSlug.current && messages.length) {
+      try { localStorage.setItem(`openmindai.guest.v1.${guestSlug.current}`, JSON.stringify(messages.slice(-40))); }
+      catch { /* Browser storage may be disabled; the active chat stays available. */ }
+    }
+  }, [messages, user]);
   async function olderMessages() {
     if (!conversationId || loadingChat || busy) return;
     chatRequest.current?.abort();
@@ -586,7 +639,29 @@ export default function ChatWorkspace() {
       (!override && inlineImage ? "Describe this image." : "");
     if (!text || busy || loadingChat || initializing) return;
     if (!user) {
-      setAuthOpen(true);
+      const controller = new AbortController();
+      generationRef.current = controller;
+      const history = messages;
+      const slug = guestSlug.current || `guest-${crypto.randomUUID()}`;
+      guestSlug.current = slug;
+      changeUrl(`/c/${slug}`);
+      setMessages([...history, {role: "user", content: text}]);
+      setDraft(""); setBusy(true); setError("");
+      try {
+        const response = await api<{content: string; remaining: number}>("guest/chat", "POST", {
+          message: text, history: history.slice(-4).map(({role, content}) => ({role, content: content.slice(0, 4000)})),
+        }, controller.signal);
+        if (controller.signal.aborted) return;
+        setMessages([...history, {role: "user", content: text}, {role: "assistant", content: response.content, status: "complete"}]);
+        setGuestRemaining(response.remaining);
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        setMessages(history); setDraft(text);
+        if (e instanceof ApiError && [403, 429].includes(e.status)) setAuthOpen(true);
+        report(e);
+      } finally {
+        if (!controller.signal.aborted) setBusy(false);
+      }
       return;
     }
     if (mediaMode !== "chat" && !override && !inlineImage) {
@@ -671,6 +746,7 @@ export default function ChatWorkspace() {
             : {}),
         },
         (event, data) => {
+          if (controller.signal.aborted) return;
           if (event === "media" && Number.isSafeInteger(data.id) && Number(data.id) > 0) {
             // A media task is stored in the existing private Library, not as a text chat turn.
             autoMedia = true;
@@ -681,6 +757,7 @@ export default function ChatWorkspace() {
             receivedMeta = true;
             const cid = data.conversation_id as number | null;
             setConversationId(cid);
+            if (cid && cid !== id) changeUrl(chatUrl(cid, text));
             activeStream.current = {
               conversation_id: cid,
               message_id: data.message_id as number | null,
@@ -777,8 +854,9 @@ export default function ChatWorkspace() {
         controller.signal,
       );
       if (!override?.resumeId) setAttachments([]);
-      if (!temporary) void refreshHistory().catch(report);
+      if (!controller.signal.aborted && !temporary) void refreshHistory().catch(report);
     } catch (e) {
+      if (generationRef.current !== controller) return;
       if ((e as Error).name === "AbortError") {
         setMessages((previous) =>
           previous.map((m, i) =>
@@ -793,10 +871,12 @@ export default function ChatWorkspace() {
         report(e);
       }
     } finally {
-      setBusy(false);
-      generationRef.current = null;
-      activeStream.current = null;
-      inputRef.current?.focus();
+      if (generationRef.current === controller) {
+        setBusy(false);
+        generationRef.current = null;
+        activeStream.current = null;
+        inputRef.current?.focus();
+      }
     }
   }
   async function stop() {
@@ -829,6 +909,7 @@ export default function ChatWorkspace() {
         message_id: target.id,
       });
       setConversationId(result.conversation_id);
+      changeUrl(chatUrl(result.conversation_id, content));
       await send(undefined, {
         text: content,
         conversationId: result.conversation_id,
@@ -947,7 +1028,7 @@ export default function ChatWorkspace() {
       return;
     }
     if (
-      /\.(pdf|docx|png|jpe?g|webp|wav|mp3|flac|ogg|webm)$/i.test(file.name) ||
+      /\.(pdf|docx?|md|markdown|txt|csv|png|jpe?g|webp|wav|mp3|flac|ogg|webm)$/i.test(file.name) ||
       /^(image|audio)\//.test(file.type)
     )
       setFilePreview(file);
@@ -1047,7 +1128,7 @@ export default function ChatWorkspace() {
             <button
               className="brand-symbol"
               aria-label="OpenMindAI: start a new chat"
-              onClick={newChat}
+              onClick={() => newChat()}
               disabled={busy}
             >
               <Image src="/openmindai-logo.png" alt="" width={30} height={30} />
@@ -1072,7 +1153,7 @@ export default function ChatWorkspace() {
           <nav className="sidebar-navigation" aria-label="Main navigation">
             <button
               className="sidebar-action new-chat-action"
-              onClick={newChat}
+              onClick={() => newChat()}
               disabled={busy}
             >
               <SquarePen size={19} />
@@ -1408,7 +1489,7 @@ export default function ChatWorkspace() {
           <div className="topbar-right">
             <button
               className="icon-button topbar-new-chat"
-              onClick={newChat}
+              onClick={() => newChat()}
               disabled={busy}
               aria-label="Start a new conversation"
               title="New chat (Ctrl+K)"
@@ -1451,6 +1532,7 @@ export default function ChatWorkspace() {
               <span className="status-dot" />
               Your models. Your space.
             </span>
+            {!user && guestRemaining !== null && <small className="muted">{guestRemaining} guest messages remaining</small>}
             {!user && (
               <button
                 className="login-pill"
@@ -2071,6 +2153,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
       {filePreview && user && (
         <FilePreview
           file={filePreview}
+          onAttach={(file) => {setFilePreview(null); void upload(file);}}
           onClose={() => setFilePreview(null)}
           onTask={(id) => setInlineMedia((old) => [...old, id])}
         />
@@ -2144,6 +2227,9 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
         <AuthDialog
           onClose={() => setAuthOpen(false)}
           onLogin={(account) => {
+            if (guestSlug.current) {
+              guestSlug.current = null; setMessages([]); changeUrl("/");
+            } else if (window.location.pathname.startsWith("/c/")) restoredRoute.current = false;
             setUser(account);
             setAuthOpen(false);
             setError("");

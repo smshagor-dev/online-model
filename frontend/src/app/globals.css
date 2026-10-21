@@ -2144,3 +2144,23 @@ html[data-theme="light"] .shared-message.user {
 .collaboration-panel article, .tool-review { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; overflow-wrap: anywhere; }
 .connector-output { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 26rem; overflow: auto; font-size: .82rem; }
 .live-camera { width: 100%; max-height: 24rem; object-fit: contain; background: #111; border-radius: 12px; }
+
+.response-code { min-width: 0; margin: 1rem 0; overflow: hidden; border: 1px solid var(--border, #444); border-radius: 12px; }
+.code-toolbar, .preview-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: var(--panel); }
+.code-toolbar > div, .preview-actions { display: flex; gap: 12px; }
+.code-toolbar button, .preview-actions button { padding: 5px 9px; border: 1px solid var(--border, #555); border-radius: 6px; color: inherit; background: transparent; cursor: pointer; }
+.response-code .code-preview { margin: 0; border: 0; border-radius: 0; max-height: 520px; overflow: auto; }
+.code-live-preview { width: 100%; height: min(65vh, 720px); border: 1px solid #ccc; background: white; }
+.document-preview { max-height: 70vh; overflow: auto; padding: 12px; }
+.document-preview .file-text-preview { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .code-toolbar { gap: 6px; padding: 8px; } .preview-actions { flex-wrap: wrap; } }
+
+.hljs-keyword, .hljs-selector-tag, .hljs-literal { color: #8a3bb1; }
+.hljs-string, .hljs-attr, .hljs-template-variable { color: #246b3c; }
+.hljs-number, .hljs-built_in { color: #956021; }
+.hljs-title, .hljs-name, .hljs-tag { color: #245aa5; }
+.hljs-comment { color: var(--muted); }
+html[data-theme="dark"] .hljs-keyword, html[data-theme="dark"] .hljs-literal { color: #d7a0f5; }
+html[data-theme="dark"] .hljs-string, html[data-theme="dark"] .hljs-attr { color: #96d5a7; }
+html[data-theme="dark"] .hljs-number, html[data-theme="dark"] .hljs-built_in { color: #edc28b; }
+html[data-theme="dark"] .hljs-title, html[data-theme="dark"] .hljs-name, html[data-theme="dark"] .hljs-tag { color: #93c5fd; }
