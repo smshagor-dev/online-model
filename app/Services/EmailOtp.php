@@ -6,16 +6,22 @@ use App\Models\User;
 use App\Notifications\EmailOtpCode;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
 class EmailOtp
 {
-    public function send(User $user, string $purpose): void
+    public function send(User $user, string $purpose, bool $resend = false): void
     {
         $email = mb_strtolower(trim($user->email));
+        $limitKey = 'otp:resend:'.hash('sha256', $email.'|'.$purpose);
+        if ($resend && RateLimiter::tooManyAttempts($limitKey, 5)) {
+            $wait = RateLimiter::availableIn($limitKey);
+            throw ValidationException::withMessages(['email' => 'You have reached the limit of 5 resend requests per hour. Try again in '.max(1, (int) ceil($wait / 60)).' minute(s).']);
+        }
         $existing = DB::table('email_otp_challenges')->where('email', $email)->where('purpose', $purpose)->first();
-        if ($existing && \Illuminate\Support\Carbon::parse($existing->updated_at)->greaterThan(now()->subSeconds(60))) {
-            throw ValidationException::withMessages(['email' => 'Wait 60 seconds before requesting another code.']);
+        if ($existing && \Illuminate\Support\Carbon::parse($existing->updated_at)->greaterThan(now()->subSeconds(120))) {
+            throw ValidationException::withMessages(['email' => 'Wait 2 minutes before requesting another code.']);
         }
         $code = (string) random_int(100000, 999999);
         DB::table('email_otp_challenges')->updateOrInsert(
@@ -24,6 +30,7 @@ class EmailOtp
         );
         try {
             $user->notify(new EmailOtpCode($code, $purpose));
+            if ($resend) RateLimiter::hit($limitKey, 3600);
         } catch (\Throwable $exception) {
             DB::table('email_otp_challenges')->where('email', $email)->where('purpose', $purpose)->delete();
             throw $exception;
