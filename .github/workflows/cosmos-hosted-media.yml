@@ -4,6 +4,8 @@ on:
     paths:
       - 'app/Http/Controllers/NvidiaCosmosController.php'
       - 'app/Jobs/RunCosmosGeneration.php'
+      - 'app/Services/HostedCodeAgents.php'
+      - 'app/Http/Controllers/OpenMindAiGatewayController.php'
       - 'routes/api.php'
       - 'routes/console.php'
       - 'database/migrations/2026_10_21_000009_cosmos_generations.php'
@@ -14,6 +16,8 @@ on:
     paths:
       - 'app/Http/Controllers/NvidiaCosmosController.php'
       - 'app/Jobs/RunCosmosGeneration.php'
+      - 'app/Services/HostedCodeAgents.php'
+      - 'app/Http/Controllers/OpenMindAiGatewayController.php'
       - 'routes/api.php'
       - 'routes/console.php'
       - 'database/migrations/2026_10_21_000009_cosmos_generations.php'
