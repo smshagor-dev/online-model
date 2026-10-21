@@ -71,6 +71,12 @@ class CloudImageController
                 abort_if($row->requests + $count > config('media.image_daily_limit'), 429, 'Daily image request limit reached.');
                 $pending = (clone $tasks)->whereIn('status', ['queued', 'running'])->count();
                 abort_if($pending + $count > 4, 429, 'Too many active image requests.');
+                $month = app(\App\Services\ApiCreditUsage::class)->monthStart();
+                $usedCredits = (int) DB::table('api_credit_usage')->where('user_id', $user->id)
+                    ->where('created_at', '>=', $month)->sum('credits');
+                abort_if($user->monthly_credit_limit !== null
+                    && $usedCredits + $pending + $count > $user->monthly_credit_limit,
+                    429, 'Your remaining monthly credits are insufficient for this image batch.');
                 abort_if((clone $tasks)->sum('bytes') + ($pending + $count) * 25000000
                     > config('media.storage_bytes'), 422, 'Media storage quota reached.');
                 $ids = [];
