@@ -14,7 +14,7 @@ class MediaController
 {
     public function index(Request $r)
     {
-        $r->validate(['q' => 'nullable|string|max:100', 'kind' => 'nullable|in:image,vision,document,transcription,speech,video,code']);
+        $r->validate(['q' => 'nullable|string|max:100', 'kind' => 'nullable|in:image,vision,document,document_create,transcription,speech,video,code']);
         $query = MediaTask::where('user_id', $r->user()->id);
         if ($r->filled('q')) {
             $query->where('prompt', 'like', '%'.$r->query('q').'%');
