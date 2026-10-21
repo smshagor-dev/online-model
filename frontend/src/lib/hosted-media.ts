@@ -147,12 +147,24 @@ export async function hostedMediaRequest(
   let taskId: number | null = null;
   try {
     const begin = await bridge("media/hosted/task/begin", { kind: job.kind, prompt: job.prompt, provider_model: providerModel });
-    if (!begin.ok) throw new WorkError(begin.status === 429
-      ? "Daily media request limit reached."
-      : "Cannot start a media task.", begin.status === 429 ? 429 : 503);
+    if (!begin.ok) {
+      const status = begin.status === 401 ? 401 : begin.status === 403 ? 403 :
+        begin.status === 422 ? 422 : begin.status === 429 ? 429 : 503;
+      throw new WorkError(
+        status === 401 ? "Your session expired. Please sign in again." :
+        status === 403 ? "You do not have access to this media task." :
+        status === 422 ? "This media request was rejected." :
+        status === 429 ? "Daily media request limit reached." :
+        "Cannot start a media task.",
+        status,
+      );
+    }
     const task = await begin.json();
     if (!Number.isSafeInteger(task?.id) || task.id < 1) throw new WorkError("Invalid media task.");
     taskId = task.id;
+    // An abandoned browser request must not begin costly provider inference.
+    // Keep the cleanup bridge independent of this signal so it can mark failure.
+    if (signal.aborted) throw new WorkError("Media request was cancelled.", 499);
     let completed: Record<string, string>;
     if (job.kind === "transcription") {
       const form = new FormData();
@@ -205,6 +217,7 @@ export async function hostedMediaRequest(
       completed = { data: raw.toString("base64"), mime: job.format === "docx"
         ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/pdf" };
     }
+    if (signal.aborted) throw new WorkError("Media request was cancelled.", 499);
     const saved = await bridge("media/" + taskId + "/hosted/task/complete", { ...completed, provider_model: providerModel }, 45000);
     if (!saved.ok) throw new WorkError("Media created but could not be saved.");
     const result = await saved.json();
@@ -213,6 +226,8 @@ export async function hostedMediaRequest(
   } catch (error) {
     if (taskId) { try { await bridge("media/" + taskId + "/hosted/task/fail", {}, 12000); } catch {} }
     const failure = error instanceof WorkError ? error : new WorkError("Media generation could not be completed.");
-    return Response.json({ message: failure.message, ...(taskId ? { task_id: taskId } : {}) }, { status: failure.status });
+    return Response.json({ message: failure.message, ...(taskId ? { task_id: taskId } : {}) }, {
+      status: failure.status, headers: { "Cache-Control": "no-store" },
+    });
   }
 }
