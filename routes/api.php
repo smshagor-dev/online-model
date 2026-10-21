@@ -210,7 +210,7 @@ Route::prefix('v1')->group(function () {
             Route::post('2fa/recovery-codes', [AccountController::class, 'recovery']);
         });
         Route::get('models', [ChatController::class, 'models']);
-        Route::get('chat/hosted-models', fn (HostedCodeAgents $agents) => response()->json(['data' => $agents->enabled()->whereIn('slug', ['openmindai-lite', 'openmindai-super', 'openmindai-ultra'])->map(fn ($model) => ['id' => $model->slug])->values()->all()])->header('Cache-Control', 'no-store'));
+        Route::get('chat/hosted-models', fn (HostedCodeAgents $agents) => response()->json(['data' => $agents->enabled()->map(fn ($model) => ['id' => $model->slug, 'name' => $model->name, 'provider_model' => $model->provider_model])->values()->all()])->header('Cache-Control', 'no-store'));
         Route::post('chat', [ChatController::class, 'send'])->middleware('throttle:chat');
         Route::get('conversations', [ChatController::class, 'index']);
         Route::get('conversations/{id}', [ChatController::class, 'show']);
