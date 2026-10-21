@@ -61,7 +61,7 @@ async function proxy(
       /^explore\/assistants(?:\/[a-f0-9-]{36})?$/.test(endpoint));
   if (!token && !isPublic)
     return NextResponse.json({ message: "Please sign in." }, { status: 401 });
-  const base = process.env.LARAVEL_API_URL;
+  const base = process.env.LARAVEL_API_URL || "https://cloud.openmindai.org/api/v1";
   if (!base)
     return NextResponse.json(
       { message: "The backend connection has not been configured." },
@@ -243,7 +243,7 @@ async function proxy(
         );
       }
     }
-    if (endpoint === "capabilities" && upstream.ok && (hostedImageEnabled() || hostedMediaEnabled())) {
+    if (endpoint === "capabilities" && upstream.ok && data.hosted_inference_enabled === true && (hostedImageEnabled() || hostedMediaEnabled())) {
       const advertised = Array.isArray(data.media)
         ? data.media.filter((item): item is string => typeof item === "string")
         : [];
