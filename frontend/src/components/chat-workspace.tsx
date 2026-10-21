@@ -41,6 +41,7 @@ import {
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import TypingIndicator from "./typing-indicator";
+import ModelPicker from "./model-picker";
 import Dialog from "./dialog";
 import WelcomeToolsMenu, { type WelcomeToolAction } from "./welcome-tools-menu";
 import BrowserTabLinksDialog from "./browser-tab-links-dialog";
@@ -2016,20 +2017,8 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                 </button>
               )}
               {models.length > 1 && mediaMode === "chat" && (
-                <label className="composer-model-select" style={{display:"inline-flex", alignItems:"center", gap:6, maxWidth:"45%"}}>
-                  <span className="sr-only">OpenMindAI model</span>
-                  <select
-                    aria-label="OpenMindAI model"
-                    value={modelId ?? ""}
-                    onChange={(event) => setModelId(Number(event.target.value))}
-                    disabled={busy || loadingChat || modelsLoading}
-                    style={{maxWidth:"100%", padding:"5px 8px", borderRadius:8, fontSize:12, background:"transparent", color:"inherit"}}
-                  >
-                    {models.map((model) => (
-                      <option key={model.id} value={model.id}>{model.name}</option>
-                    ))}
-                  </select>
-                </label>
+                <ModelPicker models={models} value={modelId} onChange={setModelId}
+                  disabled={busy || loadingChat || modelsLoading} />
               )}
               {(webSearch || mediaMode !== "chat") && (
                 <span className="composer-active-mode">
