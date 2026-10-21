@@ -21,8 +21,8 @@ return [
         ],
         'nvidia-3d-body-pose' => [
             'mime' => 'video/mp4', 'extension' => 'mp4',
-            'max_bytes' => 20000000, 'output_mime' => 'application/vnd.apache.arrow.file',
-            'output_extension' => 'arrow',
+            'max_bytes' => 20000000, 'output_mime' => 'application/x-ndjson',
+            'output_extension' => 'json',
         ],
     ],
 ];

@@ -46,3 +46,21 @@ def test_arbitrary_model_and_wrong_mime_fail():
             raise AssertionError("WAV passed as video")
         except ValueError:
             pass
+
+
+def test_body_pose_uses_explicit_bbox_and_json_lines():
+    with tempfile.TemporaryDirectory() as directory:
+        root = pathlib.Path(directory)
+        script = root / SPECS["nvidia-3d-body-pose"]["script"]
+        script.parent.mkdir(parents=True, exist_ok=True)
+        script.write_text("pass\n")
+        video = b"\x00\x00\x00\x18ftypisom" + b"x" * 20
+        with patch("runtime.maxine.server.subprocess.run") as execute:
+            def finish(args, **kwargs):
+                assert "--bbox-input" in args
+                pathlib.Path(args[args.index("--output") + 1]).write_bytes(b'{"frame":0,"poses":[]}\n')
+            execute.side_effect = finish
+            mime, output = run_model("nvidia-3d-body-pose", video,
+                root=root, api_key="test-provider-key", boxes=b"1\n0 0 1 2 3 4\n")
+            assert mime == "application/x-ndjson"
+            assert b'"frame":0' in output

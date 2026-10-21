@@ -44,13 +44,17 @@ class RunMaxineInference implements ShouldQueue
             $key = (string) config('maxine.worker_key');
             abort_unless(strlen($key) >= 32, 503, 'Maxine worker unavailable.');
             $input = Storage::disk('local')->get($job->input_path);
+            $data = ['model' => $job->model, 'data' => base64_encode($input)];
+            if ($job->model === 'nvidia-3d-body-pose') {
+                if (! $job->aux_path || ! Storage::disk('local')->exists($job->aux_path)) {
+                    throw new \RuntimeException('missing_tracking_annotations');
+                }
+                $data['bbox'] = base64_encode(Storage::disk('local')->get($job->aux_path));
+            }
             $response = Http::withToken($key)->acceptJson()
                 ->connectTimeout(10)->timeout(config('maxine.timeout', 840))
                 ->withOptions(['allow_redirects' => false])
-                ->post($url.'/infer', [
-                    'model' => $job->model,
-                    'data' => base64_encode($input),
-                ]);
+                ->post($url.'/infer', $data);
             if (!$response->ok() || strlen($response->body()) > 35000000) {
                 throw new \RuntimeException('upstream');
             }
@@ -64,8 +68,15 @@ class RunMaxineInference implements ShouldQueue
                 strlen($binary) > config('maxine.max_output_bytes')) {
                 throw new \RuntimeException('invalid_output');
             }
-            if ($job->model !== 'nvidia-3d-body-pose' &&
-                !(substr($binary, 0, 4) === 'RIFF' && substr($binary, 8, 4) === 'WAVE')) {
+            if ($job->model === 'nvidia-3d-body-pose') {
+                $records = array_filter(explode("\n", trim($binary)));
+                if (!$records || count($records) > 120000) {
+                    throw new \RuntimeException('invalid_pose_json');
+                }
+                foreach ($records as $record) {
+                    json_decode($record, true, 64, JSON_THROW_ON_ERROR);
+                }
+            } elseif (!(substr($binary, 0, 4) === 'RIFF' && substr($binary, 8, 4) === 'WAVE')) {
                 throw new \RuntimeException('invalid_wave');
             }
             $outputPath = 'maxine/'.$job->user_id.'/'.$job->id.'.'.$info['output_extension'];
@@ -91,7 +102,7 @@ class RunMaxineInference implements ShouldQueue
             }
             $this->failed($e);
         } finally {
-            Storage::disk('local')->delete($job->input_path);
+            Storage::disk('local')->delete(array_filter([$job->input_path, $job->aux_path]));
         }
     }
 
@@ -99,7 +110,7 @@ class RunMaxineInference implements ShouldQueue
     {
         $job = DB::table('maxine_jobs')->where('id', $this->jobId)->first();
         if ($job && in_array($job->status, ['queued', 'running'], true)) {
-            Storage::disk('local')->delete($job->input_path);
+            Storage::disk('local')->delete(array_filter([$job->input_path, $job->aux_path]));
             DB::table('maxine_jobs')->where('id', $job->id)->update([
                 'status' => 'failed', 'error_code' => 'inference_unavailable',
                 'updated_at' => now(),

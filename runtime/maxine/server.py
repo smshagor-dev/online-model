@@ -45,15 +45,15 @@ SPECS = {
         "function": "254b3621-bb66-4b7b-9c89-621c352b4d91",
         "input_option": "--video-input",
         "input_ext": ".mp4",
-        "output_ext": ".arrow",
-        "mime": "application/vnd.apache.arrow.file",
+        "output_ext": ".json",
+        "mime": "application/x-ndjson",
         "max_bytes": 20000000,
         "extra": [],
     },
 }
 
 
-def run_model(model: str, payload: bytes, *, root: Path, api_key: str) -> tuple[str, bytes]:
+def run_model(model: str, payload: bytes, *, root: Path, api_key: str, boxes: bytes | None = None) -> tuple[str, bytes]:
     spec = SPECS.get(model)
     if spec is None:
         raise ValueError("Unknown model")
@@ -75,6 +75,12 @@ def run_model(model: str, payload: bytes, *, root: Path, api_key: str) -> tuple[
         incoming = Path(temp) / ("input" + spec["input_ext"])
         outgoing = Path(temp) / ("output" + spec["output_ext"])
         incoming.write_bytes(payload)
+        bbox_path = None
+        if model == "nvidia-3d-body-pose":
+            if not boxes or len(boxes) > 1048576:
+                raise ValueError("Tracked bounding-box annotations required")
+            bbox_path = Path(temp) / "bbox.txt"
+            bbox_path.write_bytes(boxes)
         cmd = [
             sys.executable,
             str(script),
@@ -87,6 +93,8 @@ def run_model(model: str, payload: bytes, *, root: Path, api_key: str) -> tuple[
             "--output", str(outgoing),
             *spec["extra"],
         ]
+        if bbox_path:
+            cmd += ["--bbox-input", str(bbox_path)]
         try:
             subprocess.run(
                 cmd, check=True, stdout=subprocess.DEVNULL,
@@ -102,6 +110,14 @@ def run_model(model: str, payload: bytes, *, root: Path, api_key: str) -> tuple[
             raise RuntimeError("Invalid NVIDIA output length")
         if spec["mime"] == "audio/wav" and (result[:4] != b"RIFF" or result[8:12] != b"WAVE"):
             raise RuntimeError("Invalid output WAV structure")
+        if model == "nvidia-3d-body-pose":
+            import json
+            try:
+                records = [json.loads(line) for line in result.decode("utf-8").splitlines() if line.strip()]
+                if not records:
+                    raise ValueError("Empty pose output")
+            except (ValueError, UnicodeError) as exc:
+                raise RuntimeError("Invalid pose JSON Lines output") from exc
         return spec["mime"], result
 
 
@@ -127,9 +143,15 @@ async def infer(request: Request, authorization: str | None = Header(default=Non
         if not isinstance(encoded, str) or len(encoded) > 4 * ((spec["max_bytes"] + 2) // 3):
             raise ValueError("Input too large")
         binary = base64.b64decode(encoded, validate=True)
+        boxes = None
+        if model == "nvidia-3d-body-pose":
+            raw_boxes = data.get("bbox")
+            if not isinstance(raw_boxes, str) or len(raw_boxes) > 1500000:
+                raise ValueError("Bounding-box file required")
+            boxes = base64.b64decode(raw_boxes, validate=True)
         output_mime, output_bytes = run_model(
             model, binary, root=Path(os.environ.get("NVIDIA_NIM_CLIENTS_ROOT", "/opt/nim-clients")),
-            api_key=os.environ.get("NVIDIA_API_KEY", ""),
+            api_key=os.environ.get("NVIDIA_API_KEY", ""), boxes=boxes,
         )
     except (ValueError, KeyError, TypeError, binascii.Error):
         raise HTTPException(status_code=422, detail="Invalid media request")

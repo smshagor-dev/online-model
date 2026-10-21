@@ -38,6 +38,17 @@ class NvidiaMaxineController
         abort_unless($file && $file->isValid(), 422, 'Invalid uploaded file.');
         $bytes = $file->get();
         abort_if(strlen($bytes) > $info['max_bytes'], 413, 'Input exceeds this model limit.');
+        $bboxBytes = null;
+        if ($slug === 'nvidia-3d-body-pose') {
+            $request->validate(['bbox_file' => 'required|file|max:1024']);
+            $bboxBytes = $request->file('bbox_file')->get();
+            $lines = preg_split('/\\r?\\n/', trim($bboxBytes));
+            abort_unless(strlen($bboxBytes) <= 1048576
+                && preg_match('/^[0-9]{1,4}$/D', $lines[0] ?? '')
+                && count($lines) >= 2
+                && preg_match('/^[0-9eE+., \\t\\-]+$/D', trim($lines[1] ?? '')),
+                422, 'Tracked bounding-box TXT annotations are required.');
+        }
         if ($info['mime'] === 'audio/wav') {
             abort_unless(strlen($bytes) >= 44 && substr($bytes, 0, 4) === 'RIFF'
                 && substr($bytes, 8, 4) === 'WAVE', 422, 'A valid WAV audio file is required.');
@@ -46,7 +57,7 @@ class NvidiaMaxineController
                 422, 'A valid MP4 input is required.');
         }
 
-        return Cache::lock('maxine:create:'.$user->id, 12)->block(3, function () use ($user, $slug, $info, $bytes, $credits) {
+        return Cache::lock('maxine:create:'.$user->id, 12)->block(3, function () use ($user, $slug, $info, $bytes, $bboxBytes, $credits) {
             abort_if(DB::table('maxine_jobs')->where('user_id', $user->id)
                 ->whereIn('status', ['queued', 'running'])->exists(),
                 429, 'An NVIDIA media request is already pending.');
@@ -66,17 +77,22 @@ class NvidiaMaxineController
             $id = (string) Str::uuid();
             $path = 'maxine/'.$user->id.'/'.$id.'.input.'.$info['extension'];
             Storage::disk('local')->put($path, $bytes);
+            $bboxPath = $bboxBytes === null ? null : 'maxine/'.$user->id.'/'.$id.'.bbox.txt';
+            if ($bboxPath) {
+                Storage::disk('local')->put($bboxPath, $bboxBytes);
+            }
             try {
-                DB::transaction(function () use ($id, $user, $slug, $connection, $path) {
+                DB::transaction(function () use ($id, $user, $slug, $connection, $path, $bboxPath) {
                     DB::table('maxine_jobs')->insert([
                         'id' => $id, 'user_id' => $user->id, 'connection_id' => $connection,
                         'model' => $slug, 'status' => 'queued', 'input_path' => $path,
+                        'aux_path' => $bboxPath,
                         'created_at' => now(), 'updated_at' => now(),
                     ]);
                     RunMaxineInference::dispatch($id)->onConnection('database')->onQueue('default')->afterCommit();
                 });
             } catch (\Throwable $e) {
-                Storage::disk('local')->delete($path);
+                Storage::disk('local')->delete(array_filter([$path, $bboxPath]));
                 throw $e;
             }
 

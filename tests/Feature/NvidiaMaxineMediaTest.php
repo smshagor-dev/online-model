@@ -110,6 +110,7 @@ class NvidiaMaxineMediaTest extends TestCase
         $this->assertDatabaseHas('maxine_jobs', ['id' => $id, 'status' => 'completed']);
         $this->withToken($token)->post('/api/v1/openmindai/maxine/nvidia-3d-body-pose/jobs', [
             'file' => UploadedFile::fake()->createWithContent('wrong.wav', $this->wav()),
+            'bbox_file' => UploadedFile::fake()->createWithContent('bbox.txt', "1\n0 0 1 2 3 4\n"),
         ])->assertUnprocessable();
     }
 

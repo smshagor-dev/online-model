@@ -128,7 +128,7 @@ Schedule::call(function () {
         now()->subHours((int) config('maxine.retention_hours', 24)))->orderBy('created_at')
         ->chunk(100, function ($items) {
             foreach ($items as $item) {
-                Storage::disk('local')->delete(array_filter([$item->input_path, $item->output_path]));
+                Storage::disk('local')->delete(array_filter([$item->input_path, $item->aux_path, $item->output_path]));
                 DB::table('maxine_jobs')->where('id', $item->id)->delete();
             }
         });

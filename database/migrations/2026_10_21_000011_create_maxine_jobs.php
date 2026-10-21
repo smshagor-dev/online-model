@@ -15,6 +15,7 @@ return new class extends Migration
             $table->string('model', 80);
             $table->string('status', 20)->default('queued');
             $table->string('input_path');
+            $table->string('aux_path')->nullable();
             $table->string('output_path')->nullable();
             $table->string('output_mime', 80)->nullable();
             $table->unsignedInteger('output_bytes')->nullable();
