@@ -1,3 +1,4 @@
+import { evidenceUrl } from "./research-evidence.ts";
 // Runs only on the Next.js server. Planning uses normal chat JSON responses.
 export type Source = {
   url: string;
@@ -21,16 +22,27 @@ export async function researchLoop(options: {
   checkpoint?: (state: ResearchState) => Promise<void>;
   signal: AbortSignal;
   progress: (label: string, sources: Source[]) => void;
+  limits?: {actions?: number; sources?: number; pages?: number; elapsedMs?: number};
 }) {
   const sources = new Map(
-    (options.state?.sources || options.sources).map((source) => [
+    (options.state?.sources || options.sources).filter(source=>source && evidenceUrl(source.url)).slice(0,40).map((source) => [
       source.url,
       source,
     ]),
   );
-  const evidence: unknown[] = options.state?.evidence || [];
+  const evidence: unknown[] = (options.state?.evidence || []).slice(0,12);
   const actions = new Set<string>(options.state?.actions || []);
   let pending = options.state?.pending || null;
+  const started = Date.now();
+  const limits = {actions:24, sources:40, pages:12, elapsedMs:120000, ...options.limits};
+  const report = (conclusion: string, complete: boolean) => {
+    const all = [...sources.values()];
+    const read = all.filter(source=>source.read_status === "read");
+    const domains = new Set(read.map(source=>new URL(source.url).hostname.replace(/^www\./,"")));
+    return {sources:all, evidence, conclusion, complete,
+      coverage:{actions:actions.size, sources:all.length, pagesRead:read.length, domainsRead:domains.size},
+      limitations:[...(!read.length ? ["No full page text was read. Evidence is limited to search snippets or unavailable sources."] : []), ...(domains.size < 2 ? ["Independent coverage from multiple domains was not established."] : []), ...(!complete ? ["Research stopped at its execution budget; requested coverage may be incomplete."] : [])]};
+  };
   const save = () =>
     options.checkpoint?.({
       sources: [...sources.values()],
@@ -40,6 +52,7 @@ export async function researchLoop(options: {
     });
   while (true) {
     options.signal.throwIfAborted();
+    if (Date.now() - started >= limits.elapsedMs || (!pending && actions.size >= limits.actions)) return report("Research budget reached.", false);
     const raw = pending
       ? JSON.stringify(pending)
       : await options.decide(
@@ -61,11 +74,14 @@ export async function researchLoop(options: {
       typeof action.reason === "string" &&
       action.reason.trim()
     ) {
-      return {
-        sources: [...sources.values()],
-        evidence,
-        conclusion: action.reason,
-      };
+      // A planner cannot declare snippet-only search results to be inspected evidence.
+      const unread = [...sources.values()].find(source=>source.read_status !== "read" && !actions.has(JSON.stringify({action:"read",url:source.url})));
+      if (!evidence.length && unread && actions.size < limits.actions) {
+        pending = {action:"read",url:unread.url};
+        await save();
+        continue;
+      }
+      return report(action.reason, true);
     }
     if (
       !(
@@ -77,7 +93,7 @@ export async function researchLoop(options: {
       !(
         action?.action === "read" &&
         typeof action.url === "string" &&
-        action.url.length <= 2000
+        Boolean(evidenceUrl(action.url)) && action.url.length <= 2000
       )
     )
       throw new Error("NVIDIA research returned an unsupported action.");
@@ -90,6 +106,7 @@ export async function researchLoop(options: {
       throw new Error(
         "NVIDIA research stopped because it repeated an action without new evidence. The request is incomplete.",
       );
+    if (request.action === "read" && evidence.length >= limits.pages) return report("Page-reading budget reached.", false);
     actions.add(key);
     pending = request;
     await save();
@@ -106,8 +123,13 @@ export async function researchLoop(options: {
         throw new Error(
           "NVIDIA research search service returned invalid results.",
         );
-      for (const source of result.sources as Source[]) {
-        if (!sources.has(source.url))
+      for (const rawSource of result.sources as Source[]) {
+        if (!rawSource || typeof rawSource.url !== "string" || typeof rawSource.title !== "string" || rawSource.url.length > 2000) continue;
+        let parsed: URL;
+        try { parsed = new URL(rawSource.url); } catch { continue; }
+        if (!["https:","http:"].includes(parsed.protocol) || parsed.username || parsed.password) continue;
+        const source = {url:rawSource.url,title:rawSource.title.slice(0,200),snippet:typeof rawSource.snippet === "string" ? rawSource.snippet.slice(0,2000) : ""};
+        if (sources.size < limits.sources && !sources.has(source.url))
           sources.set(source.url, {
             ...source,
             citation: sources.size + 1,
@@ -126,7 +148,7 @@ export async function researchLoop(options: {
         ...source,
         read_status: result.read_status === "read" ? "read" : "unavailable",
       });
-      evidence.push(result);
+      evidence.push({url,read_status:result.read_status === "read" ? "read" : "unavailable",page_text:typeof result.page_text === "string" ? result.page_text.slice(0,8000) : ""});
     }
     pending = null;
     await save();
