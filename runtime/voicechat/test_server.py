@@ -7,7 +7,7 @@ from runtime.voicechat.server import TICKET, check_client_event, valid_worker_se
 
 
 def test_realtime_accepts_only_bounded_pcm16_audio():
-    audio = base64.b64encode(b"\\x00\\x00" * 1920).decode("ascii")
+    audio = base64.b64encode(bytes([0, 0]) * 1920).decode("ascii")
     assert check_client_event(json.dumps({
         "type": "input_audio_buffer.append", "event_id": "abc", "audio": audio,
     })) == "input_audio_buffer.append"
