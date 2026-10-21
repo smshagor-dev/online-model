@@ -67,6 +67,7 @@ class GuestChatTest extends TestCase
         $payload['model'] = 'arbitrary-model';
         $this->postJson('/api/v1/chat/provider', $payload, $headers)->assertForbidden();
     }
+
     public function test_native_function_definitions_and_results_survive_the_backend_relay(): void
     {
         Sanctum::actingAs(User::create(['name' => 'Tools', 'email' => 'native-tools@example.com', 'password' => 'StrongPassword123']));
@@ -85,5 +86,4 @@ class GuestChatTest extends TestCase
         $payload['tools'][0]['function']['name'] = 'arbitrary_shell';
         $this->postJson('/api/v1/chat/provider', $payload, ['X-Chat-Bridge-Key' => str_repeat('b', 32)])->assertUnprocessable();
     }
-
 }
