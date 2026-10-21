@@ -128,7 +128,7 @@ class CloudToolCallingTest extends TestCase
                 'messages' => [['role' => 'user', 'content' => 'Use your editor tools']],
                 'tools' => $this->tools(19),
                 'stream' => true,
-            ])->assertOk()->assertHeader('Content-Type', 'text/event-stream');
+            ])->assertOk()->assertHeader('Content-Type', 'text/event-stream; charset=utf-8');
 
         $this->assertStringContainsString('data: [DONE]', $result->streamedContent());
         Http::assertSent(fn ($r) => count($r['tools']) === 19
