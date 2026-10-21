@@ -8,7 +8,7 @@ class HostedCodeAgents
 {
     public function enabled()
     {
-        return DB::table('hosted_code_agents')->where('api_ready', true)->where('api_protocol', 'chat')
+        return DB::table('hosted_code_agents')->where('enabled', true)->where('api_ready', true)->where('api_protocol', 'chat')
             ->orderByRaw("CASE slug WHEN 'openmindai-super' THEN 1 WHEN 'openmindai-ultra' THEN 2 WHEN 'openmindai-lite' THEN 3 ELSE 4 END")
             ->orderBy('name')->get();
     }
@@ -28,7 +28,7 @@ class HostedCodeAgents
     public function find(string $slug)
     {
         return DB::table('hosted_code_agents')->where('slug', $slug)
-            ->where('api_ready', true)->first();
+            ->where('enabled', true)->where('api_ready', true)->first();
     }
 
     public function publicModels(): array
@@ -41,8 +41,8 @@ class HostedCodeAgents
             'name' => $model->name,
             'type' => $model->category,
             'active' => (bool) $model->enabled,
-            'available' => (bool) $model->api_ready,
-            'inference_status' => $model->api_ready ? 'configured' : 'setup_required',
+            'available' => (bool) ($model->enabled && $model->api_ready),
+            'inference_status' => ! $model->enabled ? 'disabled' : ($model->api_ready ? 'configured' : 'setup_required'),
             'provider_verified' => $model->last_test_status === 'success',
             'integration_requirements' => config('nvidia_specialists.models.'.$model->slug),
             'operation' => $model->slug === 'nvidia-nemotron-voicechat'
@@ -76,8 +76,8 @@ class HostedCodeAgents
                 'listed' => true,
                 'provider_access' => $model->last_test_status === 'success' ? 'verified' : 'unverified',
                 'active' => (bool) $model->enabled,
-            'available' => (bool) $model->api_ready,
-            'inference_status' => $model->api_ready ? 'configured' : 'setup_required',
+            'available' => (bool) ($model->enabled && $model->api_ready),
+            'inference_status' => ! $model->enabled ? 'disabled' : ($model->api_ready ? 'configured' : 'setup_required'),
                 'provider_verified' => $model->last_test_status === 'success',
                 'integration_requirements' => config('nvidia_specialists.models.'.$model->slug),
                 'last_test_status' => $model->last_test_status,
@@ -95,7 +95,7 @@ class HostedCodeAgents
                 : (isset(config('maxine.models', [])[$model->slug])
                 ? 'media.process'
                 : ($model->slug === 'nvidia-cosmos3-nano' ? 'generate' : ($model->api_protocol === 'chat' ? 'chat.completions' : 'invoke'))))))),
-                'path' => $model->api_ready
+                'path' => ($model->enabled && $model->api_ready)
                     ? ($model->slug === 'nvidia-nemotron-voicechat'
                         ? '/voicechat/sessions'
                         : ($model->slug === 'nvidia-magpie-tts-zeroshot'

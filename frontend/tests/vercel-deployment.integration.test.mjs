@@ -25,9 +25,13 @@ test("Next.js API handles Vercel deployment origins and long requests", () => {
   assert.match(route, /request\.headers\.get\("origin"\) !== expectedOrigin/);
 });
 
-test("Vercel config points to Laravel without a provider API key", () => {
+test("Vercel config keeps provider credentials server-only and points to Laravel", () => {
   const env = source(".env.example");
   assert.match(env, /LARAVEL_API_URL=https:\/\/cloud\.openmindai\.org\/api\/v1/);
   assert.match(env, /FRONTEND_CHAT_BRIDGE_KEY=/);
-  assert.doesNotMatch(env, /^NVIDIA_API_KEY=/m);
+  // The current Next.js hosting flow still performs server-side inference.
+  // Neither provider nor HMAC signing credentials may be public env vars.
+  assert.match(env, /^NVIDIA_API_KEY=/m);
+  assert.doesNotMatch(env, /^NEXT_PUBLIC_NVIDIA_API_KEY=/m);
+  assert.doesNotMatch(env, /^NEXT_PUBLIC_FRONTEND_CHAT_BRIDGE_KEY=/m);
 });
