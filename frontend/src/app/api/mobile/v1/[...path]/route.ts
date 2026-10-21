@@ -1,3 +1,5 @@
+import { createHash, createHmac } from "node:crypto";
+import { isIP } from "node:net";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -23,6 +25,36 @@ const publicRoutes = new Set([
   "email/verify-code", "email/resend", "forgot-password", "reset-password",
 ]);
 const maxJsonResponse = 1024 * 1024;
+const identityRoutes = new Set([
+  "login", "login/verify-ip", "register", "email/verify-code",
+  "email/resend", "forgot-password", "reset-password",
+]);
+
+function signedMobileIdentity(request: NextRequest, target: URL, body: string) {
+  const key = process.env.FRONTEND_CHAT_BRIDGE_KEY ?? "";
+  // On Vercel, this header is set by its edge and is not an untrusted
+  // caller-supplied X-Forwarded-For value.
+  const forwarded = process.env.VERCEL === "1"
+    ? request.headers.get("x-vercel-forwarded-for")
+    : request.headers.get("x-forwarded-for");
+  const ip = forwarded?.split(",")[0]?.trim() ?? "";
+  if (key.length < 32 || isIP(ip) === 0) return null;
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const data = [
+    timestamp,
+    ip,
+    request.method,
+    target.pathname,
+    createHash("sha256").update(body).digest("hex"),
+  ].join("\n");
+  return {
+    "X-OpenMind-Mobile-IP": ip,
+    "X-OpenMind-Mobile-Time": timestamp,
+    "X-OpenMind-Mobile-Signature":
+      createHmac("sha256", key).update(data).digest("hex"),
+  };
+}
+
 
 function json(payload: Record<string, unknown>, status = 200) {
   return NextResponse.json(payload, {
@@ -171,7 +203,18 @@ async function mobile(
     // status uses the same real Laravel endpoint as public-config, with a
     // sanitized result that never exposes hostnames, cookies or credentials.
     const target = endpoint === "status" ? "public-config" : endpoint;
-    const upstream = await fetch(backendUrl(target), {
+    const upstreamUrl = backendUrl(target);
+    const identity = identityRoutes.has(endpoint)
+      ? signedMobileIdentity(request, upstreamUrl, body ?? "")
+      : {};
+    if (!identity) {
+      return json({
+        message: "The Mobile gateway requires its existing shared backend "
+          + "bridge key and a verified client IP.",
+        code: "MOBILE_IDENTITY_NOT_CONFIGURED",
+      }, 503);
+    }
+    const upstream = await fetch(upstreamUrl, {
       method: request.method,
       body,
       headers: {
@@ -179,6 +222,7 @@ async function mobile(
           ? "text/event-stream" : "application/json",
         ...(isGet ? {} : { "Content-Type": "application/json" }),
         ...(!isPublic ? { Authorization: authorization } : {}),
+        ...identity,
       },
       cache: "no-store",
       redirect: "manual",
