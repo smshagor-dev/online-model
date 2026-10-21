@@ -103,6 +103,7 @@ test("server-only modules and backend API expose no NVIDIA provider gateway", ()
 
 test("missing server NVIDIA key never advertises enabled media", () => {
   const prior = process.env.NVIDIA_API_KEY;
+  const priorBridge = process.env.FRONTEND_CHAT_BRIDGE_KEY;
   try {
     delete process.env.NVIDIA_API_KEY;
     process.env.FRONTEND_CHAT_BRIDGE_KEY = "x".repeat(32);
@@ -111,6 +112,7 @@ test("missing server NVIDIA key never advertises enabled media", () => {
   } finally {
     if (prior === undefined) delete process.env.NVIDIA_API_KEY;
     else process.env.NVIDIA_API_KEY = prior;
-    delete process.env.FRONTEND_CHAT_BRIDGE_KEY;
+    if (priorBridge === undefined) delete process.env.FRONTEND_CHAT_BRIDGE_KEY;
+    else process.env.FRONTEND_CHAT_BRIDGE_KEY = priorBridge;
   }
 });
