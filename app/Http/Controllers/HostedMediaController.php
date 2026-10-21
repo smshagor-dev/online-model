@@ -93,14 +93,20 @@ class HostedMediaController
                     abort_unless(str_starts_with($raw, '%PDF-'), 422, 'Invalid PDF file.');
                 } elseif ($mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
                     abort_unless(str_starts_with($raw, 'PK'), 422, 'Invalid document archive.');
+                    abort_unless(class_exists(\ZipArchive::class), 503, 'Document verification is unavailable.');
                     $zip = new \ZipArchive();
                     $tmp = tempnam(sys_get_temp_dir(), 'omd');
+                    abort_unless($tmp !== false, 503, 'Unable to verify document.');
+                    $opened = false;
                     try {
-                        file_put_contents($tmp, $raw);
-                        abort_unless($zip->open($tmp) === true, 422, 'Invalid DOCX file.');
+                        abort_unless(file_put_contents($tmp, $raw) === strlen($raw), 503, 'Unable to verify document.');
+                        $opened = $zip->open($tmp) === true;
+                        abort_unless($opened, 422, 'Invalid DOCX file.');
                         abort_unless($zip->locateName('word/document.xml') !== false && $zip->locateName('[Content_Types].xml') !== false, 422, 'Invalid DOCX contents.');
                     } finally {
-                        $zip->close();
+                        if ($opened) {
+                            $zip->close();
+                        }
                         @unlink($tmp);
                     }
                 }
