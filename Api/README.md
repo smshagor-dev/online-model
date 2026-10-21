@@ -4,11 +4,11 @@ A separate Next.js application inside `Api/` for developer registration and sign
 
 ## Architecture
 
-- Next.js is a **backend-for-frontend**. The browser calls only `/api/bridge/*` over the portal's own origin.
+- Next.js hosts both browser-account endpoints under `/api/bridge/*` and the public Bearer-key developer gateway under `/api/v1/openmindai/*`.
 - Laravel remains the identity provider, developer key issuer, source of model truth, and usage database. Do not create a second account database.
 - Login and registration reuse Laravel `/api/v1/register`, `/login`, `/login/verify-ip`, `/forgot-password`, and `/public-config`. Existing OpenMindAI accounts can sign in. A person who registers here becomes a developer by managing keys, not by obtaining extra Laravel permissions.
 - Login bearer tokens are stored only in a Secure (production), HttpOnly, SameSite=Lax cookie. The browser never receives them in JSON or localStorage.
-- API keys are separate Sanctum tokens scoped to `openmindai:invoke`, shown only when created, with a 90-day lifetime, up to 10 active keys. Use them only with `/api/v1/openmindai/*`.
+- API keys are separate Sanctum tokens scoped to `openmindai:invoke`, shown only when created, with a 90-day lifetime, up to 10 active keys. External clients must use this Next.js portal's `/api/v1/openmindai/*`, not Laravel's domain.
 - Credentials for hosted model providers remain exclusively on the Laravel server. There is no NVIDIA credential in the Next.js portal.
 - Developer reports are limited to their own usage. Each completed request counts as one **application request credit**, not a provider billing token.
 
@@ -41,7 +41,7 @@ Open `http://localhost:3100`. Set `LARAVEL_API_URL` to the full backend API URL 
 1. Register or log in. Laravel enforces registration controls, optional email verification, TOTP and unfamiliar-IP email challenges.
 2. Open `/keys`, label a key, confirm the account password and enter a 2FA code when required.
 3. Copy the new key **once** into a trusted desktop credential store or backend secrets manager.
-4. Use the returned `base_url` and `Authorization: Bearer ...` to call `/models` or `/chat/completions`. Never use a developer key to access account-management routes.
+4. Use the portal-origin `base_url` and `Authorization: Bearer ...` to call `/models` or `/chat/completions`. Never use a developer key to access account-management routes.
 5. Open `/dashboard` for completed request credits and `/models` for model readiness. Read `/docs` for cURL, Node.js and Python integration samples.
 6. Revoke compromised keys under `/keys`; clients using them will stop authenticating.
 
@@ -81,3 +81,34 @@ The CI workflow runs the Next.js build and typecheck. Complete end-to-end HTTPS/
 ## Link from the existing frontend
 
 Set `NEXT_PUBLIC_DEVELOPER_PORTAL_URL=https://YOUR-PORTAL-DOMAIN` on the existing `frontend/` deployment, rebuild and restart. Settings → Developer API then opens this standalone portal. Without the variable, original key-management settings remain functional through the authenticated proxy.
+
+## Public Developer API Base URL
+
+External clients connect to the **Next.js developer portal**, not directly to the Laravel backend.
+
+**Base URL:** `https://YOUR-PORTAL-DOMAIN/api/v1/openmindai`
+
+The portal's API key creation/list endpoints present that public URL based on `PORTAL_ORIGIN`. `LARAVEL_API_URL` is strictly an internal, server-side forwarding target and should not be shown to developers as their API connection URL.
+
+Supported gateway routes:
+
+| Method | Public path |
+| --- | --- |
+| GET | `/api/v1/openmindai/models` |
+| GET | `/api/v1/openmindai/catalog` |
+| POST | `/api/v1/openmindai/chat/completions` |
+| POST | `/api/v1/openmindai/models/{slug}/invoke` |
+| POST | `/api/v1/openmindai/cosmos/generations` |
+| GET | `/api/v1/openmindai/cosmos/{uuid}` |
+| GET | `/api/v1/openmindai/cosmos/{uuid}/download` |
+
+The public gateway checks an explicit `Authorization: Bearer YOUR_DEVELOPER_KEY` header and never authenticates using the portal login cookie. It forwards only a restricted set of endpoints, preserves model errors and rate-limit headers, and streams SSE completions and authenticated media downloads. Laravel continues to validate Sanctum keys, enforce user/model permissions and credit limits, and talk to the inference provider.
+
+Client example:
+
+```bash
+curl "https://YOUR-PORTAL-DOMAIN/api/v1/openmindai/models" \
+  -H "Authorization: Bearer YOUR_DEVELOPER_KEY"
+```
+
+The Next.js deployment must use HTTPS and route `/api/v1/openmindai/*` to its own Node.js server. Do not configure an ingress rule that bypasses Next.js for these paths. For streaming inference, ensure the platform supports long-running HTTP responses.
