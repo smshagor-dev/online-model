@@ -72,6 +72,19 @@ class CodeAgentsAdminController
                 abort_unless($path === '/v1/chat/completions', 422, 'Chat models must use the chat completions endpoint.');
             }
         }
+        if ($slug === 'nvidia-cosmos3-nano') {
+            // Cosmos is a dedicated queued-media integration, never a generic
+            // administrator-supplied JSON relay or interchangeable model ID.
+            abort_if(isset($data['provider_model']) &&
+                $data['provider_model'] !== 'nvidia/cosmos3-nano', 422,
+                'The queued Cosmos model identifier is fixed.');
+            $data['provider_model'] = 'nvidia/cosmos3-nano';
+            $data['api_origin'] = 'ai.api.nvidia.com';
+            $data['api_path'] = '/v1/cosmos/nvidia/cosmos3-nano';
+            $data['api_protocol'] = 'json';
+            $data['api_ready'] = true;
+            $data['include_model'] = false;
+        }
         // Catalog entries must remain visible. A valid API key does not grant
         // upstream NVIDIA entitlements, so non-chat integrations still require
         // an explicitly reviewed protocol and path.
