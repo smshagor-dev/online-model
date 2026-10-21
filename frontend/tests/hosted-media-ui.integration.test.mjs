@@ -42,6 +42,10 @@ test("generated files can be privately downloaded and previewed from media studi
   assert.match(studio, /application\/pdf/);
   assert.match(studio, /wordprocessingml/);
   assert.match(library, /application\/pdf/);
+  assert.match(library, /"document_create"/);
+  const inline = read("components/inline-media.tsx");
+  assert.match(inline, /Generated document/);
+  assert.match(inline, /application\/pdf/);
   assert.match(api, /application\/pdf/);
   assert.match(api, /application\/vnd\.openxmlformats-officedocument/);
 });
