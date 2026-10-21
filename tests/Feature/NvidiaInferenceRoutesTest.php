@@ -54,7 +54,10 @@ class NvidiaInferenceRoutesTest extends TestCase
             ]);
         }
         $this->assertDatabaseHas('hosted_code_agents', [
-            'slug' => 'nvidia-cosmos3-nano', 'api_ready' => false, 'enabled' => true,
+            'slug' => 'nvidia-cosmos3-nano', 'api_ready' => true,
+            'api_origin' => 'ai.api.nvidia.com',
+            'api_path' => '/v1/cosmos/nvidia/cosmos3-nano',
+            'enabled' => true,
         ]);
     }
 
