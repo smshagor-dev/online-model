@@ -1,4 +1,5 @@
 import { groundResearchAnswer } from "./research-evidence.ts";
+import { withPromptUnderstanding } from "./prompt-understanding.ts";
 import { runConversationTools } from "./conversation-tools.ts";
 import { generateHostedImage } from "./hosted-image.ts";
 import { hostedMediaRequest } from "./hosted-media.ts";
@@ -248,6 +249,9 @@ export async function nvidiaChat(
     lease = await prepared.json();
     if (!lease.ticket || !Array.isArray(lease.messages))
       throw new Error("Invalid lease");
+    lease.messages = withPromptUnderstanding(lease.messages);
+    if (lease.checkpoint?.messages)
+      lease.checkpoint.messages = withPromptUnderstanding(lease.checkpoint.messages);
   } catch {
     return Response.json(
       {
