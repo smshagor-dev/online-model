@@ -6,10 +6,11 @@ type KeyItem = { id: number; name: string; created_at: string; last_used_at: str
 type KeyList = { base_url: string; keys: KeyItem[] };
 type Created = { api_key: string; base_url: string };
 
-export default function DeveloperApiSettings() {
+export default function DeveloperApiSettings({ requiresTwoFactor = false }: { requiresTwoFactor?: boolean }) {
   const [data, setData] = useState<KeyList | null>(null);
   const [label, setLabel] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -32,10 +33,11 @@ export default function DeveloperApiSettings() {
     setNotice("");
     setSecret("");
     try {
-      const created = await api<Created>("developer/keys", "POST", { name: label.trim(), password });
+      const created = await api<Created>("developer/keys", "POST", { name: label.trim(), password, ...(requiresTwoFactor ? { code } : {}) });
       setSecret(created.api_key);
       setLabel("");
       setPassword("");
+      setCode("");
       await refresh();
       setNotice("Key created. Copy it now; you cannot view it again.");
     } catch (e) { setError((e as Error).message); }
@@ -64,6 +66,7 @@ export default function DeveloperApiSettings() {
       <form onSubmit={create} className="form-stack">
         <label>Key name<input required maxLength={64} minLength={3} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="My code editor" /></label>
         <label>Confirm password<input required type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+        {requiresTwoFactor && <label>Authenticator code<input required value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" /></label>}
         <button className="secondary-button" type="submit" disabled={busy}>Generate API key</button>
       </form>
       {secret && <div className="form-stack" role="status">
