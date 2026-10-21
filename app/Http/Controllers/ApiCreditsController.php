@@ -29,9 +29,9 @@ class ApiCreditsController
         if ($request->user()->two_factor_confirmed_at) {
             abort_unless($twoFactor->verify($request->user(), $data['code'] ?? ''), 422, 'A valid two-factor code is required.');
         }
-        $affected = DB::table('api_model_connections')->where('id', $id)
-            ->update(['monthly_credit_limit' => $data['monthly_credit_limit'] ?? null, 'updated_at' => now()]);
-        abort_unless($affected, 404);
+        $query = DB::table('api_model_connections')->where('id', $id);
+        abort_unless((clone $query)->exists(), 404);
+        $query->update(['monthly_credit_limit' => $data['monthly_credit_limit'] ?? null, 'updated_at' => now()]);
 
         return back()->with('status', 'Model credit allocation saved.');
     }
