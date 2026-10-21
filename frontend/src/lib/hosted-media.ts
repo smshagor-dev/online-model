@@ -1,6 +1,5 @@
 // Server-only hosted media bridge. Browser never receives third-party credentials.
 import { readProviderJson } from "./provider-response.ts";
-import { backendProviderFetcher } from "./backend-provider.ts";
 export type HostedKind = "transcription" | "speech" | "video" | "document_create";
 type Work = { kind: HostedKind; prompt: string; input?: string; format?: "pdf" | "docx"; language?: string };
 export type ProviderConfig = { apiKey: string; bridgeKey: string; chatModel?: string };
@@ -16,7 +15,7 @@ const SPEECH_VOICES: Record<string, string> = {
   "fr-FR": "Magpie-Multilingual.FR-FR.Louise",
 };
 export const hostedMediaEnabled = () =>
-  !!process.env.FRONTEND_CHAT_BRIDGE_KEY && (process.env.FRONTEND_CHAT_BRIDGE_KEY?.length || 0) >= 32;
+  !!process.env.NVIDIA_API_KEY && (process.env.FRONTEND_CHAT_BRIDGE_KEY?.length || 0) >= 32;
 
 class WorkError extends Error {
   status: number;
@@ -91,7 +90,7 @@ export async function hostedMediaRequest(
   options: { fetcher?: typeof fetch; config?: ProviderConfig } = {},
 ): Promise<Response> {
   const config = options.config || {
-    apiKey: "backend-managed",
+    apiKey: process.env.NVIDIA_API_KEY || "",
     bridgeKey: process.env.FRONTEND_CHAT_BRIDGE_KEY || "",
     chatModel: process.env.NVIDIA_MODEL || "nvidia/nemotron-3.5-lightning-30b-a3b",
   };
@@ -121,9 +120,7 @@ export async function hostedMediaRequest(
   } catch(e) {
     return Response.json({ message: (e as Error).message }, { status: 422 });
   }
-  const fetcher = options.config
-    ? (options.fetcher || fetch)
-    : backendProviderFetcher(backend, token, config.bridgeKey, options.fetcher || fetch);
+  const fetcher = options.fetcher || fetch;
   const base = backend.replace(/\/$/, "");
   const headers = {
     Authorization: "Bearer " + token,
