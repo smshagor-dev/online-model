@@ -112,11 +112,11 @@ async def infer(request: Request, authorization: str | None = Header(default=Non
         authorization, "Bearer " + worker_key
     ):
         raise HTTPException(status_code=401, detail="Unauthorized")
-    # Maximum 20MB MP4, encoded in JSON; avoid consuming unlimited RAM.
-    if request.headers.get("content-length") and int(request.headers["content-length"]) > 30000000:
+    # Maximum 32MB WAV or 20MB MP4, base64-encoded JSON; bound memory.
+    if request.headers.get("content-length") and int(request.headers["content-length"]) > 44000000:
         raise HTTPException(status_code=413, detail="Payload too large")
     body = await request.body()
-    if len(body) > 30000000:
+    if len(body) > 44000000:
         raise HTTPException(status_code=413, detail="Payload too large")
     try:
         import json
