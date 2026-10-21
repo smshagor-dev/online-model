@@ -24,6 +24,11 @@ test("voice panel uses hosted audio transcription and transcribes before chattin
   const live = read("components/live-conversation.tsx");
   assert.match(panel, /audioAsWavBase64/);
   assert.match(panel, /"media\/transcription"/);
+  assert.match(panel, /setTranscript\(result\.result_text\)/);
+  assert.doesNotMatch(panel, /i < 180/);
+  assert.match(live, /playAudioUntilFinished/);
+  assert.match(live, /generatedAbort\.current\?\.abort\(\)/);
+  assert.match(live, /Using your browser voice instead/);
   assert.match(live, /hostedVoice/);
   assert.match(live, /"media\/transcription"/);
   assert.match(live, /streamChat\(/);
