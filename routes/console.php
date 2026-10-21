@@ -12,6 +12,7 @@ use App\Services\AdminSettings;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
+use Illuminate\Support\Facades\Storage;
 
 Artisan::command('admin:create {email} {name}', function () {
     $email = $this->argument('email');
@@ -86,3 +87,29 @@ Schedule::call(function () {
     TaskRun::where('status', 'running')->where('updated_at', '<', now()->subMinutes(10))->update(['status' => 'failed', 'error' => 'Task worker stopped before completing.']);
     TaskRun::where('status', 'queued')->where('updated_at', '<', now()->subDay())->update(['status' => 'failed', 'error' => 'Task worker did not start in time.']);
 })->everyFiveMinutes();
+
+
+// Cosmos hosted media is private and short-lived. Remove expired output and
+// clear orphaned state if a shared-hosting cron worker terminates unexpectedly.
+Schedule::call(function () {
+    DB::table('cosmos_generations')->where('status', 'running')
+        ->where('updated_at', '<', now()->subMinutes(30))->update([
+            'status' => 'failed', 'error_code' => 'worker_interrupted',
+            'encrypted_request' => '', 'updated_at' => now(),
+        ]);
+    DB::table('cosmos_generations')->where('status', 'queued')
+        ->where('created_at', '<', now()->subDay())->update([
+            'status' => 'failed', 'error_code' => 'worker_not_started',
+            'encrypted_request' => '', 'updated_at' => now(),
+        ]);
+    DB::table('cosmos_generations')->where('created_at', '<', now()->subHours(
+        (int) config('cosmos.retention_hours', 24)
+    ))->orderBy('created_at')->chunk(100, function ($items) {
+        foreach ($items as $item) {
+            if ($item->output_path) {
+                Storage::disk('local')->delete($item->output_path);
+            }
+            DB::table('cosmos_generations')->where('id', $item->id)->delete();
+        }
+    });
+})->hourly();

@@ -81,6 +81,8 @@ class OpenMindAiGatewayController
     private function invokeModel(Request $request, string $slug, bool $firstParty, HostedCodeAgents $agents, ApiCreditUsage $credits)
     {
         $user = $this->actor($request, $firstParty);
+        abort_if($slug === 'nvidia-cosmos3-nano', 422,
+            'Use /api/v1/openmindai/cosmos/generations for queued Cosmos image/video generation.');
         $model = $agents->find($slug);
         abort_unless($model, 404, 'This model is unavailable.');
         abort_if($model->api_protocol === 'chat', 422, 'Use /chat/completions for chat models.');

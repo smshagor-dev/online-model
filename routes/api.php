@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\DeveloperKeysController;
 use App\Http\Controllers\OpenMindAiGatewayController;
+use App\Http\Controllers\NvidiaCosmosController;
 use App\Http\Controllers\AssistantGalleryController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CanvasController;
@@ -29,6 +30,9 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
         Route::get('openmindai/models', [OpenMindAiGatewayController::class, 'models']);
         Route::get('openmindai/catalog', [OpenMindAiGatewayController::class, 'catalog']);
+        Route::post('openmindai/cosmos/generations', [NvidiaCosmosController::class, 'generate'])->middleware('throttle:chat');
+        Route::get('openmindai/cosmos/{id}', [NvidiaCosmosController::class, 'status']);
+        Route::get('openmindai/cosmos/{id}/download', [NvidiaCosmosController::class, 'download']);
         Route::post('openmindai/models/{slug}/invoke', [OpenMindAiGatewayController::class, 'invoke'])->middleware('throttle:chat');
         Route::post('openmindai/chat/completions', [OpenMindAiGatewayController::class, 'chat'])->middleware('throttle:chat');
     });

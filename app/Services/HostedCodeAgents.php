@@ -42,7 +42,7 @@ class HostedCodeAgents
             'type' => $model->category,
             'available' => (bool) $model->api_ready,
             'provider_verified' => $model->last_test_status === 'success',
-            'operation' => $model->api_protocol === 'chat' ? 'chat.completions' : 'invoke',
+            'operation' => $model->slug === 'nvidia-cosmos3-nano' ? 'generate' : ($model->api_protocol === 'chat' ? 'chat.completions' : 'invoke'),
         ])->all();
     }
 
@@ -66,7 +66,7 @@ class HostedCodeAgents
                 'last_tested_at' => $model->last_tested_at,
                 'operation' => $model->api_protocol === 'chat' ? 'chat.completions' : 'invoke',
                 'path' => $model->api_ready
-                    ? ($model->api_protocol === 'chat' ? '/chat/completions' : '/models/'.$model->slug.'/invoke')
+                    ? ($model->slug === 'nvidia-cosmos3-nano' ? '/cosmos/generations' : ($model->api_protocol === 'chat' ? '/chat/completions' : '/models/'.$model->slug.'/invoke'))
                     : null,
             ])->all();
     }
