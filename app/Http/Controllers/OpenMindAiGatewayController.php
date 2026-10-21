@@ -269,7 +269,7 @@ class OpenMindAiGatewayController
             $stream = (bool) ($data['stream'] ?? false);
             $payload = [
                 'model' => $agent->provider_model,
-                'messages' => $mobile ? MultilingualPrompt::apply($data['messages']) : $data['messages'],
+                'messages' => ($mobile || $firstParty) ? MultilingualPrompt::apply($data['messages']) : $data['messages'],
                 'max_tokens' => $data['max_tokens'] ?? 2048,
                 'stream' => $stream,
             ];
