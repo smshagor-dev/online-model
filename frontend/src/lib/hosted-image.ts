@@ -90,6 +90,8 @@ export async function generateHostedImage(
     if (!Number.isSafeInteger(created?.id) || created.id < 1)
       throw new ImageFailure("Unable to create an image task.", 502);
     taskId = created.id;
+    if (signal.aborted)
+      throw new ImageFailure("Image request was cancelled.", 499);
 
     // Official fixed endpoint and constrained parameters: no arbitrary browser URL.
     const upstream = await fetcher(IMAGE_ENDPOINT, {
@@ -146,6 +148,8 @@ export async function generateHostedImage(
     if (!image.length || image.length > 20000000)
       throw new ImageFailure("The generated image exceeds the size limit.", 502);
     const mime = imageFormat(image);
+    if (signal.aborted)
+      throw new ImageFailure("Image request was cancelled.", 499);
     const finish = await requestBackend(
       "media/" + taskId + "/hosted/finish",
       { data: encoded, mime, provider_model: IMAGE_MODEL },
