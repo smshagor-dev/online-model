@@ -24,8 +24,12 @@ Route::prefix('v1')->group(function () {
     // Trusted apps sign every request; no per-user API key is sent from their clients.
     Route::get('first-party/models', [OpenMindAiGatewayController::class, 'internalModels'])->middleware('throttle:api');
     Route::post('first-party/chat/completions', [OpenMindAiGatewayController::class, 'internalChat'])->middleware('throttle:chat');
+    Route::get('first-party/catalog', [OpenMindAiGatewayController::class, 'internalCatalog'])->middleware('throttle:api');
+    Route::post('first-party/models/{slug}/invoke', [OpenMindAiGatewayController::class, 'internalInvoke'])->middleware('throttle:chat');
     Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
         Route::get('openmindai/models', [OpenMindAiGatewayController::class, 'models']);
+        Route::get('openmindai/catalog', [OpenMindAiGatewayController::class, 'catalog']);
+        Route::post('openmindai/models/{slug}/invoke', [OpenMindAiGatewayController::class, 'invoke'])->middleware('throttle:chat');
         Route::post('openmindai/chat/completions', [OpenMindAiGatewayController::class, 'chat'])->middleware('throttle:chat');
     });
     Route::get('public-config', fn () => ['registration_enabled' => app(\App\Services\AdminSettings::class)->enabled('registration_enabled'), 'site_name' => app(\App\Services\AdminSettings::class)->get('site_name'), 'registration_email_verification_enabled' => app(\App\Services\AdminSettings::class)->enabled('registration_email_verification_enabled')])->middleware('throttle:60,1');
