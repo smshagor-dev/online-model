@@ -162,6 +162,42 @@ class MediaTest extends TestCase
             ->assertOk()->assertJsonCount(0, 'data');
     }
 
+    public function test_deleting_running_hosted_image_rejects_late_completion(): void
+    {
+        $user = $this->setupEngine();
+        config(['models.frontend_chat_key' => str_repeat('s', 32)]);
+        $this->withHeaders(['X-Chat-Bridge-Key' => str_repeat('s', 32)]);
+        $id = $this->postJson('/api/v1/media/hosted/begin', ['prompt' => 'Sunset'])
+            ->assertStatus(202)->json('id');
+
+        $this->deleteJson('/api/v1/media/'.$id)->assertNoContent();
+        $this->postJson('/api/v1/media/'.$id.'/hosted/finish', [
+            'mime' => 'image/png', 'data' => base64_encode($this->png()),
+        ])->assertNotFound();
+        $this->postJson('/api/v1/media/'.$id.'/hosted/fail', [])->assertNotFound();
+        $this->getJson('/api/v1/media/'.$id)->assertNotFound();
+        Storage::disk('local')->assertMissing('media/'.$user->id.'/'.$id.'.output');
+    }
+
+    public function test_deleting_running_hosted_audio_rejects_late_completion(): void
+    {
+        $user = $this->setupEngine();
+        config(['models.frontend_chat_key' => str_repeat('s', 32)]);
+        $this->withHeaders(['X-Chat-Bridge-Key' => str_repeat('s', 32)]);
+        $id = $this->postJson('/api/v1/media/hosted/task/begin', [
+            'kind' => 'speech', 'prompt' => 'Hello',
+        ])->assertStatus(202)->json('id');
+
+        $this->deleteJson('/api/v1/media/'.$id)->assertNoContent();
+        $wav = 'RIFF'.pack('V', 36).'WAVEfmt '.pack('VvvVVvv', 16, 1, 1, 16000, 32000, 2, 16).'data'.pack('V', 0);
+        $this->postJson('/api/v1/media/'.$id.'/hosted/task/complete', [
+            'mime' => 'audio/wav', 'data' => base64_encode($wav),
+        ])->assertNotFound();
+        $this->postJson('/api/v1/media/'.$id.'/hosted/task/fail', [])->assertNotFound();
+        $this->get('/api/v1/media/'.$id.'/output')->assertNotFound();
+        Storage::disk('local')->assertMissing('media/'.$user->id.'/'.$id.'.output');
+    }
+
     public function test_hosted_audio_and_document_formats_are_validated_before_storage(): void
     {
         $this->setupEngine();
