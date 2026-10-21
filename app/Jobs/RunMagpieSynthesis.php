@@ -43,23 +43,21 @@ class RunMagpieSynthesis implements ShouldQueue
             }
             $data = json_decode(Crypt::decryptString($row->encrypted_request), true, 512, JSON_THROW_ON_ERROR);
             $form = [
-                ['name' => 'language', 'contents' => $data['language']],
-                ['name' => 'text', 'contents' => $data['text']],
-                ['name' => 'voice', 'contents' => $data['voice']],
+                'language' => $data['language'],
+                'text' => $data['text'],
+                'voice' => $data['voice'],
             ];
+            $client = Http::withToken($key)->accept('audio/wav')->connectTimeout(10)
+                ->timeout(config('magpie.timeout', 600))
+                ->withOptions(['allow_redirects' => false])->asMultipart();
             if ($row->voice_path) {
                 if (!Storage::disk('local')->exists($row->voice_path)) {
                     throw new \RuntimeException('missing_voice');
                 }
-                $form[] = [
-                    'name' => 'audio_prompt', 'contents' => Storage::disk('local')->get($row->voice_path),
-                    'filename' => 'voice.wav', 'headers' => ['Content-Type' => 'audio/wav'],
-                ];
+                $client->attach('audio_prompt', Storage::disk('local')->get($row->voice_path),
+                    'voice.wav', ['Content-Type' => 'audio/wav']);
             }
-            $response = Http::withToken($key)->accept('audio/wav')->connectTimeout(10)
-                ->timeout(config('magpie.timeout', 600))
-                ->withOptions(['allow_redirects' => false])
-                ->asMultipart()->post($url.'/v1/audio/synthesize', $form);
+            $response = $client->post($url.'/v1/audio/synthesize', $form);
             if (!$response->ok() || strlen($response->body()) > config('magpie.max_output_bytes')) {
                 throw new \RuntimeException('synthesis_unavailable');
             }
