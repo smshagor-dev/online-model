@@ -198,6 +198,17 @@ test("workspace renders the welcome layout", async () => {
   assert.ok(html.includes("New chat"));
   assert.ok(html.includes("Ask anything"));
 });
+test("frontend health endpoint stays JSON even without backend credentials", async () => {
+  const response = await fetch(origin + "/api/health");
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") || "", /application\/json/);
+  const health = await response.json();
+  assert.equal(health.service, "OpenMindAI frontend");
+  assert.equal(health.frontend, "ok");
+  assert.equal(health.backendConfigured, true);
+  assert.equal(JSON.stringify(health).includes("127.0.0.1"), false);
+});
+
 test("protected requests reject missing cookies", async () => {
   assert.equal((await request("me")).status, 401);
 });
