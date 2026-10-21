@@ -79,6 +79,9 @@ class NvidiaMaxineMediaTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/openmindai/maxine/jobs/'.$id)
             ->assertOk()->assertJsonPath('status', 'completed')
             ->assertJsonPath('mime', 'audio/wav');
+        $savedPath = DB::table('maxine_jobs')->where('id', $id)->value('output_path');
+        $this->assertNotEmpty($savedPath);
+        Storage::disk('local')->assertExists($savedPath);
         $this->withToken($token)->get('/api/v1/openmindai/maxine/jobs/'.$id.'/download')->assertOk()
             ->assertHeader('Cache-Control', 'no-store, private');
         Http::assertSent(fn ($r) => $r->url() === 'https://maxine-worker.example.test/infer'
