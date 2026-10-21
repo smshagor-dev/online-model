@@ -1,5 +1,5 @@
 // Server-only hosted media bridge. Browser never receives third-party credentials.
-import { readProviderJson } from "./provider-response";
+import { readProviderJson } from "./provider-response.ts";
 export type HostedKind = "transcription" | "speech" | "video" | "document_create";
 type Work = { kind: HostedKind; prompt: string; input?: string; format?: "pdf" | "docx" };
 export type ProviderConfig = { apiKey: string; bridgeKey: string; chatModel?: string };
