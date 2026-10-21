@@ -41,6 +41,38 @@ class NvidiaModelCatalogAdminTest extends TestCase
         $this->assertDatabaseCount('hosted_code_agents', 42);
     }
 
+    public function test_all_models_are_active_without_falsely_passing_live_verification(): void
+    {
+        $this->administrator();
+        $response = $this->get('/admin/nvidia-models')->assertOk()
+            ->assertSee('Active catalog models')
+            ->assertSee('Route configured')
+            ->assertSee('NVIDIA live test')
+            ->assertDontSee('API configured · not verified')
+            ->assertDontSee('Verified (JSON API)');
+        $this->assertSame(42, DB::table('hosted_code_agents')->where('enabled', true)->count());
+
+        $user = User::create([
+            'name' => 'Desktop Developer', 'email' => 'catalog-developer@example.com',
+            'password' => 'TestPassword123',
+        ]);
+        $user->forceFill(['email_verified_at' => now()])->save();
+        $apiKey = $user->createToken('developer:Studio', ['openmindai:invoke'])->plainTextToken;
+        $this->app['auth']->forgetGuards();
+        $catalog = $this->withToken($apiKey)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data');
+        $this->assertCount(42, $catalog);
+        foreach ($catalog as $model) {
+            $this->assertTrue($model['active']);
+            $this->assertContains($model['inference_status'], ['configured', 'setup_required']);
+            if (!$model['available']) {
+                $this->assertSame('setup_required', $model['inference_status']);
+            }
+        }
+        $voice = collect($catalog)->firstWhere('id', 'nvidia-nemotron-voicechat');
+        $this->assertFalse($voice['provider_verified']);
+        $this->assertTrue($voice['active']);
+    }
+
     public function test_admin_configures_api_and_models_remain_visible(): void
     {
         $this->administrator();
