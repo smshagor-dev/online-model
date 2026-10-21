@@ -26,6 +26,7 @@ const publicRoutes = new Set([
 ]);
 const maxJsonResponse = 1024 * 1024;
 const identityRoutes = new Set([
+  "status", "public-config",
   "login", "login/verify-ip", "register", "email/verify-code",
   "email/resend", "forgot-password", "reset-password",
 ]);
