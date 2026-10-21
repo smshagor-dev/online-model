@@ -68,8 +68,14 @@ binary payloads up to 20 MB.
   endpoints. Do not forward provider error response bodies to clients.
 
 The API bridge makes the request synchronously; a short-lived shared-hosting
-process or timeout can interrupt a long-running provider call. Failed calls
-are marked failed where possible; the scheduler handles abandoned tasks.
+process or timeout can interrupt a long-running provider call. If the browser
+cancels after Laravel creates a task, the Next.js bridge will not start further
+inference or save a late provider result, and it attempts to mark the task
+failed. This prevents cancelled work from being reported as complete, but it
+does not guarantee that a provider has stopped billing or running an already
+accepted request. Deleting a task while generation is in progress removes
+its private record and rejects later attempts to save output. The scheduler
+handles abandoned tasks when a process exits before recording failure.
 Production-grade long video jobs may require a durable background worker.
 
 ## Verification before production
