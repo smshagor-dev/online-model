@@ -197,7 +197,7 @@ export async function hostedMediaRequest(
       const reply = await readJson(response, 1000000);
       const text = reply?.choices?.[0]?.message?.content;
       if (typeof text !== "string" || !text.trim()) throw new WorkError("Document generation returned no content.", 502);
-      const { renderDocx, renderPdf } = await import("./document-files");
+      const { renderDocx, renderPdf } = await import("./document-files.ts");
       const raw = job.format === "docx" ? renderDocx(text) : renderPdf(text);
       completed = { data: raw.toString("base64"), mime: job.format === "docx"
         ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/pdf" };
