@@ -66,12 +66,12 @@ Schedule::call(function () {
 
                     return;
                 }
-                if ($daily >= $dailyLimit) {
+                if ($dailyLimit > 0 && $daily >= $dailyLimit) {
                     $t->update(['next_run_at' => now()->addDay()->startOfDay()]);
 
                     return;
                 }
-                if (! $active && $daily < $dailyLimit) {
+                if (! $active && ($dailyLimit === 0 || $daily < $dailyLimit)) {
                     $run = TaskRun::create(['scheduled_task_id' => $t->id, 'steps' => [['label' => 'Scheduled run queued', 'status' => 'queued']]]);
                     RunWorkspaceTask::dispatch($run->id)->onQueue('tasks')->afterCommit();
                 }
