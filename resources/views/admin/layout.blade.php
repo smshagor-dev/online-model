@@ -16,6 +16,7 @@ $navigation = [
     ['Users', '/admin/users', 'people', request()->is('admin/users*')],
     ['Administrators', '/admin/administrators/create', 'shield', request()->is('admin/administrators*')],
     ['Chat models', '/admin/models', 'chip', request()->is('admin/models*')],
+    ['Code agents', '/admin/code-agents', 'chip', request()->is('admin/code-agents*')],
     ['Media models', '/admin/model-bundles', 'layers', request()->is('admin/model-bundles*')],
     ['API credits', '/admin/api-credits', 'credit', request()->is('admin/api-credits*')],
     ['Public assistants', '/admin/assistants', 'spark', request()->is('admin/assistants*')],
@@ -30,7 +31,7 @@ $navigation = [
         @foreach($navigation as $item)
             @if($loop->index === 0)<div class="nav-section">WORKSPACE</div>@endif
             @if($loop->index === 3)<div class="nav-section">AI OPERATIONS</div>@endif
-            @if($loop->index === 7)<div class="nav-section">ADMINISTRATION</div>@endif
+            @if($loop->index === 8)<div class="nav-section">ADMINISTRATION</div>@endif
             <a href="{{ $item[1] }}" @class(['admin-nav-item', 'selected' => $item[3]]) @if($item[3]) aria-current="page" @endif>
             <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" aria-hidden="true">
                 @switch($item[2])
