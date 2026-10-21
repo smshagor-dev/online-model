@@ -25,6 +25,13 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('api', fn ($r) => Limit::perMinute(60)->by($r->user()?->id ?: $r->ip()));
         RateLimiter::for('sensitive', fn ($r) => Limit::perMinute(5)->by('sensitive:'.$r->user()->id));
         RateLimiter::for('media', fn ($r) => Limit::perMinute(20)->by('media:'.$r->user()->id));
+        // Completion/rejection callbacks belong to a previously approved
+        // media task. They should not exhaust the five-per-minute limiter
+        // shared with key creation and account-security changes.
+        RateLimiter::for('media-callback', fn ($r) => [
+            Limit::perMinute(40)->by('media-callback-user:'.$r->user()->id),
+            Limit::perMinute(10)->by('media-callback-task:'.$r->user()->id.':'.$r->route('id')),
+        ]);
         RateLimiter::for('chat', function ($r) {
             $limits = [Limit::perMinute(10)->by('chat:'.$r->user()->id)];
             $daily = app(AdminSettings::class)->limit('chat_daily_limit');
