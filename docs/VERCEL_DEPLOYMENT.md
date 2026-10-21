@@ -50,6 +50,43 @@ Keep Preview deployments protected as appropriate. Their server-side gateway
 uses the same authenticated Laravel bridge, and deployment URLs alone are not
 authorizations to invoke provider models.
 
+## Native Mobile gateway
+
+The Flutter app connects to
+`https://chat.openmindai.org/api/mobile/v1` for Laravel login,
+OTP, password recovery, account profile, model catalog and SSE chat.
+This native route is **separate** from the browser-cookie
+`/api/backend/*` route and returns the Sanctum bearer token only to the
+native client. It never copies or writes browser session cookies.
+
+The existing `FRONTEND_CHAT_BRIDGE_KEY` (32+ characters, identical on
+Vercel and Laravel) is **required for native authentication**. Next.js
+uses Vercel's sanitized `x-vercel-forwarded-for` header to sign the
+original client IP with a request-body digest, path and short-lived timestamp.
+Laravel verifies that signature before unusual-network login checks and
+per-IP authentication throttles. This prevents all Mobile users from
+appearing to share Vercel's outgoing server IP.
+
+After deploying the backend middleware and frontend together:
+
+```bash
+curl -i -H 'Accept: application/json' https://chat.openmindai.org/api/mobile/v1/status
+curl -i -H 'Accept: application/json' https://chat.openmindai.org/api/mobile/v1/public-config
+```
+
+A healthy `status` response is
+`{"gateway":"ok","backend":"connected"}`.
+`HOSTING_FIREWALL_BLOCKED` means Imunify360 still blocks **Vercel's**
+outgoing requests to Laravel; a proxy alone cannot remove that block.
+Never send passwords, OTPs, bearer tokens or signed bridge headers in public
+diagnostic commands or logs.
+
+Native requests are allowlisted, bounded and JSON-only, and POSTs with
+browser Origin headers are rejected. No unrestricted upstream URLs or
+public credential proxy routes exist. Securely deploy both the **Next.js
+route and Laravel IP-verification middleware** before distributing a
+Mobile build. Existing web frontend authentication remains unchanged.
+
 ## Deployment workflow
 
 1. Link the Git repository to a Vercel project using **Root Directory =

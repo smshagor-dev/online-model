@@ -2,11 +2,13 @@ import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { spawn } from "node:child_process";
+import { createHash, createHmac } from "node:crypto";
 import { once } from "node:events";
 
 let backend, next, origin;
 let lastRequest;
 let logs = "";
+let mobileBackendBlocked = false;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 before(async () => {
   backend = http
@@ -17,9 +19,35 @@ before(async () => {
         url: req.url,
         method: req.method,
         authorization: req.headers.authorization,
+        mobileIp: req.headers["x-openmind-mobile-ip"],
+        mobileTime: req.headers["x-openmind-mobile-time"],
+        mobileSignature: req.headers["x-openmind-mobile-signature"],
         body,
       };
       res.setHeader("Content-Type", "application/json");
+      if (req.url === "/api/v1/public-config") {
+        if (mobileBackendBlocked) {
+          res.statusCode = 403;
+          res.setHeader("Content-Type", "text/html");
+          return res.end("<html>Access denied by Imunify360 bot-protection</html>");
+        }
+        return res.end(JSON.stringify({
+          registration_enabled: true, site_name: "OpenMindAI",
+        }));
+      }
+      if (req.url === "/api/v1/mobile/models")
+        return res.end(JSON.stringify({
+          data: [{ id: "openmindai-lite", operation: "chat.completions", available: true }],
+        }));
+      if (req.url === "/api/v1/mobile/chat/completions") {
+        res.setHeader("Content-Type", "text/event-stream");
+        return res.end('data: {"choices":[{"delta":{"content":"Hello from Cloud"}}]}\n\ndata: [DONE]\n\n');
+      }
+      if (req.url === "/api/v1/login/verify-ip")
+        return res.end(JSON.stringify({
+          token: "fixture-mobile-verified-token",
+          user: { id: 1, name: "Test User", email: "test@example.com" },
+        }));
       if (req.url === "/api/v1/login")
         return res.end(
           JSON.stringify({
@@ -170,6 +198,8 @@ before(async () => {
         NEXT_TELEMETRY_DISABLED: "1",
         // These fixtures exercise the local backend proxy independently of .env.
         CHAT_PROVIDER: "local",
+        FRONTEND_CHAT_BRIDGE_KEY: "0123456789abcdef0123456789abcdef",
+        VERCEL: "0",
         FRONTEND_URL: origin,
         LARAVEL_API_URL: `http://127.0.0.1:${backend.address().port}/api/v1`,
       },
@@ -654,6 +684,124 @@ test("guest chat works without a token, still rejects cross-origin requests and 
   const conversation = await fetch(`${origin}/c/7-example-chat`);
   assert.equal(conversation.status, 200);
   assert.match(await conversation.text(), /OpenMindAI/);
+});
+
+
+const mobileRequest = (path, options = {}) =>
+  fetch(origin + "/api/mobile/v1/" + path, options);
+
+test("mobile gateway checks real Laravel backend status", async () => {
+  const status = await mobileRequest("status");
+  assert.equal(status.status, 200);
+  assert.deepEqual(await status.json(), { gateway: "ok", backend: "connected" });
+  const config = await mobileRequest("public-config");
+  assert.equal(config.status, 200);
+  assert.equal((await config.json()).registration_enabled, true);
+});
+
+test("mobile login returns Sanctum token, not a browser cookie", async () => {
+  const response = await mobileRequest("login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: "test@example.com",
+      password: "fixture-password",
+      device_name: "OpenMindAI Mobile",
+    }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).token, "fixture-secret-token");
+  assert.equal(response.headers.get("set-cookie"), null);
+  assert.equal(lastRequest.authorization, undefined);
+  assert.ok(lastRequest.mobileIp, "signed client IP must reach Laravel");
+  assert.ok(lastRequest.mobileTime);
+  const message = [
+    lastRequest.mobileTime, lastRequest.mobileIp, "POST", "/api/v1/login",
+    createHash("sha256").update(lastRequest.body).digest("hex"),
+  ].join("\n");
+  assert.equal(lastRequest.mobileSignature,
+    createHmac("sha256", "0123456789abcdef0123456789abcdef")
+      .update(message).digest("hex"));
+  assert.match(response.headers.get("cache-control") || "", /no-store/);
+});
+
+test("mobile unfamiliar-network OTP returns a bearer session", async () => {
+  const response = await mobileRequest("login/verify-ip", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      challenge_id: "00000000-0000-4000-8000-000000000001",
+      code: "123456",
+    }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).token, "fixture-mobile-verified-token");
+  assert.equal(response.headers.get("set-cookie"), null);
+});
+
+test("mobile APIs reject browser cookies and require a bearer token", async () => {
+  assert.equal((await mobileRequest("me")).status, 401);
+  assert.equal((await mobileRequest("mobile/models", {
+    headers: { Cookie: "openmindai_token=fixture-secret-token" },
+  })).status, 401);
+  const response = await mobileRequest("mobile/models", {
+    headers: { Authorization: "Bearer fixture-mobile-secret-token" },
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).data[0].id, "openmindai-lite");
+  assert.equal(lastRequest.authorization, "Bearer fixture-mobile-secret-token");
+});
+
+test("native mobile SSE streams and preserves bearer authentication", async () => {
+  const response = await mobileRequest("mobile/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer fixture-mobile-secret-token",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "openmindai-lite",
+      messages: [{ role: "user", content: "Hello" }],
+      stream: true,
+    }),
+  });
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/event-stream/);
+  assert.match(await response.text(), /data: \[DONE\]/);
+  assert.equal(lastRequest.authorization, "Bearer fixture-mobile-secret-token");
+});
+
+test("native gateway rejects browser origins, unknown paths and oversized bodies", async () => {
+  assert.equal((await mobileRequest("login", {
+    method: "POST",
+    headers: { Origin: origin, "Content-Type": "application/json" },
+    body: "{}",
+  })).status, 403);
+  assert.equal((await mobileRequest("evil/admin-token")).status, 404);
+  assert.equal((await mobileRequest("me?url=https://evil.example", {
+    headers: { Authorization: "Bearer fixture-mobile-secret-token" },
+  })).status, 400);
+  assert.equal((await mobileRequest("login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: "a".repeat(45000) }),
+  })).status, 413);
+});
+
+test("mobile status identifies upstream WAF blocks without returning HTML", async () => {
+  mobileBackendBlocked = true;
+  try {
+    const status = await mobileRequest("status");
+    assert.equal(status.status, 503);
+    assert.equal((await status.json()).reason, "HOSTING_FIREWALL_BLOCKED");
+    const response = await mobileRequest("public-config");
+    assert.equal(response.status, 503);
+    const data = await response.json();
+    assert.equal(data.code, "HOSTING_FIREWALL_BLOCKED");
+    assert.equal(JSON.stringify(data).includes("<html>"), false);
+  } finally {
+    mobileBackendBlocked = false;
+  }
 });
 
 test("legacy document preview requires an authenticated same-origin request", async () => {
