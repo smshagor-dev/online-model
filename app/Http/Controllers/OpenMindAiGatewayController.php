@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\ApiCreditUsage;
 use App\Services\FirstPartySignature;
 use App\Services\HostedCodeAgents;
+use App\Services\MultilingualPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -268,7 +269,7 @@ class OpenMindAiGatewayController
             $stream = (bool) ($data['stream'] ?? false);
             $payload = [
                 'model' => $agent->provider_model,
-                'messages' => $data['messages'],
+                'messages' => $mobile ? MultilingualPrompt::apply($data['messages']) : $data['messages'],
                 'max_tokens' => $data['max_tokens'] ?? 2048,
                 'stream' => $stream,
             ];
