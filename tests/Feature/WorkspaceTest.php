@@ -209,10 +209,10 @@ class WorkspaceTest extends TestCase
         $this->getJson('/api/v1/canvases/'.$id)->assertNotFound();
     }
 
-    public function test_search_requires_explicit_self_hosted_configuration(): void
+    public function test_search_is_unavailable_when_all_providers_are_disabled(): void
     {
         Sanctum::actingAs($this->user());
-        config(['models.search_url' => null]);
+        config(['models.search_url' => null, 'models.public_search_fallback' => false]);
         Http::preventStrayRequests();
         $this->getJson('/api/v1/capabilities')->assertOk()->assertJsonPath('web_search', false);
         $this->postJson('/api/v1/web-search', ['query' => 'test'])->assertStatus(503);
