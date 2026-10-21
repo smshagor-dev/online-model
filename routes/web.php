@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminAccountController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ApiCreditsController;
 use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\AssistantGalleryController;
 use App\Http\Controllers\AuthController;
@@ -16,6 +17,9 @@ Route::get('/admin/login', [AdminController::class, 'loginForm'])->name('login')
 Route::post('/admin/login', [AdminController::class, 'login'])->middleware('throttle:auth');
 Route::prefix('admin')->middleware(['auth', 'active', 'admin'])->group(function () {
     Route::get('/', [AdminController::class, 'dashboard']);
+    Route::get('api-credits', [ApiCreditsController::class, 'index']);
+    Route::patch('api-credits/models/{id}', [ApiCreditsController::class, 'modelLimit'])->middleware('throttle:sensitive');
+    Route::patch('api-credits/users/{user}', [ApiCreditsController::class, 'userLimit'])->middleware('throttle:sensitive');
     Route::get('settings', [AdminSettingsController::class, 'index']);
     Route::get('smtp-settings', [SmtpSettingsController::class, 'index']);
     Route::patch('smtp-settings', [SmtpSettingsController::class, 'update'])->middleware('throttle:sensitive');

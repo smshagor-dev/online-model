@@ -9,6 +9,7 @@ use App\Models\MediaTask;
 use App\Models\Message;
 use App\Models\TaskRun;
 use App\Services\AdminSettings;
+use App\Services\ApiCreditUsage;
 use App\Models\User;
 use App\Services\HuggingFace;
 use App\Services\TwoFactor;
@@ -78,7 +79,7 @@ class AdminController
         return redirect('/admin/login');
     }
 
-    public function dashboard(AdminSettings $settings)
+    public function dashboard(AdminSettings $settings, ApiCreditUsage $creditUsage)
     {
         $registrations = [];
         for ($daysAgo = 6; $daysAgo >= 0; $daysAgo--) {
@@ -88,6 +89,9 @@ class AdminController
 
         return view('admin.dashboard', [
             'settings' => $settings->all(),
+            'creditModels' => $creditUsage->models(),
+            'creditUsers' => $creditUsage->users(),
+            'creditMonth' => now()->format('F Y'),
             'stats' => [
                 'users' => User::count(),
                 'new_users' => User::where('created_at', '>=', now()->subDays(30))->count(),
@@ -123,9 +127,9 @@ class AdminController
         return view('admin.users', ['users' => $q->latest()->paginate(25)->withQueryString()]);
     }
 
-    public function user(Request $r, User $user)
+    public function user(Request $r, User $user, ApiCreditUsage $creditUsage)
     {
-        return view('admin.user', ['account' => $user, 'tokens' => $user->tokens()->get(['id', 'name', 'last_used_at', 'created_at'])]);
+        return view('admin.user', ['account' => $user, 'tokens' => $user->tokens()->get(['id', 'name', 'last_used_at', 'created_at']), 'creditModels' => $creditUsage->userModels($user->id), 'creditUsed' => (int) DB::table('api_credit_usage')->where('user_id', $user->id)->where('created_at', '>=', $creditUsage->monthStart())->sum('credits')]);
     }
 
     public function updateUser(Request $r, User $user)

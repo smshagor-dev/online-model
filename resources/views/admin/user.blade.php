@@ -20,6 +20,22 @@
         </form>
         @endunless
         <section class="admin-card">
+            <div class="section-separator"><h2>API request credits</h2><p>{{ now()->format('F Y') }} · successful hosted requests</p></div>
+            @include('admin.credit-pie', ['used' => $creditUsed, 'limit' => $account->monthly_credit_limit])
+            <div class="credit-usage-list">
+                @forelse($creditModels as $m)
+                    @if($m->used)<div class="info-row"><span>{{ $m->model_key }} · {{ $m->kind }}</span><strong>{{ number_format($m->used) }}</strong></div>@endif
+                @empty<p class="field-help">No API requests recorded this month.</p>@endforelse
+            </div>
+            <form method="post" class="credit-limit-form" action="/admin/api-credits/users/{{ $account->id }}">
+                @csrf @method('PATCH')
+                <label>Monthly credit allocation (blank = not configured)<input type="number" min="1" max="100000000" name="monthly_credit_limit" value="{{ $account->monthly_credit_limit }}"></label>
+                <label>Current admin password<input name="current_password" type="password" required autocomplete="current-password"></label>
+                @if(auth()->user()->two_factor_confirmed_at)<label>Two-factor code<input name="code" maxlength="64" required autocomplete="one-time-code"></label>@endif
+                <button class="btn-primary-admin" type="submit">Save user allocation</button>
+            </form>
+        </section>
+        <section class="admin-card">
             <div class="section-separator"><h2>Devices and access tokens</h2><p>Devices that have previously accessed this account.</p></div>
             <div class="table-wrap"><table class="admin-table"><thead><tr><th>Device</th><th>Last used</th></tr></thead><tbody>
                 @forelse($tokens as $token)<tr><td>{{ $token->name }}</td><td>{{ $token->last_used_at ?? 'Never' }}</td></tr>@empty<tr><td colspan="2" class="empty-state">No active access tokens.</td></tr>@endforelse

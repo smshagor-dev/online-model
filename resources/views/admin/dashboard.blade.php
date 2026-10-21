@@ -24,6 +24,7 @@
 @endforeach
 <div class="panel-bottom"><span>Not a remote runtime health check</span><a href="/admin/models">Manage models →</a></div></section>
 </div>
+@include('admin.credit-overview')
 <div class="dashboard-grid two-tables">
 <section class="card"><div class="panel-heading"><div><h2>Recent users</h2><p>Newest registered accounts</p></div><a href="/admin/users" class="view-all">View all →</a></div>
 <div class="scroll"><table><thead><tr><th>Account</th><th>Joined</th><th>Status</th></tr></thead><tbody>
