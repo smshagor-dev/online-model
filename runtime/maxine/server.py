@@ -151,7 +151,7 @@ def run_model(model: str, payload: bytes, *, root: Path, api_key: str, boxes: by
                 raise RuntimeError("Invalid pose JSON Lines output") from exc
         if model == "nvidia-active-speaker-detection" and result[4:8] != b"ftyp":
             raise RuntimeError("Invalid MP4 output")
-        if model == "nvidia-synthetic-video-detector" and not result.startswith(b"index,probability\\n"):
+        if model == "nvidia-synthetic-video-detector" and not result.startswith(b"index,probability\n"):
             raise RuntimeError("Invalid CSV output")
         return spec["mime"], result
 
