@@ -27,7 +27,7 @@ test("chat header is static while existing model routing remains active", () => 
   assert.doesNotMatch(workspace, /className="model-menu-wrapper"/);
   assert.match(workspace, /setModelId\(\(previous\) =>/);
   assert.match(workspace, /model_id: inlineImage && !override \? -2 : modelId/);
-  assert.match(workspace, /aria-label="OpenMindAI model"/);
+  assert.match(workspace, /<ModelPicker models=\{models\}/);
   assert.doesNotMatch(workspace, /This chat uses an external AI service/);
 });
 

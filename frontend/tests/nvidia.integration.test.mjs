@@ -401,3 +401,31 @@ test("long code responses have an explicit budget and continue after a token bou
   assert.match(body, /Bottle design<\/body><\/html>/);
   assert.match(body, /"status":"complete"/);
 });
+
+test("a catalog model selected in the picker reaches backend inference with its exact provider ID", async () => {
+  const { hostedCatalog } = await import("../src/lib/nvidia-chat.ts");
+  const previousBridge = process.env.FRONTEND_CHAT_BRIDGE_KEY;
+  const rows = [{id: "openmindai-flash", name: "Flash", provider_model: "deepseek-ai/flash"}];
+  const selected = hostedCatalog(rows)[0];
+  process.env.FRONTEND_CHAT_BRIDGE_KEY = "k".repeat(32);
+  try {
+    const f = fixture({providerUrl: "https://backend/api/v1/chat/provider", providerAuthorization: "Bearer user-token"});
+    const fetcher = async (url, options) => {
+      if (url.endsWith("/public-config")) return Response.json({frontend_inference_route: "backend"});
+      if (url.endsWith("/chat/hosted-models")) return Response.json({data: rows});
+      return f.fetcher(url, options);
+    };
+    const response = await nvidiaChat(JSON.stringify({message: "Hi", model_id: selected.id}), "user-token",
+      "https://backend/api/v1", new AbortController().signal, {fetcher});
+    assert.match(await response.text(), /Hello/);
+    const request = f.calls.find(call => call.url.endsWith("/chat/provider"));
+    assert.equal(request.body.model, rows[0].provider_model);
+    assert.equal(f.calls.some(call => call.url.includes("nvidia.com")), false);
+    const rejected = await nvidiaChat(JSON.stringify({message: "Hi", model_id: selected.id - 1}), "user-token",
+      "https://backend/api/v1", new AbortController().signal, {fetcher});
+    assert.equal(rejected.status, 404);
+  } finally {
+    if (previousBridge === undefined) delete process.env.FRONTEND_CHAT_BRIDGE_KEY;
+    else process.env.FRONTEND_CHAT_BRIDGE_KEY = previousBridge;
+  }
+});

@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import {
   nvidiaChat,
+  hostedCatalog,
   nvidiaEnabled,
   nvidiaModels,
   isNvidiaModelId,
@@ -173,7 +174,7 @@ async function proxy(
       if (!Array.isArray(catalog.data)) return NextResponse.json({ message: "Invalid hosted model catalog." }, { status: 503 });
       const allowed = catalog.data.map((model: {id:string}) => model.id);
       return NextResponse.json(
-        [...nvidiaModels(allowed), ...(Array.isArray(local) ? local : [])],
+        [...nvidiaModels(allowed, hostedCatalog(catalog.data)), ...(Array.isArray(local) ? local : [])],
         { headers: { "Cache-Control": "no-store" } },
       );
     } catch {

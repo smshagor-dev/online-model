@@ -16,13 +16,46 @@ export const NVIDIA_HOSTED_MODELS = [
   { id: -3, slug: "openmindai-ultra", name: "OpenMindAI Ultra", provider: "nvidia/nemotron-3-ultra-550b-a55b" },
   { id: -1, slug: "openmindai-lite", name: "OpenMindAI Lite", provider: "nvidia/nemotron-3.5-lightning-30b-a3b" },
 ] as const;
+type HostedModel = { id: number; slug: string; name: string; provider: string };
+const chatLabels: Record<string, string> = {
+  "nvidia-step-5-preview": "Horizon Preview",
+  "nvidia-deepseek-v4.1-flash": "Flash",
+  "nvidia-glm-5-3": "Reason",
+  "nvidia-glm-5-3-flash": "Reason Fast",
+  "nvidia-muse-glimmer-30b": "Glimmer",
+  "nvidia-riva-translate-4b-instruct-v2": "Translate",
+  "nvidia-ising-calibration-1.5-31b": "Science Plus",
+  "nvidia-laguna-xs-2.1": "Code",
+  "nvidia-diffusiongemma-26b-a4b-it": "Compose",
+  "nvidia-nemotron-3.5-content-safety": "Safety",
+  "nvidia-cosmos3-nano-reasoner": "Scene",
+  "nvidia-nemotron-3-nano-omni-30b-a3b-reasoning": "Omni",
+  "nvidia-ising-calibration-1-35b-a3b": "Science",
+  "nvidia-gemma-4-31b-it": "Craft",
+  "nvidia-llama-3.1-nemotron-safety-guard-8b-v3": "Guard",
+  "nvidia-gpt-oss-20b": "Logic",
+  "nvidia-llama-guard-4-12b": "Vision Guard",
+  "nvidia-nemotron-3-super-120b-a12b": "Planner",
+  "nvidia-llama-3.2-11b-vision-instruct": "Vision",
+  "nvidia-llama-3.2-90b-vision-instruct": "Vision Plus",
+};
+export function hostedCatalog(rows: {id: string; name?: string; provider_model?: string}[]): HostedModel[] {
+  return rows.map((row) => {
+    const known = NVIDIA_HOSTED_MODELS.find((model) => model.slug === row.id);
+    if (known) return {...known, name: known.name, provider: row.provider_model || known.provider};
+    // Stable IDs preserve selection when the catalog order changes.
+    let hash = 2166136261;
+    for (const char of row.id) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+    const label = (chatLabels[row.id] || row.name || row.id).replace(/^openmindai[ -]*/i, "").replace(/[-_]/g, " ");
+    return {id: -1000 - (hash >>> 0), slug: row.id, name: "OpenMindAI " + label, provider: row.provider_model || ""};
+  }).filter((model) => Boolean(model.provider));
+}
 export const isNvidiaModelId = (id: number) =>
-  id === NVIDIA_AUTO_MODEL_ID || NVIDIA_HOSTED_MODELS.some((model) => model.id === id);
-export const nvidiaModels = (allowed: string[]) => [
-  ...(allowed.length ? [{id: NVIDIA_AUTO_MODEL_ID, name: "OpenMindAI Auto", family: "Hosted AI", license: "External inference service"}] : []),
-  ...NVIDIA_HOSTED_MODELS
-    .filter((model) => allowed.includes(model.slug))
-    .map((model) => ({id: model.id, name: model.name, family: "Hosted coding", license: "External inference service"})),
+  Number.isSafeInteger(id) && (id <= -1000 || id === NVIDIA_AUTO_MODEL_ID || NVIDIA_HOSTED_MODELS.some((model) => model.id === id));
+export const nvidiaModels = (allowed: string[], catalog: HostedModel[] = [...NVIDIA_HOSTED_MODELS]) => [
+  ...(allowed.length ? [{id: NVIDIA_AUTO_MODEL_ID, name: "OpenMindAI Auto", family: "Automatic selection", license: "External inference service"}] : []),
+  ...catalog.filter((model) => allowed.includes(model.slug))
+    .map((model) => ({id: model.id, name: model.name, family: "Chat", license: "External inference service"})),
 ];
 export const nvidiaEnabled = () => process.env.CHAT_PROVIDER === "nvidia";
 export function nvidiaModel() {
@@ -109,7 +142,22 @@ export async function nvidiaChat(
   // Only text and metadata are sent to Laravel. Image bytes stay inside Next.js.
   const {image: _discardImage, ...backendInput} = input;
   void _discardImage;
-  const selected = NVIDIA_HOSTED_MODELS.find((model) => model.id === Number(input.model_id));
+  let catalog: HostedModel[] = [...NVIDIA_HOSTED_MODELS];
+  if (!options.config) {
+    try {
+      const response = await fetcher(base.replace(/\/$/, "") + "/chat/hosted-models", {
+        headers: {Authorization: "Bearer " + token, Accept: "application/json"},
+        cache: "no-store", redirect: "error", signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
+      });
+      if (!response.ok) return Response.json({message: "Cannot load models."}, {status: response.status});
+      const data = await response.json();
+      if (!Array.isArray(data.data)) throw new Error("Invalid catalog");
+      catalog = hostedCatalog(data.data);
+    } catch {
+      return Response.json({message: "Cannot load models."}, {status: 503});
+    }
+  }
+  const selected = catalog.find((model) => model.id === Number(input.model_id));
   const isAuto = Number(input.model_id) === NVIDIA_AUTO_MODEL_ID;
   if (!selected && !isAuto && !input.resume_message_id && !options.config)
     return Response.json({message: "Unknown hosted model."}, {status: 404});
@@ -117,20 +165,7 @@ export async function nvidiaChat(
   // Respect Laravel's existing admin-managed availability without changing its controllers.
   if ((selected || isAuto) && !options.config && !input.resume_message_id) {
     try {
-      const response = await fetcher(base.replace(/\/$/, "") + "/chat/hosted-models", {
-        headers: {Authorization: "Bearer " + token, Accept: "application/json"},
-        cache: "no-store", redirect: "error",
-        signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
-      });
-      if (!response.ok)
-        return Response.json({message: "Cannot verify available models."},
-          {status: response.status === 401 ? 401 : 503});
-      const catalog = await response.json();
-      if (!Array.isArray(catalog.data))
-        return Response.json({message: "Invalid model catalog."}, {status: 503});
-      const allowedSlugs: string[] = catalog.data
-        .map((m: {id?: string}) => m.id)
-        .filter((id: unknown): id is string => typeof id === "string");
+      const allowedSlugs = catalog.map((model) => model.slug);
       permittedSlugs = allowedSlugs;
       if ((isAuto && allowedSlugs.length === 0) ||
           (selected && !allowedSlugs.includes(selected.slug)))
@@ -145,7 +180,7 @@ export async function nvidiaChat(
   let fallbackModel = config.model;
   if (permittedSlugs?.length) {
     fallbackModel = permittedSlugs.includes("openmindai-lite") ? NVIDIA_HOSTED_MODELS[2].provider :
-      permittedSlugs.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : NVIDIA_HOSTED_MODELS[1].provider;
+      permittedSlugs.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : (catalog.find((model) => model.slug === permittedSlugs?.[0])?.provider || config.model);
   }
   // The classifier is a paid upstream call: confirm the Laravel session first.
   // Existing injected test fixtures already exercise authenticated bridge responses.
@@ -170,7 +205,7 @@ export async function nvidiaChat(
     const routing = serverRouterConfig(inferenceRoute === "backend" ? "backend-managed" : config.apiKey, config.model);
     if (isAuto && permittedSlugs) {
       const fast = available.includes("openmindai-lite") ? NVIDIA_HOSTED_MODELS[2].provider :
-        available.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : NVIDIA_HOSTED_MODELS[1].provider;
+        available.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : (catalog.find((model) => model.slug === available[0])?.provider || config.model);
       const reasoning = available.includes("openmindai-ultra") ? NVIDIA_HOSTED_MODELS[1].provider :
         available.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : fast;
       routing.fastModel = fast;
@@ -196,7 +231,7 @@ export async function nvidiaChat(
       });
     }
   }
-  // An explicit Lite/Super/Ultra selection is honored for ordinary text chat;
+  // An explicit model selection is honored for ordinary text chat;
   // automatic requests use the prompt's result. Images always require Super VL.
   if (selected && !inlineImage && !options.config) routedModel = selected.provider;
   const backend = async (
