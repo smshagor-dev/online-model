@@ -409,13 +409,14 @@ export async function nvidiaChat(
               return data;
             },
             artifact: async work => {
-              if (!config.apiKey && work.kind !== "document_create") return {ok:false,message:"This media service has not been configured on the server."};
+              if (!config.apiKey && !["document_create", "image"].includes(work.kind)) return {ok:false,message:"This media service has not been configured on the server."};
               const request = work.kind === "image"
-                ? generateHostedImage(JSON.stringify({prompt:work.prompt}),token,base,upstreamAbort.signal,{fetcher,config:{apiKey:config.apiKey,bridgeKey:config.bridgeKey}})
+                ? generateHostedImage(JSON.stringify({prompt:work.prompt}),token,base,upstreamAbort.signal,{fetcher,waitForCompletion:true})
                 : hostedMediaRequest(JSON.stringify(work),token,base,upstreamAbort.signal,{fetcher,config:{apiKey:config.apiKey || "backend-managed",bridgeKey:config.bridgeKey,chatModel:activeModel}});
               const response = await request;
               if (!response.ok) return {ok:false,message:"The requested file could not be generated."};
               const saved = await response.json();
+              if (saved.status === "queued" || saved.status === "running" || response.status === 202) return {ok:false,message:"Image generation continues in the background. Check Library for the saved task."};
               if (!Number.isSafeInteger(saved.id) || saved.id < 1 || saved.status !== "complete") return {ok:false,message:"The generated output was not saved."};
               generatedFiles.push({id:saved.id,kind:work.kind});
               emit("artifact", {id:saved.id,kind:work.kind});
