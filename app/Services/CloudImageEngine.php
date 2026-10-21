@@ -22,6 +22,7 @@ class CloudImageEngine
             return false;
         }
         $parts = parse_url($url);
+
         // The URL is set by the operator, never accepted from a user request.
         return ($parts['scheme'] ?? null) === 'https'
             && ! isset($parts['user']) && ! isset($parts['pass'])
@@ -45,6 +46,7 @@ class CloudImageEngine
                 (string) config('cloud_images.mask_model') !== '', 503,
                 'Inpainting and outpainting require a compatible private masking NIM.');
         }
+
         return ['mode' => $mode, 'aspect_ratio' => $ratio];
     }
 
@@ -133,6 +135,7 @@ class CloudImageEngine
             || ! $size || $size[0] * $size[1] > 16000000) {
             throw new RuntimeException('Image output failed content validation.');
         }
+
         return ['binary' => $binary, 'mime' => $mime, 'model' => $model];
     }
 }
