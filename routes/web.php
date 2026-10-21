@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminAccountController;
+use App\Http\Controllers\CodeAgentsAdminController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ApiCreditsController;
 use App\Http\Controllers\AdminSettingsController;
@@ -43,6 +44,10 @@ Route::prefix('admin')->middleware(['auth', 'active', 'admin'])->group(function 
     Route::get('model-bundles/inspect', [ModelBundleController::class, 'inspect'])->middleware('throttle:hub');
     Route::post('model-bundles', [ModelBundleController::class, 'import'])->middleware('throttle:hub');
     Route::post('model-bundles/{bundle}/download', [ModelBundleController::class, 'download']);
+    Route::get('code-agents', [CodeAgentsAdminController::class, 'index']);
+    Route::patch('code-agents/{slug}', [CodeAgentsAdminController::class, 'model'])->middleware('throttle:sensitive');
+    Route::post('code-agents/apps', [CodeAgentsAdminController::class, 'addApp'])->middleware('throttle:sensitive');
+    Route::delete('code-agents/apps/{app}', [CodeAgentsAdminController::class, 'disableApp'])->middleware('throttle:sensitive');
     Route::get('models', [AdminController::class, 'models']);
     Route::get('models/search', [AdminController::class, 'search'])->middleware('throttle:hub');
     Route::get('models/inspect', [AdminController::class, 'inspect'])->middleware('throttle:hub');
