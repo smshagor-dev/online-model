@@ -4,7 +4,7 @@
 
 Run Laravel migrations. Set `NVIDIA_API_KEY` in the Laravel server's private `.env` (not in Git or `NEXT_PUBLIC_`). The Next.js hosted chat also needs its own private `NVIDIA_API_KEY` if its original hosted-chat path remains in use. Both servers can use the same key, but keep it server-side.
 
-In Admin → Code agents enable OpenMindAI Super, Ultra or Lite. Their NVIDIA model IDs are stored in the database. Model availability and provider quota are controlled by NVIDIA and must be tested with your key.
+In Admin → NVIDIA models, every registered model stays visible; OpenMindAI Super, Ultra and Lite can be selected for chat. Their NVIDIA model IDs are stored in the database. Model availability and provider quota are controlled by NVIDIA and must be tested with your key.
 
 The public API base URL is `{APP_URL}/api/v1/openmindai`, for example `https://models.example.com/api/v1/openmindai`. Replace the example hostname with your deployed Laravel APP_URL.
 
@@ -47,14 +47,14 @@ Construct the canonical input as `timestamp + "\n" + nonce + "\n" + uppercase_me
 
 ## NVIDIA Build free-endpoint catalog (2026-10-21)
 
-The NVIDIA Build catalog advertised 42 free endpoint models on October 21, 2026. The migration `2026_10_21_000006_nvidia_free_model_catalog.php` seeds them into the existing `hosted_code_agents` database table. The three original OpenMindAI chat aliases remain enabled and ready; the other 39 are disabled and not marked API-ready until an administrator has checked the exact NVIDIA model identifier, endpoint path, request schema and account entitlement.
+The NVIDIA Build catalog advertised 42 free endpoint models on October 21, 2026. The migration `2026_10_21_000006_nvidia_free_model_catalog.php` seeds them into the existing `hosted_code_agents` database table. All 42 models are permanently listed in the authenticated catalogs, including models whose specialized API integration still requires verification. Chat models use the shared chat-completion route. Provider entitlement and API quotas must be checked independently.
 
-Admin → NVIDIA models (`/admin/nvidia-models`) displays all 42, with search, categories, editable display labels, NVIDIA model IDs, JSON API paths, whether the endpoint expects a model field, readiness and visibility. This is a database-backed configuration, not a .env list. Changing availability immediately affects the frontend catalog; no Next.js code change is needed for model discovery.
+Admin → NVIDIA models (`/admin/nvidia-models`) displays all 42, with search, categories, editable display labels, NVIDIA model IDs, JSON API paths, whether the endpoint expects a model field, and integration readiness. Models cannot be hidden or disabled through this admin menu. This is a database-backed configuration, not a .env list. Updating configuration changes how inference requests are routed, but never removes models from catalog discovery.
 
 Authenticated developer-key endpoints:
 
-- `GET /api/v1/openmindai/catalog` lists **enabled** models, including category, readiness, supported operation and relative API path when ready.
-- `GET /api/v1/openmindai/models` lists only enabled, API-ready chat models.
+- `GET /api/v1/openmindai/catalog` lists **all** registered models, including category, integration readiness, supported operation and a relative path only when ready.
+- `GET /api/v1/openmindai/models` lists all registered models with `available` and `operation` metadata so clients can distinguish catalog visibility from API readiness.
 - `POST /api/v1/openmindai/chat/completions` retains the existing streaming and non-streaming chat gateway.
 - `POST /api/v1/openmindai/models/{slug}/invoke` routes admin-verified **non-chat JSON** models to their configured NVIDIA `/v1/` API path, provided the service uses the `integrate.api.nvidia.com` origin.
 
@@ -66,4 +66,9 @@ Invoke request body:
 
 The backend removes any caller-supplied `model` or `stream`, optionally inserts the server-side model ID and returns `{"model":"alias","output":{...provider JSON...}}`. It enforces the same user and model monthly limits and records successful requests. API keys are never sent to arbitrary user-selected hosts. HMAC-protected first-party equivalents exist under `/api/v1/first-party/catalog` and `/api/v1/first-party/models/{slug}/invoke`.
 
-**Important:** NVIDIA's free endpoint badge does not guarantee unrestricted or commercial availability. Models have different schemas and not all accept JSON-only invocation. No binary uploads, streaming audio, asynchronous media jobs, signed URLs or unsupported endpoint families are exposed through this gateway. These require their own reviewed integrations. Do not enable an untested specialized model solely because it appears in the catalog.
+**Important:** NVIDIA's free endpoint badge does not guarantee unrestricted or commercial availability. Models have different schemas and not all accept JSON-only invocation. No binary uploads, streaming audio, asynchronous media jobs, signed URLs or unsupported endpoint families are exposed through this gateway. These require their own reviewed integrations. Models remain discoverable even without a verified specialized API route. A valid Developer API Key authenticates to OpenMindAI Cloud, not to every NVIDIA model, and does not waive provider restrictions.
+
+
+### Always-visible model catalog
+
+All seeded NVIDIA Build models appear in both model discovery endpoints. A follow-up migration restores previously disabled rows and configures the common chat-completions path for chat models, so `enabled` is not a client-visibility toggle. The backend still returns unavailable/404 for unsupported specialized inference operations until their request format and NVIDIA path are configured. Free endpoint status, actual uptime, rate limits and account-level NVIDIA access remain external to OpenMindAI; listing a model does not promise successful inference.
