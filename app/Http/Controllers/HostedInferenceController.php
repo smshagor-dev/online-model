@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
@@ -32,6 +33,7 @@ class HostedInferenceController
             ->withOptions(['allow_redirects' => false]);
         $stream = false;
 
+        try {
         if ($kind === 'chat') {
             $model = $params['model'] ?? null;
             abort_unless(is_string($model) && strlen($model) <= 190, 422, 'Invalid chat model.');
@@ -116,6 +118,11 @@ class HostedInferenceController
                 'resolution' => '480_16_9', 'num_frames' => 25,
                 'num_inference_steps' => 35, 'fps' => 24, 'seed' => 42,
             ]);
+        }
+
+        } catch (ConnectionException $exception) {
+            // Timeouts, DNS and TLS errors must not leak upstream URLs or keys.
+            abort(503, 'The inference backend cannot reach the generation service.');
         }
 
         if (! $response->successful()) {
