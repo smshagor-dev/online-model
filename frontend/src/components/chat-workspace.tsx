@@ -886,7 +886,9 @@ export default function ChatWorkspace() {
         );
       } else {
         if (!receivedMeta) {
-          setMessages(history);
+          // Keep the submitted turn visible when preparation fails, so an error
+          // cannot silently drop the user back onto the welcome screen.
+          setMessages([...history, { role: "user", content: text }]);
           if (!override?.resumeId) setDraft(text);
         }
         report(e);

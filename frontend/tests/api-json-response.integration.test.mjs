@@ -80,3 +80,8 @@ test("chat stream rejects an HTML page rather than presenting a parse error", as
     globalThis.fetch = original;
   }
 });
+
+ test("blank backend errors always have a visible fallback", async () => {
+  await assert.rejects(readApiJson(jsonResponse({message: "", errors: {chat: [" "]}}, 403), "chat/stream"),
+    error => error instanceof ApiError && error.status === 403 && error.message.includes("403"));
+});

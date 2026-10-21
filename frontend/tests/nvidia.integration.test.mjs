@@ -372,3 +372,11 @@ test("backend routing uses Laravel credentials and never requires a frontend pro
     if (oldBridge === undefined) delete process.env.FRONTEND_CHAT_BRIDGE_KEY; else process.env.FRONTEND_CHAT_BRIDGE_KEY = oldBridge;
   }
 });
+
+test("blank backend bridge rejection has an actionable error", async () => {
+  const response = await nvidiaChat(JSON.stringify({model_id: -1, message: "Hello"}), "token", "https://backend.test/api/v1", new AbortController().signal, {
+    config, fetcher: async () => Response.json({message: ""}, {status: 403}),
+  });
+  assert.equal(response.status, 403);
+  assert.match((await response.json()).message, /FRONTEND_CHAT_BRIDGE_KEY/);
+});

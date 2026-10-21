@@ -237,7 +237,11 @@ export async function nvidiaChat(
       } catch {
         data = { message: "Backend could not prepare chat." };
       }
-      return Response.json(data, {
+      const detail = typeof data?.message === "string" ? data.message.trim() : "";
+      const message = detail || (prepared.status === 403
+        ? "The chat connection was rejected by the backend (403). Ask the administrator to match FRONTEND_CHAT_BRIDGE_KEY on both servers."
+        : `The backend could not start this chat (${prepared.status}). Please try again.`);
+      return Response.json({ message }, {
         status: prepared.status,
         headers: prepared.headers.has("retry-after")
           ? { "Retry-After": prepared.headers.get("retry-after")! }

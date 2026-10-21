@@ -45,12 +45,12 @@ export async function readApiJson<T>(
     const values = payload.errors && typeof payload.errors === "object"
       ? Object.values(payload.errors).flat()
       : [];
-    const first = values.find((value) => typeof value === "string");
+    const first = values.find((value) => typeof value === "string" && value.trim());
     const message = typeof first === "string"
       ? first
-      : typeof payload.message === "string"
+      : typeof payload.message === "string" && payload.message.trim()
         ? payload.message
-        : "Something went wrong. Please try again.";
+        : `The request failed (${response.status}). Please try again.`;
     throw new ApiError(message, response.status);
   }
 
