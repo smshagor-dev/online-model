@@ -9,6 +9,15 @@ import {
 // Server-only implementation. Never import this module in a client component.
 const endpoint = "https://integrate.api.nvidia.com/v1/chat/completions";
 export const NVIDIA_MODEL_ID = -1;
+export const NVIDIA_HOSTED_MODELS = [
+  { id: -2, slug: "openmindai-super", name: "OpenMindAI Super", provider: "nvidia/nemotron-3.5-super-vl-120b-a12b" },
+  { id: -3, slug: "openmindai-ultra", name: "OpenMindAI Ultra", provider: "nvidia/nemotron-3-ultra-550b-a55b" },
+  { id: -1, slug: "openmindai-lite", name: "OpenMindAI Lite", provider: "nvidia/nemotron-3.5-lightning-30b-a3b" },
+] as const;
+export const isNvidiaModelId = (id: number) => NVIDIA_HOSTED_MODELS.some((model) => model.id === id);
+export const nvidiaModels = (allowed: string[]) => NVIDIA_HOSTED_MODELS
+  .filter((model) => allowed.includes(model.slug))
+  .map((model) => ({ id: model.id, name: model.name, family: "Hosted coding", license: "External inference service" }));
 export const nvidiaEnabled = () => process.env.CHAT_PROVIDER === "nvidia";
 export function nvidiaModel() {
   return {
@@ -60,6 +69,26 @@ export async function nvidiaChat(
     );
   const fetcher = options.fetcher || fetch;
   const input = JSON.parse(body);
+  const selected = NVIDIA_HOSTED_MODELS.find((model) => model.id === Number(input.model_id));
+  if (!selected && !input.resume_message_id && !options.config)
+    return Response.json({ message: "Unknown hosted code model." }, { status: 404 });
+  // Enforce database visibility even when someone manually submits an unavailable model ID.
+  if (selected && !options.config && !input.resume_message_id) {
+    try {
+      const response = await fetcher(base.replace(/\/$/, "") + "/openmindai/models", {
+        headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+        cache: "no-store", redirect: "error",
+        signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
+      });
+      if (!response.ok)
+        return Response.json({ message: "Cannot verify available models." }, { status: response.status === 401 ? 401 : 503 });
+      const models = await response.json();
+      if (!Array.isArray(models.data) || !models.data.some((model: {id:string}) => model.id === selected.slug))
+        return Response.json({ message: "This model is not enabled." }, { status: 403 });
+    } catch {
+      return Response.json({ message: "Cannot verify available models." }, { status: 503 });
+    }
+  }
   let routedModel = config.model;
   // The classifier is a paid upstream call: confirm the Laravel session first.
   // Existing injected test fixtures already exercise authenticated bridge responses.
@@ -96,6 +125,8 @@ export async function nvidiaChat(
       });
     }
   }
+  // A user's explicit selection wins over automatic chat routing.
+  if (selected) routedModel = selected.provider;
   const backend = async (
     path: string,
     data: unknown,
