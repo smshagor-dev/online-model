@@ -51,7 +51,7 @@ class VerifiedMobileGatewayIpTest extends TestCase
     {
         config()->set('mobile_gateway.bridge_key', self::KEY);
         $request = $this->requestWithIdentity();
-        $reply = (new VerifiedMobileGatewayIp())->handle(
+        $reply = (new VerifiedMobileGatewayIp)->handle(
             $request,
             fn ($r) => response()->json([
                 'ip' => $r->ip(),
@@ -70,7 +70,7 @@ class VerifiedMobileGatewayIpTest extends TestCase
     {
         config()->set('mobile_gateway.bridge_key', self::KEY);
         $request = Request::create('/api/v1/public-config');
-        $reply = (new VerifiedMobileGatewayIp())->handle(
+        $reply = (new VerifiedMobileGatewayIp)->handle(
             $request,
             fn () => response()->json(['untouched' => true])
         );
@@ -84,7 +84,7 @@ class VerifiedMobileGatewayIpTest extends TestCase
         $request = $this->requestWithIdentity();
         $request->headers->set('X-OpenMind-Mobile-IP', '192.0.2.99');
         $this->expectException(HttpException::class);
-        (new VerifiedMobileGatewayIp())->handle($request, fn () => response('unreachable'));
+        (new VerifiedMobileGatewayIp)->handle($request, fn () => response('unreachable'));
     }
 
     public function test_outdated_signatures_are_rejected(): void
@@ -92,7 +92,7 @@ class VerifiedMobileGatewayIpTest extends TestCase
         config()->set('mobile_gateway.bridge_key', self::KEY);
         $request = $this->requestWithIdentity(timestamp: (string) (time() - 300));
         $this->expectException(HttpException::class);
-        (new VerifiedMobileGatewayIp())->handle($request, fn () => response('unreachable'));
+        (new VerifiedMobileGatewayIp)->handle($request, fn () => response('unreachable'));
     }
 
     public function test_missing_one_gateway_header_fails_closed(): void
@@ -101,7 +101,7 @@ class VerifiedMobileGatewayIpTest extends TestCase
         $request = $this->requestWithIdentity();
         $request->headers->remove('X-OpenMind-Mobile-Signature');
         $this->expectException(HttpException::class);
-        (new VerifiedMobileGatewayIp())->handle($request, fn () => response('unreachable'));
+        (new VerifiedMobileGatewayIp)->handle($request, fn () => response('unreachable'));
     }
 
     public function test_unconfigured_bridge_key_fails_closed(): void
@@ -109,6 +109,6 @@ class VerifiedMobileGatewayIpTest extends TestCase
         config()->set('mobile_gateway.bridge_key', '');
         $request = $this->requestWithIdentity();
         $this->expectException(HttpException::class);
-        (new VerifiedMobileGatewayIp())->handle($request, fn () => response('unreachable'));
+        (new VerifiedMobileGatewayIp)->handle($request, fn () => response('unreachable'));
     }
 }
