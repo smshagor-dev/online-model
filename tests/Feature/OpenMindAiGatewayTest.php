@@ -120,18 +120,18 @@ class OpenMindAiGatewayTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()
             ->assertJsonCount(42, 'data')
             ->assertJsonFragment(['id' => 'openmindai-super', 'available' => true]);
-        DB::table('hosted_code_agents')->where('slug', 'nvidia-nemotron-3.5-embed-1b')
+        DB::table('hosted_code_agents')->where('slug', 'nvidia-background-noise-removal')
             ->update(['enabled' => false]);
         $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()
             ->assertJsonCount(42, 'data')
             ->assertJsonFragment([
-                'id' => 'nvidia-nemotron-3.5-embed-1b',
+                'id' => 'nvidia-background-noise-removal',
                 'available' => false,
                 'path' => null,
             ]);
         $this->withToken($token)->getJson('/api/v1/openmindai/models')->assertOk()
             ->assertJsonCount(42, 'data')
-            ->assertJsonFragment(['id' => 'nvidia-nemotron-3.5-embed-1b', 'available' => false]);
+            ->assertJsonFragment(['id' => 'nvidia-background-noise-removal', 'available' => false]);
     }
 
     public function test_specialized_json_invoke_requires_admin_verified_configuration_and_tracks_usage(): void
@@ -145,6 +145,7 @@ class OpenMindAiGatewayTest extends TestCase
         $slug = 'nvidia-nemotron-3.5-embed-1b';
         $endpoint = '/api/v1/openmindai/models/'.$slug.'/invoke';
         $input = ['input' => ['input' => 'hello world']];
+        DB::table('hosted_code_agents')->where('slug', $slug)->update(['api_ready' => false]);
         $this->withToken($token)->postJson($endpoint, $input)->assertNotFound();
         DB::table('hosted_code_agents')->where('slug', $slug)->update([
             'enabled' => true,

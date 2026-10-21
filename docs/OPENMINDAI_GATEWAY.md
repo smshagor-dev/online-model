@@ -78,3 +78,24 @@ All seeded NVIDIA Build models appear in both model discovery endpoints. A follo
 Admin → Code agents → **Developer API Keys for OpenMind Studio** lets the currently signed-in administrator generate an ordinary **per-account Sanctum Developer API Key** with the `openmindai:invoke` ability and a 90-day expiry. The admin must re-enter their password and, when enabled, a valid 2FA code. The generated token is shown in the browser only once and cleared after 60 seconds. A refresh or later visit cannot reveal it: Sanctum stores only a hash of the token. Existing keys show metadata and support password/2FA-protected revocation.
 
 This is the same credential type as Account → Developer API, and follows the same maximum of 10 active keys per user. The admin UI manages **only the signed-in administrator's own keys**, not all users' keys. Use this Bearer key in OpenMind Studio's encrypted cloud API-key setting. First-party App IDs and signing secrets are exclusively for trusted server-to-server integrations; never distribute these secrets in an installer.
+
+## NVIDIA model-specific API integrations
+
+NVIDIA NIM services do **not** all use the same endpoint or hostname. Database migration `2026_10_21_000008_nvidia_verified_inference_routes.php` configures documented backend routes for:
+- Nemotron 3.5 Embed 1B/8B, Nemotron 3 Embed 1B: `https://integrate.api.nvidia.com/v1/embeddings` (JSON input and input_type)
+- Nemotron 3.5 Rerank 8B: `https://ai.api.nvidia.com/v1/retrieval/nvidia/nemotron-3.5-rerank-8b/reranking` (query object, passages array)
+- Kumo Tabular and Relational: `https://ai.api.nvidia.com/v1/structured-data/nvidia/{model}/predictions` (task, schema, context, predict, output envelope; special model-family identifiers)
+- RFD4 Proteina: `https://health.api.nvidia.com/v1/biology/ipd/rfd4-proteina/generative` (protein task and condition input)
+- Riva Translate 4B v2: `https://integrate.api.nvidia.com/v1/chat/completions`, as a chat-compatible translation model.
+
+The API gateway restricts outbound requests to these three fixed NVIDIA-owned HTTPS origins, refuses redirects, and never accepts a caller-supplied destination URL or alternate model ID. Complex image, voice, and video services need separate binary upload, signed-asset or async job integration, and are **not** treated as working JSON APIs merely because NVIDIA lists a free endpoint.
+
+In Admin → NVIDIA models, `API configured · not verified` means the protocol/path is implemented and mock-tested, **not** that your server NVIDIA key has permission or quota. The password/2FA-protected **Test live NVIDIA inference** action sends a tiny sample for chat, embeddings or reranking and records success, access denied, rate limiting or upstream failures. `Verified live` appears only after a successful real NVIDIA response. Other complex models remain in the catalog with `Custom protocol required` until a safe integration is built. Changes to model configuration reset any prior live verification.
+
+Example specialized request:
+
+```json
+{"input":{"input":"Example sentence for RAG","input_type":"query"}}
+```
+
+Use `POST /api/v1/openmindai/models/nvidia-nemotron-3-embed-1b/invoke` with a Developer API Key. Provider-side access, availability, usage limits and applicable license terms are independent of local authentication.
