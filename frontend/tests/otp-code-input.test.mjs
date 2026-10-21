@@ -10,7 +10,7 @@ test("six OTP boxes support paste, backspace and mobile numeric input", () => {
   assert.match(input, /clipboardData\.getData/);
   assert.match(input, /Backspace/);
   assert.match(input, /inputMode="numeric"/);
-  assert.match(input, /name=\{name\} value=\{digits\.join\(" "\)\}/.source ? /name=\{name\} value=\{digits\.join\(" "\)\}/ : /type="hidden"/);
+  assert.match(input, /type="hidden" name=\{name\}/);
 });
 
 test("all three email verification flows use six-box component", () => {
