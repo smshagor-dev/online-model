@@ -114,6 +114,64 @@ class NvidiaMaxineMediaTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public function test_active_speaker_diarization_creates_private_mp4_output(): void
+    {
+        Storage::fake('local');
+        Queue::fake();
+        config([
+            'maxine.worker_url' => 'https://maxine-worker.example.test',
+            'maxine.worker_key' => str_repeat('t', 40),
+        ]);
+        $mp4 = "\x00\x00\x00\x18ftypisom0000000000000000";
+        Http::fake(['maxine-worker.example.test/*' => Http::response([
+            'mime' => 'video/mp4', 'data' => base64_encode($mp4),
+        ])]);
+        [$user, $token] = $this->account();
+        $video = fn () => UploadedFile::fake()->createWithContent('clip.mp4', $mp4);
+        $path = '/api/v1/openmindai/maxine/nvidia-active-speaker-detection/jobs';
+        $this->withToken($token)->post($path, ['file' => $video()])->assertUnprocessable();
+        $this->withToken($token)->post($path, [
+            'file' => $video(),
+            'diarization_file' => UploadedFile::fake()->createWithContent('speakers.json', '{"segments":[]}'),
+        ])->assertStatus(202);
+        $id = DB::table('maxine_jobs')->where('user_id', $user->id)->value('id');
+        (new RunMaxineInference($id))->handle(app(ApiCreditUsage::class));
+        $this->assertDatabaseHas('maxine_jobs', [
+            'id' => $id, 'status' => 'completed', 'output_mime' => 'video/mp4',
+        ]);
+        Http::assertSent(fn ($r) => $r['model'] === 'nvidia-active-speaker-detection'
+            && json_decode(base64_decode($r['diarization'], true), true) === ['segments' => []]);
+        $this->withToken($token)->get('/api/v1/openmindai/maxine/jobs/'.$id.'/download')->assertOk();
+    }
+
+    public function test_synthetic_video_detector_returns_owner_only_csv_report(): void
+    {
+        Storage::fake('local');
+        Queue::fake();
+        config([
+            'maxine.worker_url' => 'https://maxine-worker.example.test',
+            'maxine.worker_key' => str_repeat('t', 40),
+        ]);
+        $csv = "index,probability\n0,0.100000\n";
+        Http::fake(['maxine-worker.example.test/*' => Http::response([
+            'mime' => 'text/csv', 'data' => base64_encode($csv),
+        ])]);
+        [$user, $token] = $this->account();
+        $video = "\x00\x00\x00\x18ftypisom0000000000000000";
+        $response = $this->withToken($token)->post(
+            '/api/v1/openmindai/maxine/nvidia-synthetic-video-detector/jobs',
+            ['file' => UploadedFile::fake()->createWithContent('sample.mp4', $video)]
+        )->assertStatus(202);
+        $id = $response->json('id');
+        (new RunMaxineInference($id))->handle(app(ApiCreditUsage::class));
+        $this->assertDatabaseHas('maxine_jobs', [
+            'id' => $id, 'status' => 'completed', 'output_mime' => 'text/csv',
+        ]);
+        $this->withToken($token)->get('/api/v1/openmindai/maxine/jobs/'.$id.'/download')->assertOk()
+            ->assertHeader('Content-Type', 'text/csv');
+        $this->assertDatabaseCount('api_credit_usage', 1);
+    }
+
     public function test_media_job_cannot_be_read_by_other_account_or_invalid_token(): void
     {
         Storage::fake('local');

@@ -32,3 +32,11 @@ Laravel provides `POST /api/v1/openmindai/maxine/{slug}/jobs` with a binary mult
 NVIDIA's provider entitlement, remote gRPC uptime, and model compatibility require a real end-to-end invocation on the deployed bridge. No implementation or mocked CI test alone is evidence of `Verified live` provider access.
 
 **Body Pose contract:** Upload an additional `bbox_file` alongside the MP4: NVIDIA requires tracked-body bounding boxes. Its official Python client writes JSON Lines to `.json`, not Arrow. Results are served with `application/x-ndjson`. See the official `body-pose/scripts/config.py` for the required annotation layout.
+
+## Hosted video workflows
+
+**Active Speaker Detection:** `active-speaker-detection/scripts/active_speaker_detection.py`, gRPC function `f286f937-05c4-454b-8312-fba67a2a6fa7`. Upload `file` as MP4 and `diarization_file` as nonempty JSON, using `POST /api/v1/openmindai/maxine/nvidia-active-speaker-detection/jobs`. The bridge uses NVIDIA `--skip-audio` mode, extracting audio embedded in the video. The output is a private annotated MP4.
+
+**Synthetic Video Detector:** NVIDIA's **v1** preview client `synthetic-video-detector/scripts/v1/synthetic-video-detector.py` uses hosted function `847b6e53-0133-452d-ab85-d7acf3ace723`; its v2 interface differs. Upload an MP4 to `/api/v1/openmindai/maxine/nvidia-synthetic-video-detector/jobs`. Output is private `text/csv` with frame indices and synthetic probabilities. **The NVIDIA account must have private-access approval**; the presence of API code does not grant entitlement.
+
+Install the official `active-speaker-detection/requirements.txt` and `synthetic-video-detector/requirements.txt` in the worker environment. No automatic NVIDIA live tests are executed against either model until permission is confirmed.
