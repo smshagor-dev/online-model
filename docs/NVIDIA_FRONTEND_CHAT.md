@@ -1,3 +1,12 @@
+# OpenMindAI hosted chat through Laravel
+
+**Current architecture: Browser -> Next.js proxy -> Laravel cloud backend -> NVIDIA.**
+The old direct Next.js-to-provider instructions below are superseded by
+[LARAVEL_PROVIDER_GATEWAY.md](LARAVEL_PROVIDER_GATEWAY.md). The NVIDIA API key
+must be configured only on the Laravel backend at cloud.openmindai.org.
+
+## Historical integration notes
+
 # NVIDIA Nemotron chat from Next.js
 
 The web client sends chat to its same-origin Next.js route. The Next.js **server** connects directly to NVIDIA's hosted chat-completions API; Laravel does not make the NVIDIA inference request. The API key is never included in browser JavaScript, public environment variables, model-list JSON or SSE events.
