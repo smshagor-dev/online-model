@@ -15,12 +15,12 @@
  <p class="entity-meta"><code>GET /catalog</code> — all catalog models, categories and integration readiness. <code>GET /models</code> — every registered model with availability metadata. <code>POST /chat/completions</code> — chat inference. <code>POST /models/{slug}/invoke</code> — configured JSON-based specialized models.</p>
  <p class="entity-meta">These APIs require a developer Bearer token. Specialized model invocation requires verified integration settings, but models are never hidden from the catalog. File uploads, binary and long-running asynchronous model operations are not supported by this JSON gateway.</p>
 </section>
-<form method="get" action="/admin/nvidia-models" style="margin-bottom:24px">
- <div class="card-grid">
+<form method="get" action="/admin/nvidia-models" class="admin-card admin-filter-form">
+ <div class="admin-filter-fields">
   <div class="field"><label for="nvidia-q">Search models</label><input id="nvidia-q" name="q" value="{{ $search }}" placeholder="Model name or NVIDIA ID"></div>
   <div class="field"><label for="nvidia-category">Category</label><select id="nvidia-category" name="category"><option value="">All categories</option>@foreach($categories as $category)<option value="{{ $category }}" @selected($selectedCategory === $category)>{{ $category }}</option>@endforeach</select></div>
  </div>
- <div class="form-actions"><button type="submit" class="btn-primary-admin">Filter models</button><a href="/admin/nvidia-models">Reset filters</a></div>
+ <div class="admin-filter-actions"><button type="submit" class="btn-primary-admin">Filter models</button><a class="admin-reset-filter" href="/admin/nvidia-models">Reset filters</a></div>
 </form>
 @forelse($grouped as $category => $models)
 <div class="section-separator"><h2>{{ $category }}</h2><p>{{ $models->count() }} model(s)</p></div>
