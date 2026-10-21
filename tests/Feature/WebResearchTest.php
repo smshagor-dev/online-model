@@ -103,6 +103,7 @@ class WebResearchTest extends TestCase
         $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $r->json('ticket'), 'content' => 'Report [1](https://example.org/paper)', 'status' => 'complete'], $headers)->assertOk();
         $this->assertDatabaseHas('messages', ['content' => 'Report [1](https://example.org/paper)', 'status' => 'complete']);
     }
+
     public function test_search_falls_back_to_public_rss_without_exposing_primary_errors(): void
     {
         config(['models.search_url' => 'https://search.example/search', 'models.public_search_fallback' => true]);
@@ -131,5 +132,4 @@ class WebResearchTest extends TestCase
         $this->assertSame('unavailable', $sources[1]['read_status']);
         $this->assertArrayNotHasKey('page_text', app(WebResearch::class)->summaries($sources)[0]);
     }
-
 }
