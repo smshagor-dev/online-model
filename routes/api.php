@@ -13,6 +13,7 @@ use App\Http\Controllers\HostedImageController;
 use App\Http\Controllers\HostedMediaController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\NvidiaCosmosController;
+use App\Http\Controllers\NvidiaCosmosTransferController;
 use App\Http\Controllers\NvidiaMaxineController;
 use App\Http\Controllers\NvidiaAvSceneController;
 use App\Http\Controllers\NvidiaAvWorkerController;
@@ -38,6 +39,9 @@ Route::prefix('v1')->group(function () {
         Route::post('openmindai/cosmos/generations', [NvidiaCosmosController::class, 'generate'])->middleware('throttle:chat');
         Route::get('openmindai/cosmos/{id}', [NvidiaCosmosController::class, 'status']);
         Route::get('openmindai/cosmos/{id}/download', [NvidiaCosmosController::class, 'download']);
+        Route::post('openmindai/transfer/generations', [NvidiaCosmosTransferController::class, 'generate'])->middleware('throttle:chat');
+        Route::get('openmindai/transfer/{id}', [NvidiaCosmosTransferController::class, 'status']);
+        Route::get('openmindai/transfer/{id}/download', [NvidiaCosmosTransferController::class, 'download']);
         Route::post('openmindai/maxine/{slug}/jobs', [NvidiaMaxineController::class, 'create'])->middleware('throttle:chat');
         Route::get('openmindai/maxine/jobs/{id}', [NvidiaMaxineController::class, 'status']);
         Route::get('openmindai/maxine/jobs/{id}/download', [NvidiaMaxineController::class, 'download']);

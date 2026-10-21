@@ -150,3 +150,22 @@ Schedule::call(function () {
             }
         });
 })->hourly();
+
+// Remove temporary Cosmos Transfer MP4 media and finish orphaned queue jobs.
+Schedule::call(function () {
+    DB::table('cosmos_transfer_jobs')->where('status','running')
+        ->where('updated_at','<',now()->subMinutes(25))
+        ->update(['status'=>'failed','error_code'=>'worker_interrupted','updated_at'=>now()]);
+    DB::table('cosmos_transfer_jobs')->where('status','queued')
+        ->where('created_at','<',now()->subDay())
+        ->update(['status'=>'failed','error_code'=>'worker_not_started','updated_at'=>now()]);
+    DB::table('cosmos_transfer_jobs')->where('created_at','<',now()->subHours(24))->orderBy('created_at')
+        ->chunk(100,function ($rows) {
+            foreach ($rows as $row) {
+                Storage::disk('local')->delete(array_filter([
+                    $row->input_path,$row->control_path,$row->output_path,
+                ]));
+                DB::table('cosmos_transfer_jobs')->where('id',$row->id)->delete();
+            }
+        });
+})->hourly();
