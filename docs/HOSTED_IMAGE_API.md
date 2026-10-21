@@ -1,7 +1,8 @@
 # Hosted image generation
 
-Image generation uses the Laravel backend-only NVIDIA API key and
-the existing shared bridge secret on Laravel and Next.js. No image model download or GPU
+Image generation calls NVIDIA from the Next.js server, using the private
+NVIDIA_API_KEY, while Laravel authenticates users, enforces quotas and
+stores the generated image. No image model download or GPU
 runtime is required for this path. The model/provider name is not displayed in
 the customer-facing interface.
 
@@ -10,9 +11,10 @@ the customer-facing interface.
 On the Next.js server, set:
 - FRONTEND_CHAT_BRIDGE_KEY to the same 32+ character value as Laravel.
 - LARAVEL_API_URL=https://cloud.openmindai.org/api/v1 and FRONTEND_URL.
-- Do NOT set NVIDIA_API_KEY in Next.js.
+- Set NVIDIA_API_KEY in the Next.js **server environment**, never NEXT_PUBLIC_.
 
-On Laravel, set NVIDIA_API_KEY and FRONTEND_CHAT_BRIDGE_KEY to that same shared bridge secret. Run
+On Laravel, set FRONTEND_CHAT_BRIDGE_KEY to the same secret as Next.js.
+A Laravel-side NVIDIA key is optional and unrelated to this hosted image flow. Run
 php artisan migrate --force to ensure media_tasks and media_daily_usage exist,
 then run php artisan config:cache. The normal media GPU runtime
 (MEDIA_RUNTIME_URL, MEDIA_RUNTIME_KEY, MEDIA_ENABLED_KINDS) is not needed
@@ -44,8 +46,8 @@ the scheduler cleans it up.
    active task concurrency and private storage quota, then creates a running
    task. Requests are rejected before contacting the inference provider if
    the user lacks quota.
-5. Next.js asks Laravel's protected provider/invoke endpoint to invoke the
-   fixed image API using Laravel's server-only credential. The response must include a successful image artifact. The response JSON
+5. Next.js invokes the fixed NVIDIA image API from the server using its
+   server-only credential; Laravel is not the inference transport. The response must include a successful image artifact. The response JSON
    is read with a hard 28 MB streamed byte limit even when Content-Length is
    missing or incorrect. Invalid HTML or malformed JSON fails safely.
    Filtered outputs and rate limits are not falsely recorded as successful generations.
