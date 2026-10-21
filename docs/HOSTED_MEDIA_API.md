@@ -2,7 +2,7 @@
 
 OpenMindAI uses Next.js as its trusted API client. Laravel owns login,
 quota checks, task records, private file storage, and authenticated downloads.
-The existing NVIDIA_API_KEY stays exclusively on the Next.js server. The
+The existing NVIDIA_API_KEY stays exclusively on the Laravel server. The
 existing FRONTEND_CHAT_BRIDGE_KEY (32+ characters) must match on Next.js
 and Laravel. No new public browser credentials are required.
 
@@ -17,8 +17,8 @@ and Laravel. No new public browser credentials are required.
 | Video creation | media/video | Cosmos3 Nano text-to-video | MP4 |
 | Live voice | Voice panel, Live workspace | Hosted transcription + chat stream + browser speech synthesis | Conversation text/history |
 
-Source-controlled endpoints are fixed; the browser cannot supply arbitrary
-provider URLs, model IDs or API keys. Each supported request uses the existing
+Source-controlled provider endpoints are fixed in Laravel; the browser cannot
+supply arbitrary provider URLs, model IDs or API keys. Each supported request uses the existing
 HttpOnly login cookie and an origin-checked Next.js API route. The Next.js
 server calls a protected Laravel begin/complete/fail bridge; Laravel stores
 results under private storage/app, subject to account ownership, daily usage
@@ -58,8 +58,10 @@ binary payloads up to 20 MB.
 
 ## Hosting
 
-- Set NVIDIA_API_KEY, FRONTEND_CHAT_BRIDGE_KEY, LARAVEL_API_URL and FRONTEND_URL
-  on the Next.js server, and the matching bridge key on Laravel.
+- On Laravel at cloud.openmindai.org set NVIDIA_API_KEY and
+  FRONTEND_CHAT_BRIDGE_KEY. On Next.js set LARAVEL_API_URL pointing to
+  https://cloud.openmindai.org/api/v1, FRONTEND_URL and the same bridge key.
+  Never configure the provider key on Next.js.
 - Run the existing Laravel migrations (media_tasks and media_daily_usage),
   config cache and scheduler. All media tasks use the same existing quotas.
 - Allow request bodies up to 11 MB for transcription uploads and up to 28 MB
