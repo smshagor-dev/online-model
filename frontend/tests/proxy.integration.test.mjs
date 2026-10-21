@@ -2,6 +2,7 @@ import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { spawn } from "node:child_process";
+import { createHash, createHmac } from "node:crypto";
 import { once } from "node:events";
 
 let backend, next, origin;
@@ -18,6 +19,9 @@ before(async () => {
         url: req.url,
         method: req.method,
         authorization: req.headers.authorization,
+        mobileIp: req.headers["x-openmind-mobile-ip"],
+        mobileTime: req.headers["x-openmind-mobile-time"],
+        mobileSignature: req.headers["x-openmind-mobile-signature"],
         body,
       };
       res.setHeader("Content-Type", "application/json");
@@ -194,6 +198,8 @@ before(async () => {
         NEXT_TELEMETRY_DISABLED: "1",
         // These fixtures exercise the local backend proxy independently of .env.
         CHAT_PROVIDER: "local",
+        FRONTEND_CHAT_BRIDGE_KEY: "0123456789abcdef0123456789abcdef",
+        VERCEL: "0",
         FRONTEND_URL: origin,
         LARAVEL_API_URL: `http://127.0.0.1:${backend.address().port}/api/v1`,
       },
@@ -707,6 +713,15 @@ test("mobile login returns Sanctum token, not a browser cookie", async () => {
   assert.equal((await response.json()).token, "fixture-secret-token");
   assert.equal(response.headers.get("set-cookie"), null);
   assert.equal(lastRequest.authorization, undefined);
+  assert.ok(lastRequest.mobileIp, "signed client IP must reach Laravel");
+  assert.ok(lastRequest.mobileTime);
+  const message = [
+    lastRequest.mobileTime, lastRequest.mobileIp, "POST", "/api/v1/login",
+    createHash("sha256").update(lastRequest.body).digest("hex"),
+  ].join("\n");
+  assert.equal(lastRequest.mobileSignature,
+    createHmac("sha256", "0123456789abcdef0123456789abcdef")
+      .update(message).digest("hex"));
   assert.match(response.headers.get("cache-control") || "", /no-store/);
 });
 
