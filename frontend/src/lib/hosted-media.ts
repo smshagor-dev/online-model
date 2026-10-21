@@ -25,12 +25,47 @@ function decodeInput(encoded: unknown): Buffer {
     throw new WorkError("File exceeds the 8 MB limit.", 422);
   return result;
 }
-function mimeAudio(raw: Buffer): string {
-  if (raw.toString("ascii", 0, 4) === "RIFF" && raw.toString("ascii", 8, 12) === "WAVE") return "audio/wav";
-  if (raw.toString("ascii", 0, 4) === "OggS") return "audio/ogg";
-  if (raw.toString("ascii", 0, 4) === "fLaC") return "audio/flac";
-  if (raw.toString("ascii", 0, 4) === "\x1aE\xdf\xa3") return "audio/webm";
-  throw new WorkError("Upload a WAV, OGG or FLAC recording.", 422);
+function mimeAudio(raw: Buffer): "audio/wav" {
+  // The frontend always normalizes microphones and uploaded audio to PCM WAV.
+  // Reject unsupported input *before* reserving a task or consuming quota.
+  if (raw.length < 44 || raw.toString("ascii", 0, 4) !== "RIFF" ||
+      raw.toString("ascii", 8, 12) !== "WAVE" ||
+      raw.toString("ascii", 12, 16) !== "fmt " ||
+      raw.readUInt16LE(20) !== 1 ||
+      raw.readUInt16LE(22) !== 1 ||
+      raw.readUInt32LE(24) !== 16000 ||
+      raw.readUInt16LE(34) !== 16)
+    throw new WorkError("Please provide 16 kHz mono PCM WAV audio.", 422);
+  return "audio/wav";
+}
+async function readBounded(response: Response, limit: number): Promise<Buffer> {
+  const declared = Number(response.headers.get("content-length") || "0");
+  if (!Number.isFinite(declared) || declared > limit)
+    throw new WorkError("The media response exceeds the size limit.", 502);
+  if (!response.body) throw new WorkError("The media service returned an empty response.", 502);
+  const reader = response.body.getReader();
+  const buffers: Buffer[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel();
+        throw new WorkError("The media response exceeds the size limit.", 502);
+      }
+      buffers.push(Buffer.from(value));
+    }
+    return Buffer.concat(buffers, total);
+  } finally {
+    reader.releaseLock();
+  }
+}
+async function readJson(response: Response, limit: number): Promise<any> {
+  const raw = await readBounded(response, limit);
+  try { return JSON.parse(raw.toString("utf8")); }
+  catch { throw new WorkError("The media service returned an invalid response.", 502); }
 }
 function validMedia(raw: Buffer, kind: HostedKind) {
   if (!raw.length || raw.length > 20000000) throw new WorkError("Invalid media output.", 502);
@@ -63,8 +98,14 @@ export async function hostedMediaRequest(
   if (job.kind === "speech" && job.prompt.length > 1000)
     return Response.json({ message: "Speech text must be within 1000 characters." }, { status: 422 });
   let input: Buffer | null = null;
-  try { if (job.kind === "transcription") input = decodeInput(job.input); }
-  catch(e) { return Response.json({ message: (e as Error).message }, { status: 422 }); }
+  try {
+    if (job.kind === "transcription") {
+      input = decodeInput(job.input);
+      mimeAudio(input);
+    }
+  } catch(e) {
+    return Response.json({ message: (e as Error).message }, { status: 422 });
+  }
   const fetcher = options.fetcher || fetch;
   const base = backend.replace(/\/$/, "");
   const headers = {
@@ -107,12 +148,11 @@ export async function hostedMediaRequest(
     taskId = task.id;
     let completed: Record<string, string>;
     if (job.kind === "transcription") {
-      const mime = mimeAudio(input!);
       const form = new FormData();
-      form.set("file", new Blob([new Uint8Array(input!)], { type: mime }), "recording." + (mime === "audio/wav" ? "wav" : mime === "audio/flac" ? "flac" : "ogg"));
+      form.set("file", new Blob([new Uint8Array(input!)], { type: "audio/wav" }), "recording.wav");
       form.set("language", "en-US");
       const response = await invoke(ASR, form);
-      const reply = await response.json();
+      const reply = await readJson(response, 1000000);
       const text = typeof reply?.text === "string" ? reply.text :
         Array.isArray(reply?.segments) ? reply.segments.map((x: { text?: string }) => x.text || "").join(" ") : "";
       if (!text.trim() || text.length > 100000) throw new WorkError("The recording could not be transcribed.", 422);
@@ -125,7 +165,7 @@ export async function hostedMediaRequest(
       form.set("encoding", "LINEAR_PCM");
       form.set("sample_rate_hz", "44100");
       const response = await invoke(SPEECH, form);
-      const raw = Buffer.from(await response.arrayBuffer());
+      const raw = await readBounded(response, 20000000);
       validMedia(raw, "speech");
       completed = { data: raw.toString("base64"), mime: "audio/wav" };
     } else if (job.kind === "video") {
@@ -134,7 +174,7 @@ export async function hostedMediaRequest(
         resolution: "480_16_9", num_frames: 25,
         num_inference_steps: 35, fps: 24, seed: 42,
       }), "application/json", 180000);
-      const result = await response.json();
+      const result = await readJson(response, 27000000);
       const encoded = result?.b64_video;
       if (typeof encoded !== "string" || encoded.length > 27000000 ||
           !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded))
@@ -150,7 +190,7 @@ export async function hostedMediaRequest(
           { role: "user", content: job.prompt },
         ], stream: false, max_tokens: 4096,
       }), "application/json");
-      const reply = await response.json();
+      const reply = await readJson(response, 1000000);
       const text = reply?.choices?.[0]?.message?.content;
       if (typeof text !== "string" || !text.trim()) throw new WorkError("Document generation returned no content.", 502);
       const { renderDocx, renderPdf } = await import("./document-files");
