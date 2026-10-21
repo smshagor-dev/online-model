@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use Illuminate\Validation\ValidationException;
 use App\Notifications\VerifyEmail;
 use App\Services\AdminSettings;
 use App\Services\TwoFactor;
@@ -103,6 +104,8 @@ class AuthController
         if ($user && $user->is_active) {
             try {
                 $otp->send($user, 'password');
+            } catch (ValidationException $e) {
+                throw $e;
             } catch (\Throwable $e) {
                 abort(503, 'Could not send the reset code. Please try again later.');
             }
@@ -151,6 +154,8 @@ class AuthController
         if ($user) {
             try {
                 $otp->send($user, 'registration');
+            } catch (ValidationException $e) {
+                throw $e;
             } catch (\Throwable $e) {
                 abort(503, 'Could not send the verification code. Please try again later.');
             }
