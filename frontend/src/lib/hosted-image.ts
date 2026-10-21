@@ -1,5 +1,5 @@
 // Server-only hosted image integration. No provider credentials enter browser code.
-import { readProviderJson } from "./provider-response";
+import { readProviderJson } from "./provider-response.ts";
 const IMAGE_ENDPOINT =
   "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell";
 const IMAGE_MODEL = "black-forest-labs/flux.1-schnell";
