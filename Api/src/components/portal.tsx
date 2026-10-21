@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, BookOpen, Box, ChartColumnIncreasing, ChevronRight, Code2, Cpu, KeyRound, LogOut, Menu, ShieldCheck, Sparkles, X } from "lucide-react";
 import { api, Developer } from "@/lib/api";
 import Dashboard from "./dashboard";
+import PasswordInput from "./password-input";
 import Keys from "./keys";
 import Catalog from "./catalog";
 import Docs from "./docs";
