@@ -16,12 +16,15 @@ class EmailOtpCode extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $action = $this->purpose === 'registration' ? 'verify your email address' : 'reset your password';
-
+        $registration = $this->purpose === 'registration';
         return (new MailMessage)
-            ->subject('OpenMindAI security code')
-            ->line('Use this six-digit code to '.$action.':')
-            ->line($this->code)
-            ->line('This code expires in 10 minutes. Do not share it with anyone.');
+            ->subject($registration ? 'Verify your email · OpenMindAI' : 'Reset your password · OpenMindAI')
+            ->view('mail.security-code', [
+                'heading' => $registration ? 'Verify your email address' : 'Reset your password',
+                'description' => $registration
+                    ? 'Enter the following verification code to activate your account.'
+                    : 'Enter the following code to securely reset your password.',
+                'code' => $this->code,
+            ]);
     }
 }
