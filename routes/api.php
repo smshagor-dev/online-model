@@ -41,7 +41,7 @@ Route::prefix('v1')->group(function () {
         Route::post('reset-password', [AuthController::class, 'reset']);
         Route::post('email/resend', [AuthController::class, 'resend']);
     });
-    Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
+    Route::middleware(['auth:sanctum', 'active', 'interactive-token', 'throttle:api'])->group(function () {
         Route::middleware('throttle:sensitive')->group(function () {
             Route::post('me/avatar', [SettingsController::class, 'avatar']);
             Route::delete('me/avatar', [SettingsController::class, 'removeAvatar']);
