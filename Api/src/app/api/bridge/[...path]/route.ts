@@ -19,7 +19,12 @@ export async function handler(request: NextRequest, context: { params: Promise<{
     return NextResponse.json({ message: "Not found." }, { status: 404 });
   }
   if (request.method !== "GET") {
-    const expectedOrigin = process.env.PORTAL_ORIGIN || request.nextUrl.origin;
+    // Vercel production and preview hostnames each use their own browser origin.
+    // Compare against the validated deployment host instead of a production-only
+    // PORTAL_ORIGIN, otherwise preview sign-in and key creation return 403.
+    const expectedOrigin = process.env.VERCEL === "1"
+      ? request.nextUrl.origin
+      : process.env.PORTAL_ORIGIN || request.nextUrl.origin;
     if (request.headers.get("origin") !== expectedOrigin) {
       return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
     }
@@ -80,7 +85,9 @@ export async function handler(request: NextRequest, context: { params: Promise<{
     try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error("Non-JSON API response"); }
     // Public developer requests must use this portal, never Laravel directly.
     if (endpoint === "developer/keys" && backend.ok) {
-      const portal = new URL(process.env.PORTAL_ORIGIN || request.nextUrl.origin);
+      const portal = new URL(process.env.VERCEL_ENV === "preview"
+        ? request.nextUrl.origin
+        : process.env.PORTAL_ORIGIN || request.nextUrl.origin);
       if (process.env.NODE_ENV === "production" && portal.protocol !== "https:") {
         return NextResponse.json({ message: "The public portal origin must use HTTPS." }, { status: 503 });
       }
