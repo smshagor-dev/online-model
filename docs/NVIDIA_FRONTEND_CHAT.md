@@ -100,9 +100,11 @@ quotas, checkpoints, API usage accounting, and generated private media.
 The original image bytes **never pass to Laravel**, are not stored in history,
 and are stripped from checkpoints. A failed image turn cannot be resumed without
 reattachment, and image requests never fall back to a text-only model.
-Follow-up turns contain previously saved *text* only; users must reattach an
-image when further visual inspection is needed. This intentional transient
-behavior preserves the existing Laravel database/storage design.
+Within the same open chat tab, the uploaded image remains available for
+follow-up questions until the user removes it or starts/switches conversations.
+The image is resent to the vision model on follow-up turns, which uses provider
+input tokens and bandwidth again. Browser refresh, logout and conversation
+switch clear it; historical images are not persisted or recoverable from Laravel.
 
 Uploaded PDFs/DOCX and audio still use their existing file-processing and
 transcription paths where configured; image editing is not supported by the
