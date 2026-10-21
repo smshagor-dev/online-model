@@ -88,6 +88,9 @@ Route::prefix('v1')->group(function () {
         Route::post('email/verify-code', [AuthController::class, 'verifyCode']);
     });
     Route::middleware(['auth:sanctum', 'active', 'interactive-token', 'throttle:api'])->group(function () {
+        // User-owned Mobile sessions share hosted quota accounting; no client secret.
+        Route::get('mobile/models', [OpenMindAiGatewayController::class, 'mobileModels']);
+        Route::post('mobile/chat/completions', [OpenMindAiGatewayController::class, 'mobileChat'])->middleware('throttle:chat');
         Route::middleware('throttle:sensitive')->group(function () {
             Route::post('me/avatar', [SettingsController::class, 'avatar']);
             Route::delete('me/avatar', [SettingsController::class, 'removeAvatar']);

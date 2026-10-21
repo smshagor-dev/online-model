@@ -14,7 +14,7 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 class OpenMindAiGatewayController
 {
-    private function actor(Request $request, bool $firstParty): User
+    private function actor(Request $request, bool $firstParty, bool $mobile = false): User
     {
         if ($firstParty) {
             return app(FirstPartySignature::class)->user($request);
@@ -22,9 +22,23 @@ class OpenMindAiGatewayController
         $user = $request->user();
         abort_unless($user && $user->is_active, 401);
         $token = $user->currentAccessToken();
-        abort_unless($token && ($token instanceof PersonalAccessToken) && $token->can('openmindai:invoke'), 403, 'An API key with model access is required.');
+        abort_unless($token instanceof PersonalAccessToken && ($mobile ? $token->can('user') : $token->can('openmindai:invoke')), 403, 'Model access is not permitted for this token.');
 
         return $user;
+    }
+
+    /** Mobile uses an ordinary authenticated user session, never a developer API key. */
+    public function mobileModels(Request $request, HostedCodeAgents $agents)
+    {
+        $this->actor($request, false, true);
+
+        return response()->json(['object' => 'list', 'data' => $agents->publicModels()])
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function mobileChat(Request $request, HostedCodeAgents $agents, ApiCreditUsage $credits)
+    {
+        return $this->completion($request, false, $agents, $credits, true);
     }
 
     public function models(Request $request, HostedCodeAgents $agents)
@@ -196,9 +210,9 @@ class OpenMindAiGatewayController
         }
     }
 
-    private function completion(Request $request, bool $firstParty, HostedCodeAgents $agents, ApiCreditUsage $credits)
+    private function completion(Request $request, bool $firstParty, HostedCodeAgents $agents, ApiCreditUsage $credits, bool $mobile = false)
     {
-        $user = $this->actor($request, $firstParty);
+        $user = $this->actor($request, $firstParty, $mobile);
         // Accept the full desktop tool registry (19 tools today) while
         // keeping total request size and individual tool-call counts bounded.
         abort_if(strlen($request->getContent()) > 1048576, 413, 'Chat request exceeds the 1 MiB gateway limit.');
