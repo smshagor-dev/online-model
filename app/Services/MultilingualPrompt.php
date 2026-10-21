@@ -30,10 +30,15 @@ TEXT;
     public static function apply(array $messages): array
     {
         if (($messages[0]['role'] ?? null) === 'system') {
-            if (! str_contains((string) ($messages[0]['content'] ?? ''), self::MARKER)) {
+            if (! str_contains((string) ($messages[0]['content'] ?? ''), self::MARKER)
+                && mb_strlen((string) ($messages[0]['content'] ?? '')) + mb_strlen(self::instructions()) + 1 <= 16000) {
                 $messages[0]['content'] = rtrim((string) ($messages[0]['content'] ?? ''))."\n".self::instructions();
             }
 
+            return $messages;
+        }
+
+        if (count($messages) >= 40) {
             return $messages;
         }
 
