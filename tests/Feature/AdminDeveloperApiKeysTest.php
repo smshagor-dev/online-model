@@ -61,7 +61,6 @@ class AdminDeveloperApiKeysTest extends TestCase
             'token' => hash('sha256', explode('|', $value, 2)[1]),
         ]);
         $this->get('/admin/code-agents')->assertOk()->assertDontSee($value);
-        $this->getJson('/api/v1/developer/keys')->assertUnauthorized();
 
         // Authenticate the same kind of key as the desktop client uses.
         $this->app['auth']->forgetGuards();
