@@ -19,10 +19,11 @@ return new class extends Migration
             $table->unsignedInteger('output_bytes')->nullable();
             $table->string('error_code', 60)->nullable();
             $table->timestamps();
-            $table->index(['user_id','status']);
+            $table->index(['user_id', 'status']);
             $table->index('created_at');
         });
     }
+
     public function down(): void
     {
         Schema::dropIfExists('magpie_generations');

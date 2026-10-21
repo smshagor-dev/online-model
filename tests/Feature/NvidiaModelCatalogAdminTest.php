@@ -65,7 +65,7 @@ class NvidiaModelCatalogAdminTest extends TestCase
         foreach ($catalog as $model) {
             $this->assertTrue($model['active']);
             $this->assertContains($model['inference_status'], ['configured', 'setup_required']);
-            if (!$model['available']) {
+            if (! $model['available']) {
                 $this->assertSame('setup_required', $model['inference_status']);
             }
         }

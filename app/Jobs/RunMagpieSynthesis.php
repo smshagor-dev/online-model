@@ -17,7 +17,9 @@ class RunMagpieSynthesis implements ShouldQueue
     use Queueable;
 
     public int $tries = 1;
+
     public int $timeout = 660;
+
     public bool $failOnTimeout = true;
 
     public function __construct(public string $id) {}
@@ -32,12 +34,12 @@ class RunMagpieSynthesis implements ShouldQueue
         $output = null;
         try {
             $user = User::find($row->user_id);
-            if (!$user || !$user->is_active) {
+            if (! $user || ! $user->is_active) {
                 throw new \RuntimeException('inactive');
             }
             $url = rtrim((string) config('magpie.url'), '/');
             $key = (string) config('magpie.token');
-            if (!(str_starts_with($url, 'https://') || str_starts_with($url, 'http://127.0.0.1:'))
+            if (! (str_starts_with($url, 'https://') || str_starts_with($url, 'http://127.0.0.1:'))
                 || strlen($key) < 32) {
                 throw new \RuntimeException('worker_unavailable');
             }
@@ -51,14 +53,14 @@ class RunMagpieSynthesis implements ShouldQueue
                 ->timeout(config('magpie.timeout', 600))
                 ->withOptions(['allow_redirects' => false])->asMultipart();
             if ($row->voice_path) {
-                if (!Storage::disk('local')->exists($row->voice_path)) {
+                if (! Storage::disk('local')->exists($row->voice_path)) {
                     throw new \RuntimeException('missing_voice');
                 }
                 $client->attach('audio_prompt', Storage::disk('local')->get($row->voice_path),
                     'voice.wav', ['Content-Type' => 'audio/wav']);
             }
             $response = $client->post($url.'/v1/audio/synthesize', $form);
-            if (!$response->ok() || strlen($response->body()) > config('magpie.max_output_bytes')) {
+            if (! $response->ok() || strlen($response->body()) > config('magpie.max_output_bytes')) {
                 throw new \RuntimeException('synthesis_unavailable');
             }
             $wav = $response->body();
@@ -78,6 +80,7 @@ class RunMagpieSynthesis implements ShouldQueue
                 if ($count === 1) {
                     $credits->completed($row->user_id, $row->connection_id, 'tts:'.$row->id);
                 }
+
                 return $count;
             });
             if ($written !== 1) {
@@ -103,7 +106,7 @@ class RunMagpieSynthesis implements ShouldQueue
                 Storage::disk('local')->delete($row->voice_path);
             }
             DB::table('magpie_generations')->where('id', $this->id)
-                ->whereIn('status', ['queued','running'])->update([
+                ->whereIn('status', ['queued', 'running'])->update([
                     'status' => 'failed', 'error_code' => 'synthesis_unavailable',
                     'encrypted_request' => '', 'updated_at' => now(),
                 ]);

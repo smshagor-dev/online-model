@@ -16,37 +16,40 @@ class RunAvSceneInference implements ShouldQueue
     use Queueable;
 
     public int $timeout = 900;
+
     public int $tries = 1;
+
     public bool $failOnTimeout = true;
 
     public function __construct(public string $id) {}
 
     private function trustedS3Location(?string $url): bool
     {
-        if (!$url || strlen($url) > 8192) {
+        if (! $url || strlen($url) > 8192) {
             return false;
         }
         $parts = parse_url($url);
-        if (!is_array($parts) || strtolower((string) ($parts['scheme'] ?? '')) !== 'https' ||
+        if (! is_array($parts) || strtolower((string) ($parts['scheme'] ?? '')) !== 'https' ||
             isset($parts['user']) || isset($parts['pass']) ||
             (isset($parts['port']) && (int) $parts['port'] !== 443)) {
             return false;
         }
         $host = strtolower((string) ($parts['host'] ?? ''));
+
         return preg_match('/^(?:[a-z0-9.-]+\\.)?s3(?:[.-][a-z0-9-]+)?\\.amazonaws\\.com$/D', $host) === 1;
     }
 
     public function handle(ApiCreditUsage $credits): void
     {
         $row = DB::table('av_scene_jobs')->where('id', $this->id)->first();
-        if (!$row || DB::table('av_scene_jobs')->where('id', $row->id)
+        if (! $row || DB::table('av_scene_jobs')->where('id', $row->id)
             ->where('status', 'queued')->update(['status' => 'running', 'updated_at' => now()]) !== 1) {
             return;
         }
         $path = null;
         try {
             $user = User::find($row->user_id);
-            if (!$user || !$user->is_active) {
+            if (! $user || ! $user->is_active) {
                 throw new \RuntimeException('account_unavailable');
             }
             $key = (string) config('models.nvidia_key');
@@ -61,7 +64,7 @@ class RunAvSceneInference implements ShouldQueue
                 ]);
             if ($response->status() === 302) {
                 $url = $response->header('Location');
-                if (!$this->trustedS3Location($url)) {
+                if (! $this->trustedS3Location($url)) {
                     throw new \RuntimeException('unsafe_provider_redirect');
                 }
                 // A pre-signed S3 GET authenticates by URL; never forward the
@@ -70,12 +73,12 @@ class RunAvSceneInference implements ShouldQueue
                     ->connectTimeout(10)->timeout(720)
                     ->withOptions(['allow_redirects' => false])->get($url);
             }
-            if (!$response->ok() || strlen($response->body()) > 50331648) {
+            if (! $response->ok() || strlen($response->body()) > 50331648) {
                 throw new \RuntimeException('provider_unavailable');
             }
             $zip = $response->body();
-            if (strlen($zip) < 22 || !str_starts_with($zip, "PK\x03\x04") ||
-                !str_contains(substr($zip, -65557), "PK\x05\x06")) {
+            if (strlen($zip) < 22 || ! str_starts_with($zip, "PK\x03\x04") ||
+                ! str_contains(substr($zip, -65557), "PK\x05\x06")) {
                 throw new \RuntimeException('invalid_zip_response');
             }
             $path = 'av-scenes/'.$row->user_id.'/'.$row->id.'.zip';
@@ -91,6 +94,7 @@ class RunAvSceneInference implements ShouldQueue
                 if ($changed === 1) {
                     $credits->completed($row->user_id, $row->connection_id, 'avscene:'.$row->id);
                 }
+
                 return $changed;
             });
             if ($saved !== 1) {

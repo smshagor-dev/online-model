@@ -23,6 +23,7 @@ class NvidiaMagpieController
         $token = $user->currentAccessToken();
         abort_unless($token instanceof PersonalAccessToken && $token->can('openmindai:invoke'),
             403, 'Your own Developer API Key is required.');
+
         return $user;
     }
 
@@ -31,8 +32,8 @@ class NvidiaMagpieController
         $user = $this->actor($request);
         $data = $request->validate([
             'text' => 'required|string|min:1|max:350',
-            'language' => ['required',Rule::in(config('magpie.languages'))],
-            'voice' => ['required',Rule::in(config('magpie.voices'))],
+            'language' => ['required', Rule::in(config('magpie.languages'))],
+            'voice' => ['required', Rule::in(config('magpie.voices'))],
             'audio_prompt' => 'nullable|file|max:1536',
             'voice_consent' => 'sometimes|accepted',
         ]);
@@ -69,7 +70,7 @@ class NvidiaMagpieController
         return Cache::lock('magpie:create:'.$user->id, 12)->block(3,
             function () use ($user, $data, $audio, $credits, $model) {
                 abort_if(DB::table('magpie_generations')->where('user_id', $user->id)
-                    ->whereIn('status', ['queued','running'])->exists(),
+                    ->whereIn('status', ['queued', 'running'])->exists(),
                     429, 'A Magpie generation is already in progress.');
                 $connection = $credits->connection('nvidia', $model->provider_model, 'audio');
                 $from = $credits->monthStart();
@@ -108,6 +109,7 @@ class NvidiaMagpieController
                     }
                     throw $e;
                 }
+
                 return response()->json([
                     'id' => $id, 'model' => 'nvidia-magpie-tts-zeroshot',
                     'status' => 'queued', 'status_path' => '/api/v1/openmindai/tts/'.$id,
@@ -120,6 +122,7 @@ class NvidiaMagpieController
         $user = $this->actor($request);
         $row = DB::table('magpie_generations')->where('id', $id)->where('user_id', $user->id)->first();
         abort_unless($row, 404);
+
         return response()->json([
             'id' => $id, 'model' => 'nvidia-magpie-tts-zeroshot',
             'status' => $row->status,
@@ -135,6 +138,7 @@ class NvidiaMagpieController
         $row = DB::table('magpie_generations')->where('id', $id)->where('user_id', $user->id)->first();
         abort_unless($row && $row->status === 'completed' && $row->output_path, 404);
         abort_unless(Storage::disk('local')->exists($row->output_path), 404);
+
         return Storage::disk('local')->download($row->output_path, 'magpie-'.$id.'.wav', [
             'Content-Type' => 'audio/wav', 'Cache-Control' => 'no-store, private',
             'X-Content-Type-Options' => 'nosniff',

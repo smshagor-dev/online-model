@@ -8,7 +8,7 @@ return new class extends Migration
     public function up(): void
     {
         DB::table('hosted_code_agents')->whereIn('slug',
-            ['nvidia-sparsedrive','nvidia-bevformer'])->update([
+            ['nvidia-sparsedrive', 'nvidia-bevformer'])->update([
                 'api_ready' => true,
                 'api_protocol' => 'json',
                 'api_path' => null,
@@ -23,7 +23,7 @@ return new class extends Migration
     public function down(): void
     {
         DB::table('hosted_code_agents')->whereIn('slug',
-            ['nvidia-sparsedrive','nvidia-bevformer'])->update([
+            ['nvidia-sparsedrive', 'nvidia-bevformer'])->update([
                 'api_ready' => false, 'updated_at' => now(),
             ]);
     }

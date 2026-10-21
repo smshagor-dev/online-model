@@ -69,8 +69,8 @@ class CodeAgentsAdminController
         $model = DB::table('hosted_code_agents')->where('slug', $slug)->first();
         abort_unless($model, 404);
         abort_if(isset(config('nvidia_specialists.models', [])[$slug])
-            && !isset(config('maxine.models', [])[$slug])
-            && !isset(config('nvidia_av.routes', [])[$slug])
+            && ! isset(config('maxine.models', [])[$slug])
+            && ! isset(config('nvidia_av.routes', [])[$slug])
             && $slug !== 'nvidia-cosmos-transfer2.5-2b'
             && $slug !== 'nvidia-magpie-tts-zeroshot'
             && $slug !== 'nvidia-nemotron-voicechat'
@@ -135,7 +135,7 @@ class CodeAgentsAdminController
                 || (isset($data['api_protocol']) && $data['api_protocol'] !== 'json'),
                 422, 'Maxine gRPC media uses a fixed, reviewed integration.');
         }
-        if (!isset(config('maxine.models', [])[$slug]) && !isset(config('nvidia_av.routes', [])[$slug]) && $slug !== 'nvidia-streampetr'
+        if (! isset(config('maxine.models', [])[$slug]) && ! isset(config('nvidia_av.routes', [])[$slug]) && $slug !== 'nvidia-streampetr'
             && $slug !== 'nvidia-cosmos-transfer2.5-2b'
             && $slug !== 'nvidia-magpie-tts-zeroshot'
             && $slug !== 'nvidia-nemotron-voicechat'

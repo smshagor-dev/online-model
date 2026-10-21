@@ -73,6 +73,7 @@ class NvidiaAvSceneController
         $user = $this->actor($request);
         $row = DB::table('av_scene_jobs')->where('id', $id)->where('user_id', $user->id)->first();
         abort_unless($row, 404);
+
         return response()->json([
             'id' => $id, 'model' => $row->model, 'scene_id' => $row->scene_id,
             'status' => $row->status,

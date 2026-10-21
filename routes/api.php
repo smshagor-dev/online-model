@@ -12,13 +12,13 @@ use App\Http\Controllers\FrontendChatController;
 use App\Http\Controllers\HostedImageController;
 use App\Http\Controllers\HostedMediaController;
 use App\Http\Controllers\MediaController;
-use App\Http\Controllers\NvidiaCosmosController;
-use App\Http\Controllers\NvidiaMagpieController;
-use App\Http\Controllers\NvidiaVoiceChatController;
-use App\Http\Controllers\NvidiaCosmosTransferController;
-use App\Http\Controllers\NvidiaMaxineController;
 use App\Http\Controllers\NvidiaAvSceneController;
 use App\Http\Controllers\NvidiaAvWorkerController;
+use App\Http\Controllers\NvidiaCosmosController;
+use App\Http\Controllers\NvidiaCosmosTransferController;
+use App\Http\Controllers\NvidiaMagpieController;
+use App\Http\Controllers\NvidiaMaxineController;
+use App\Http\Controllers\NvidiaVoiceChatController;
 use App\Http\Controllers\OpenMindAiGatewayController;
 use App\Http\Controllers\RealtimeController;
 use App\Http\Controllers\SettingsController;
@@ -27,6 +27,7 @@ use App\Http\Controllers\TeamController;
 use App\Http\Controllers\ToolsController;
 use App\Http\Controllers\WorkspaceController;
 use App\Services\AdminSettings;
+use App\Services\HostedCodeAgents;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -202,7 +203,7 @@ Route::prefix('v1')->group(function () {
             Route::post('2fa/recovery-codes', [AccountController::class, 'recovery']);
         });
         Route::get('models', [ChatController::class, 'models']);
-        Route::get('chat/hosted-models', fn (\App\Services\HostedCodeAgents $agents) => response()->json(['data' => $agents->enabled()->whereIn('slug', ['openmindai-lite', 'openmindai-super', 'openmindai-ultra'])->map(fn ($model) => ['id' => $model->slug])->values()->all()])->header('Cache-Control', 'no-store'));
+        Route::get('chat/hosted-models', fn (HostedCodeAgents $agents) => response()->json(['data' => $agents->enabled()->whereIn('slug', ['openmindai-lite', 'openmindai-super', 'openmindai-ultra'])->map(fn ($model) => ['id' => $model->slug])->values()->all()])->header('Cache-Control', 'no-store'));
         Route::post('chat', [ChatController::class, 'send'])->middleware('throttle:chat');
         Route::get('conversations', [ChatController::class, 'index']);
         Route::get('conversations/{id}', [ChatController::class, 'show']);

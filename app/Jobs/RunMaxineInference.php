@@ -16,7 +16,9 @@ class RunMaxineInference implements ShouldQueue
     use Queueable;
 
     public int $timeout = 900;
+
     public int $tries = 1;
+
     public bool $failOnTimeout = true;
 
     public function __construct(public string $jobId) {}
@@ -35,7 +37,7 @@ class RunMaxineInference implements ShouldQueue
                 throw new \RuntimeException('inactive');
             }
             $info = config('maxine.models.'.$job->model);
-            if (!$info || !Storage::disk('local')->exists($job->input_path)) {
+            if (! $info || ! Storage::disk('local')->exists($job->input_path)) {
                 throw new \RuntimeException('missing_media');
             }
             $url = rtrim((string) config('maxine.worker_url'), '/');
@@ -56,22 +58,22 @@ class RunMaxineInference implements ShouldQueue
                 ->connectTimeout(10)->timeout(config('maxine.timeout', 840))
                 ->withOptions(['allow_redirects' => false])
                 ->post($url.'/infer', $data);
-            if (!$response->ok() || strlen($response->body()) > 35000000) {
+            if (! $response->ok() || strlen($response->body()) > 35000000) {
                 throw new \RuntimeException('upstream');
             }
             $result = $response->json();
-            if (!is_array($result) || ($result['mime'] ?? '') !== $info['output_mime'] ||
-                !is_string($result['data'] ?? null)) {
+            if (! is_array($result) || ($result['mime'] ?? '') !== $info['output_mime'] ||
+                ! is_string($result['data'] ?? null)) {
                 throw new \RuntimeException('invalid_response');
             }
             $binary = base64_decode($result['data'], true);
-            if (!is_string($binary) || strlen($binary) < 12 ||
+            if (! is_string($binary) || strlen($binary) < 12 ||
                 strlen($binary) > config('maxine.max_output_bytes')) {
                 throw new \RuntimeException('invalid_output');
             }
             if ($job->model === 'nvidia-3d-body-pose') {
                 $records = array_filter(explode("\n", trim($binary)));
-                if (!$records || count($records) > 120000) {
+                if (! $records || count($records) > 120000) {
                     throw new \RuntimeException('invalid_pose_json');
                 }
                 foreach ($records as $record) {
@@ -85,7 +87,7 @@ class RunMaxineInference implements ShouldQueue
                 if (! str_starts_with($binary, "index,probability\n")) {
                     throw new \RuntimeException('invalid_detector_csv');
                 }
-            } elseif (!(substr($binary, 0, 4) === 'RIFF' && substr($binary, 8, 4) === 'WAVE')) {
+            } elseif (! (substr($binary, 0, 4) === 'RIFF' && substr($binary, 8, 4) === 'WAVE')) {
                 throw new \RuntimeException('invalid_wave');
             }
             $outputPath = 'maxine/'.$job->user_id.'/'.$job->id.'.'.$info['output_extension'];
@@ -100,6 +102,7 @@ class RunMaxineInference implements ShouldQueue
                 if ($count === 1) {
                     $credits->completed($job->user_id, $job->connection_id, 'maxine:'.$job->id);
                 }
+
                 return $count;
             });
             if ($updated !== 1) {

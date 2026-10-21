@@ -3,8 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use App\Notifications\LoginIpVerification;
 use App\Notifications\EmailOtpCode;
+use App\Notifications\LoginIpVerification;
 use App\Services\AdminSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
