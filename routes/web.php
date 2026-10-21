@@ -13,7 +13,6 @@ use App\Http\Controllers\SmtpSettingsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect('/admin'));
-Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verify'])->middleware(['signed', 'throttle:auth'])->name('verification.verify');
 Route::get('/reset-password', fn () => view('reset-password'))->name('password.reset');
 Route::get('/admin/login', [AdminController::class, 'loginForm'])->name('login');
 Route::post('/admin/login', [AdminController::class, 'login'])->middleware('throttle:auth');
