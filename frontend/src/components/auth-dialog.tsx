@@ -93,6 +93,10 @@ export default function AuthDialog({
       const message = e instanceof Error ? e.message : "Unable to continue.";
       setError(message);
       if (message.toLowerCase().includes("two-factor")) setShowCode(true);
+      if (mode === "login" && /verify your email first/i.test(message)) {
+        setMode("verify-email");
+        setNotice("Your account is not verified. Enter the code from your email, or request a new one.");
+      }
     } finally {
       setBusy(false);
     }
@@ -282,10 +286,11 @@ export default function AuthDialog({
             </button>}
             <button
               className="text-button muted"
+              type="button"
               disabled={busy}
-              onClick={resend}
+              onClick={() => { setMode("verify-email"); setError(""); setNotice("Enter your email and six-digit verification code, or request a new code."); }}
             >
-              Resend verification code
+              Verify email / resend code
             </button>
           </>
         ) : (
