@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, LoaderCircle, Mail, ShieldCheck } from "lucide-react";
 import Dialog from "./dialog";
+import OtpCodeInput from "./otp-code-input";
 import { api, type User } from "@/lib/api";
 type Mode = "login" | "register" | "forgot" | "verify-email" | "reset";
 export default function AuthDialog({
@@ -45,6 +46,11 @@ export default function AuthDialog({
     setNotice("");
     setBusy(true);
     const data = Object.fromEntries(new FormData(event.currentTarget));
+    if ((mode === "verify-email" || mode === "reset" || Boolean(ipChallengeId)) && !/^\d{6}$/.test(String(ipChallengeId ? data.ip_code : data.code ?? ""))) {
+      setError("Enter all six digits of the security code.");
+      setBusy(false);
+      return;
+    }
     try {
       if (mode === "login" && ipChallengeId) {
         const result = await api<{ user: User }>("login/verify-ip", "POST", {
@@ -70,7 +76,7 @@ export default function AuthDialog({
         if (result.verification_required) {
           setMode("verify-email");
           setShowCode(false);
-          setNotice("Enter the six-digit verification code sent to your email.");
+          setNotice("Enter the latest six-digit verification code sent to your email.");
         } else if (result.user) {
           onLogin(result.user);
         } else {
@@ -166,7 +172,7 @@ export default function AuthDialog({
             autoFocus={mode !== "register"}
           />
         </label>}
-        {!ipChallengeId && (mode === "verify-email" || mode === "reset") && <label>Six-digit email code<input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required placeholder="123456" /></label>}
+        {!ipChallengeId && (mode === "verify-email" || mode === "reset") && <OtpCodeInput key={mode + email} name="code" disabled={busy} />}
         {!ipChallengeId && mode === "reset" && <><label>New password<input name="password" type="password" autoComplete="new-password" minLength={6} required /></label><label>Confirm new password<input name="password_confirmation" type="password" autoComplete="new-password" minLength={6} required /></label></>}
         {!ipChallengeId && (mode === "login" || mode === "register") && (
           <label>
@@ -219,21 +225,7 @@ export default function AuthDialog({
               <ShieldCheck size={15} /> Use a two-factor code
             </button>
           ))}
-        {ipChallengeId && (
-          <label>
-            Email security code
-            <input
-              name="ip_code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9]{6}"
-              maxLength={6}
-              placeholder="6-digit code"
-              required
-              autoFocus
-            />
-          </label>
-        )}
+        {ipChallengeId && <OtpCodeInput key={ipChallengeId} name="ip_code" disabled={busy} />}
         {error && (
           <p className="feedback error" role="alert">
             {error}
