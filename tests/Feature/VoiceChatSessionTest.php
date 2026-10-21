@@ -19,6 +19,7 @@ class VoiceChatSessionTest extends TestCase
             'password' => 'GoodPassword123',
         ]);
         $user->forceFill(['email_verified_at' => now()])->save();
+
         return [$user, $user->createToken('developer:Studio', ['openmindai:invoke'])->plainTextToken];
     }
 
@@ -27,6 +28,7 @@ class VoiceChatSessionTest extends TestCase
         $secret = str_repeat('s', 40);
         config(['voicechat.ws_url' => 'wss://voice.openmindai.org/v1/realtime',
             'voicechat.worker_key' => $secret]);
+
         return $secret;
     }
 
@@ -46,6 +48,7 @@ class VoiceChatSessionTest extends TestCase
     private function ticket(array $session): string
     {
         parse_str(parse_url($session['ws_url'], PHP_URL_QUERY), $query);
+
         return (string) $query['ticket'];
     }
 

@@ -14,6 +14,7 @@ return new class extends Migration
             'last_test_http_status' => null, 'updated_at' => now(),
         ]);
     }
+
     public function down(): void
     {
         DB::table('hosted_code_agents')->where('slug', 'nvidia-nemotron-voicechat')

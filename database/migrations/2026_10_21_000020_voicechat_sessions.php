@@ -18,7 +18,7 @@ return new class extends Migration
             $table->timestamp('claimed_at')->nullable();
             $table->timestamp('ended_at')->nullable();
             $table->timestamps();
-            $table->index(['user_id','status']);
+            $table->index(['user_id', 'status']);
             $table->index('expires_at');
         });
     }

@@ -135,7 +135,8 @@ class NvidiaInferenceRoutesTest extends TestCase
             'slug' => 'nvidia-nemotron-3.5-embed-1b',
             'last_test_status' => 'success', 'last_test_http_status' => 200,
         ]);
-        $this->get('/admin/nvidia-models')->assertOk()->assertSee('Verified live');
+        $this->get('/admin/nvidia-models')->assertOk()
+            ->assertSee('NVIDIA live test:')->assertSee('Passed');
     }
 
     public function test_live_test_records_upstream_auth_errors_without_exposing_nvidia_key(): void

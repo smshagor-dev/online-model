@@ -52,7 +52,7 @@ class NvidiaCosmosTransferController
         return Cache::lock('transfer:create:'.$user->id, 12)->block(3,
             function () use ($user, $input, $video, $control, $model, $credits) {
                 abort_if(DB::table('cosmos_transfer_jobs')->where('user_id', $user->id)
-                    ->whereIn('status',['queued','running'])->exists(), 429, 'Generation already pending.');
+                    ->whereIn('status', ['queued', 'running'])->exists(), 429, 'Generation already pending.');
                 $conn = $credits->connection('nvidia', $model->provider_model, 'video');
                 $from = $credits->monthStart();
                 $used = (int) DB::table('api_credit_usage')->where('user_id', $user->id)
@@ -69,53 +69,56 @@ class NvidiaCosmosTransferController
                 Storage::disk('local')->put($videoPath, $video);
                 Storage::disk('local')->put($controlPath, $control);
                 try {
-                    DB::transaction(function () use ($id,$user,$conn,$input,$videoPath,$controlPath) {
+                    DB::transaction(function () use ($id, $user, $conn, $input, $videoPath, $controlPath) {
                         DB::table('cosmos_transfer_jobs')->insert([
-                            'id'=>$id,'user_id'=>$user->id,'connection_id'=>$conn,
-                            'prompt'=>trim($input['prompt']),
-                            'control_type'=>$input['control_type'],
-                            'control_weight'=>$input['control_weight'] ?? 1,
-                            'status'=>'queued','input_path'=>$videoPath,
-                            'control_path'=>$controlPath,'created_at'=>now(),'updated_at'=>now(),
+                            'id' => $id, 'user_id' => $user->id, 'connection_id' => $conn,
+                            'prompt' => trim($input['prompt']),
+                            'control_type' => $input['control_type'],
+                            'control_weight' => $input['control_weight'] ?? 1,
+                            'status' => 'queued', 'input_path' => $videoPath,
+                            'control_path' => $controlPath, 'created_at' => now(), 'updated_at' => now(),
                         ]);
                         RunCosmosTransfer::dispatch($id)->onConnection('database')->onQueue('default')->afterCommit();
                     });
                 } catch (\Throwable $error) {
-                    Storage::disk('local')->delete([$videoPath,$controlPath]);
+                    Storage::disk('local')->delete([$videoPath, $controlPath]);
                     throw $error;
                 }
+
                 return response()->json([
-                    'id'=>$id,'model'=>'nvidia-cosmos-transfer2.5-2b','status'=>'queued',
-                    'status_path'=>'/api/v1/openmindai/transfer/'.$id,
-                ],202)->header('Cache-Control','no-store');
+                    'id' => $id, 'model' => 'nvidia-cosmos-transfer2.5-2b', 'status' => 'queued',
+                    'status_path' => '/api/v1/openmindai/transfer/'.$id,
+                ], 202)->header('Cache-Control', 'no-store');
             });
     }
 
     public function status(Request $request, string $id)
     {
         $user = $this->actor($request);
-        $row = DB::table('cosmos_transfer_jobs')->where('id',$id)->where('user_id',$user->id)->first();
-        abort_unless($row,404);
+        $row = DB::table('cosmos_transfer_jobs')->where('id', $id)->where('user_id', $user->id)->first();
+        abort_unless($row, 404);
+
         return response()->json([
-            'id'=>$id,'model'=>'nvidia-cosmos-transfer2.5-2b','status'=>$row->status,
-            'control_type'=>$row->control_type,
-            'mime'=>$row->status==='completed'?'video/mp4':null,
-            'download_path'=>$row->status==='completed'
-                ?'/api/v1/openmindai/transfer/'.$id.'/download':null,
-            'error'=>$row->status==='failed'?$row->error_code:null,
-        ])->header('Cache-Control','no-store');
+            'id' => $id, 'model' => 'nvidia-cosmos-transfer2.5-2b', 'status' => $row->status,
+            'control_type' => $row->control_type,
+            'mime' => $row->status === 'completed' ? 'video/mp4' : null,
+            'download_path' => $row->status === 'completed'
+                ? '/api/v1/openmindai/transfer/'.$id.'/download' : null,
+            'error' => $row->status === 'failed' ? $row->error_code : null,
+        ])->header('Cache-Control', 'no-store');
     }
 
-    public function download(Request $request,string $id)
+    public function download(Request $request, string $id)
     {
         $user = $this->actor($request);
-        $row = DB::table('cosmos_transfer_jobs')->where('id',$id)->where('user_id',$user->id)->first();
-        abort_unless($row && $row->status==='completed' && $row->output_path,404);
-        abort_unless(Storage::disk('local')->exists($row->output_path),404);
-        return Storage::disk('local')->download($row->output_path,'transfer-'.$id.'.mp4',[
-            'Content-Type'=>'video/mp4',
-            'Cache-Control'=>'no-store, private',
-            'X-Content-Type-Options'=>'nosniff',
+        $row = DB::table('cosmos_transfer_jobs')->where('id', $id)->where('user_id', $user->id)->first();
+        abort_unless($row && $row->status === 'completed' && $row->output_path, 404);
+        abort_unless(Storage::disk('local')->exists($row->output_path), 404);
+
+        return Storage::disk('local')->download($row->output_path, 'transfer-'.$id.'.mp4', [
+            'Content-Type' => 'video/mp4',
+            'Cache-Control' => 'no-store, private',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 }

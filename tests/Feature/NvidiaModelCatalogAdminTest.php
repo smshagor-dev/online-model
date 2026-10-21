@@ -35,6 +35,7 @@ class NvidiaModelCatalogAdminTest extends TestCase
             ->assertSee('OpenMindAI Super');
         $this->assertDatabaseCount('hosted_code_agents', 42);
         $this->assertDatabaseMissing('hosted_code_agents', ['enabled' => false]);
+        $this->assertSame(42, DB::table('hosted_code_agents')->where('api_ready', true)->count());
         $this->get('/admin/nvidia-models?category=Embeddings')->assertOk()
             ->assertSee('nemotron-3.5-embed-1b')
             ->assertDontSee('magpie-tts-zeroshot');
@@ -64,7 +65,7 @@ class NvidiaModelCatalogAdminTest extends TestCase
         foreach ($catalog as $model) {
             $this->assertTrue($model['active']);
             $this->assertContains($model['inference_status'], ['configured', 'setup_required']);
-            if (!$model['available']) {
+            if (! $model['available']) {
                 $this->assertSame('setup_required', $model['inference_status']);
             }
         }

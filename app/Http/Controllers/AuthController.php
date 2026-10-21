@@ -3,16 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
-use Illuminate\Validation\ValidationException;
-use App\Notifications\VerifyEmail;
 use App\Services\AdminSettings;
+use App\Services\EmailOtp;
 use App\Services\TwoFactor;
 use App\Services\UnfamiliarLogin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use App\Services\EmailOtp;
 use Illuminate\Validation\Rules\Password as PasswordRule;
+use Illuminate\Validation\ValidationException;
 
 class AuthController
 {
@@ -110,6 +109,7 @@ class AuthController
                 abort(503, 'Could not send the reset code. Please try again later.');
             }
         }
+
         return ['message' => 'If the account exists, a six-digit reset code has been sent.'];
     }
 
@@ -133,6 +133,7 @@ class AuthController
             DB::table('sessions')->where('user_id', $user->id)->delete();
         });
         abort_unless($ok, 422, 'Invalid or expired reset code.');
+
         return ['message' => 'Password reset. All devices signed out.'];
     }
 
@@ -144,6 +145,7 @@ class AuthController
             $user->forceFill(['email_verified_at' => now()])->save();
         });
         abort_unless($ok, 422, 'Invalid or expired verification code.');
+
         return ['message' => 'Email verified. You can now sign in.'];
     }
 
@@ -160,7 +162,7 @@ class AuthController
                 abort(503, 'Could not send the verification code. Please try again later.');
             }
         }
+
         return ['message' => 'If eligible, a six-digit verification code has been sent.'];
     }
-
 }

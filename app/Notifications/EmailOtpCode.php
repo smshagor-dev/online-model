@@ -17,6 +17,7 @@ class EmailOtpCode extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $registration = $this->purpose === 'registration';
+
         return (new MailMessage)
             ->subject($registration ? 'Verify your email · OpenMindAI' : 'Reset your password · OpenMindAI')
             ->view('mail.security-code', [

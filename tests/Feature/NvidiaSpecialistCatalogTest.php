@@ -27,8 +27,8 @@ class NvidiaSpecialistCatalogTest extends TestCase
             $this->assertDatabaseHas('hosted_code_agents', [
                 'slug' => $slug, 'enabled' => true,
                 'api_ready' => isset(config('maxine.models', [])[$slug]) || isset(config('nvidia_av.routes', [])[$slug])
-                    || in_array($slug, ['nvidia-streampetr','nvidia-cosmos-transfer2.5-2b',
-                        'nvidia-magpie-tts-zeroshot','nvidia-nemotron-voicechat'], true),
+                    || in_array($slug, ['nvidia-streampetr', 'nvidia-cosmos-transfer2.5-2b',
+                        'nvidia-magpie-tts-zeroshot', 'nvidia-nemotron-voicechat'], true),
             ]);
             $this->assertNotEmpty($info['transport']);
             $this->assertTrue(str_starts_with($info['reference'], 'https://build.nvidia.com/')

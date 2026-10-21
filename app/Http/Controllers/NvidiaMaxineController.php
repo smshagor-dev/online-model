@@ -117,6 +117,7 @@ class NvidiaMaxineController
         $user = $this->actor($request);
         $row = DB::table('maxine_jobs')->where('id', $id)->where('user_id', $user->id)->first();
         abort_unless($row, 404);
+
         return response()->json([
             'id' => $id, 'model' => $row->model, 'status' => $row->status,
             'mime' => $row->status === 'completed' ? $row->output_mime : null,
@@ -133,6 +134,7 @@ class NvidiaMaxineController
         abort_unless($row && $row->status === 'completed' && $row->output_path, 404);
         abort_unless(Storage::disk('local')->exists($row->output_path), 404);
         $extension = config('maxine.models.'.$row->model.'.output_extension');
+
         return Storage::disk('local')->download($row->output_path, 'nvidia-'.$id.'.'.$extension, [
             'Content-Type' => $row->output_mime,
             'Cache-Control' => 'no-store, private',

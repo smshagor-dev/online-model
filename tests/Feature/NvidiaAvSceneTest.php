@@ -6,7 +6,6 @@ use App\Jobs\RunAvSceneInference;
 use App\Models\User;
 use App\Services\ApiCreditUsage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -23,6 +22,7 @@ class NvidiaAvSceneTest extends TestCase
             'password' => 'StrongPassword123',
         ]);
         $user->forceFill(['email_verified_at' => now()])->save();
+
         return [$user, $user->createToken('developer:Studio', ['openmindai:invoke'])->plainTextToken];
     }
 
@@ -75,7 +75,7 @@ class NvidiaAvSceneTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/openmindai/av/jobs/'.$id)
             ->assertOk()->assertJsonPath('status', 'completed');
         $this->withToken($token)->get('/api/v1/openmindai/av/jobs/'.$id.'/download')->assertOk();
-        Http::assertSent(fn ($r) => $r->url() === $url && !$r->hasHeader('Authorization'));
+        Http::assertSent(fn ($r) => $r->url() === $url && ! $r->hasHeader('Authorization'));
         Http::assertSent(fn ($r) => $r->url() === 'https://ai.api.nvidia.com/v1/av/nvidia/streampetr'
             && $r['scene_id'] === 'scene-0103' && $r->hasHeader('Authorization'));
         $this->assertDatabaseCount('api_credit_usage', 1);

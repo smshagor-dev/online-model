@@ -19,6 +19,7 @@ class NvidiaVoiceChatController
         $token = $user->currentAccessToken();
         abort_unless($token instanceof PersonalAccessToken && $token->can('openmindai:invoke'),
             403, 'A personal Developer API Key with model access is required.');
+
         return $user;
     }
 
@@ -35,7 +36,7 @@ class NvidiaVoiceChatController
         $user = $this->actor($request);
         $url = (string) config('voicechat.ws_url');
         abort_unless(str_starts_with($url, 'wss://')
-            && !str_contains($url, '?') && !str_contains($url, '#')
+            && ! str_contains($url, '?') && ! str_contains($url, '#')
             && strlen((string) config('voicechat.worker_key')) >= 32,
             503, 'A secure VoiceChat relay must be configured.');
         $model = DB::table('hosted_code_agents')->where('slug', 'nvidia-nemotron-voicechat')
@@ -73,6 +74,7 @@ class NvidiaVoiceChatController
                 'expires_at' => now()->addSeconds((int) config('voicechat.ticket_seconds', 60)),
                 'created_at' => now(), 'updated_at' => now(),
             ]);
+
             return response()->json([
                 'id' => $sessionId, 'model' => 'nvidia-nemotron-voicechat',
                 'status' => 'issued', 'protocol' => 'openai-realtime',
@@ -89,6 +91,7 @@ class NvidiaVoiceChatController
         $row = DB::table('voicechat_sessions')->where('id', $id)
             ->where('user_id', $user->id)->first();
         abort_unless($row, 404);
+
         return response()->json([
             'id' => $id, 'model' => 'nvidia-nemotron-voicechat',
             'status' => $row->status,
@@ -100,9 +103,10 @@ class NvidiaVoiceChatController
     {
         $user = $this->actor($request);
         $changed = DB::table('voicechat_sessions')->where('id', $id)
-            ->where('user_id', $user->id)->whereIn('status', ['issued','claimed'])
+            ->where('user_id', $user->id)->whereIn('status', ['issued', 'claimed'])
             ->update(['status' => 'closed', 'ended_at' => now(), 'updated_at' => now()]);
         abort_unless($changed, 404);
+
         return response()->json(['id' => $id, 'status' => 'closed'])
             ->header('Cache-Control', 'no-store');
     }
@@ -110,7 +114,7 @@ class NvidiaVoiceChatController
     public function claim(Request $request)
     {
         $this->worker($request);
-        $data = $request->validate(['ticket' => ['required','string','regex:/^[a-f0-9]{64}$/D']]);
+        $data = $request->validate(['ticket' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/D']]);
         $hash = hash('sha256', $data['ticket']);
         $row = DB::table('voicechat_sessions')->where('ticket_hash', $hash)
             ->where('status', 'issued')->where('expires_at', '>=', now())->first();
@@ -121,6 +125,7 @@ class NvidiaVoiceChatController
             ->where('status', 'issued')->where('expires_at', '>=', now())
             ->update(['status' => 'claimed', 'claimed_at' => now(), 'updated_at' => now()]);
         abort_unless($updated === 1, 401, 'Session ticket already used.');
+
         return response()->json(['id' => $row->id, 'model' => 'nvidia-nemotron-voicechat',
             'max_seconds' => (int) config('voicechat.max_session_seconds', 900)])
             ->header('Cache-Control', 'no-store');
@@ -148,6 +153,7 @@ class NvidiaVoiceChatController
                 $credits->completed($row->user_id, $connection, 'voicechat:'.$row->id);
             }
         });
+
         return response()->json(['id' => $row->id, 'status' => 'closed'])
             ->header('Cache-Control', 'no-store');
     }

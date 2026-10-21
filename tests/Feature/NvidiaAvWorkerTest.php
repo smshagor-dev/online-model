@@ -6,7 +6,6 @@ use App\Jobs\RunAvWorkerScene;
 use App\Models\User;
 use App\Services\ApiCreditUsage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -23,6 +22,7 @@ class NvidiaAvWorkerTest extends TestCase
             'password' => 'StrongPassword123',
         ]);
         $user->forceFill(['email_verified_at' => now()])->save();
+
         return [$user, $user->createToken('developer:Desktop', ['openmindai:invoke'])->plainTextToken];
     }
 

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Notifications\EmailOtpCode;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
@@ -20,7 +21,7 @@ class EmailOtp
             throw ValidationException::withMessages(['email' => 'You have reached the limit of 5 resend requests per hour. Try again in '.max(1, (int) ceil($wait / 60)).' minute(s).']);
         }
         $existing = DB::table('email_otp_challenges')->where('email', $email)->where('purpose', $purpose)->first();
-        if ($existing && \Illuminate\Support\Carbon::parse($existing->updated_at)->greaterThan(now()->subSeconds(120))) {
+        if ($existing && Carbon::parse($existing->updated_at)->greaterThan(now()->subSeconds(120))) {
             throw ValidationException::withMessages(['email' => 'Wait 2 minutes before requesting another code.']);
         }
         $code = (string) random_int(100000, 999999);
@@ -30,7 +31,9 @@ class EmailOtp
         );
         try {
             $user->notify(new EmailOtpCode($code, $purpose));
-            if ($resend) RateLimiter::hit($limitKey, 3600);
+            if ($resend) {
+                RateLimiter::hit($limitKey, 3600);
+            }
         } catch (\Throwable $exception) {
             DB::table('email_otp_challenges')->where('email', $email)->where('purpose', $purpose)->delete();
             throw $exception;
@@ -52,10 +55,12 @@ class EmailOtp
                 } else {
                     (clone $query)->update(['attempts' => $challenge->attempts + 1]);
                 }
+
                 return false;
             }
             $action();
             (clone $query)->delete();
+
             return true;
         });
     }
