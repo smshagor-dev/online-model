@@ -108,7 +108,7 @@ class OpenMindAiGatewayTest extends TestCase
             'X-OpenMindAI-Nonce' => $nonce,
             'X-OpenMindAI-Signature' => hash_hmac('sha256', $message, $secret),
         ];
-        $this->get($path, $headers)->assertOk()->assertJsonCount(3, 'data');
+        $this->get($path, $headers)->assertOk()->assertJsonCount(42, 'data');
         $this->get($path, $headers)->assertStatus(409);
         $this->get($path, [...$headers, 'X-OpenMindAI-Nonce' => bin2hex(random_bytes(16))])->assertUnauthorized();
     }
@@ -118,7 +118,7 @@ class OpenMindAiGatewayTest extends TestCase
         $u = $this->account();
         $token = $u->createToken('developer:catalog', ['openmindai:invoke'])->plainTextToken;
         $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()
-            ->assertJsonCount(3, 'data')
+            ->assertJsonCount(42, 'data')
             ->assertJsonFragment(['id' => 'openmindai-super', 'available' => true]);
         DB::table('hosted_code_agents')->where('slug', 'nvidia-nemotron-3.5-embed-1b')
             ->update(['enabled' => false]);
@@ -130,7 +130,8 @@ class OpenMindAiGatewayTest extends TestCase
                 'path' => null,
             ]);
         $this->withToken($token)->getJson('/api/v1/openmindai/models')->assertOk()
-            ->assertJsonCount(3, 'data');
+            ->assertJsonCount(42, 'data')
+            ->assertJsonFragment(['id' => 'nvidia-nemotron-3.5-embed-1b', 'available' => false]);
     }
 
     public function test_specialized_json_invoke_requires_admin_verified_configuration_and_tracks_usage(): void

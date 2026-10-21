@@ -47,6 +47,11 @@ class NvidiaModelCatalogAdminTest extends TestCase
         $slug = 'nvidia-nemotron-3.5-embed-1b';
 
         $this->patchJson('/admin/nvidia-models/'.$slug, [
+            'enabled' => false,
+        ])->assertUnprocessable();
+        $this->assertDatabaseHas('hosted_code_agents', ['slug' => $slug, 'enabled' => true]);
+
+        $this->patchJson('/admin/nvidia-models/'.$slug, [
             'api_ready' => true,
         ])->assertStatus(422);
 
