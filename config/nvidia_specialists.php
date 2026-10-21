@@ -23,10 +23,10 @@ return [
             'reference' => 'https://build.nvidia.com/nvidia/bnr/api',
         ],
         'nvidia-magpie-tts-zeroshot' => [
-            'transport' => 'gated_audio',
-            'requirement' => 'NVIDIA approval and speaker consent',
-            'note' => 'Magpie ZeroShot requires approved access and a consented voice reference.',
-            'reference' => 'https://build.nvidia.com/nvidia/magpie-tts-zeroshot',
+            'transport' => 'speech_nim',
+            'requirement' => 'Approved GPU-hosted Speech NIM and speaker consent for voice prompts',
+            'note' => 'Uses the documented /v1/audio/synthesize endpoint with supported built-in voices or consented voice reference. NVIDIA approval and a GPU-backed Speech NIM are still required.',
+            'reference' => 'https://docs.nvidia.com/nim/speech/latest/get-started/tutorials/tts.html',
         ],
         'nvidia-studio-voice' => [
             'transport' => 'grpc_stream',
