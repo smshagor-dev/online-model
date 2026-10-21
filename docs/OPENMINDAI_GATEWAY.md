@@ -99,3 +99,11 @@ Example specialized request:
 ```
 
 Use `POST /api/v1/openmindai/models/nvidia-nemotron-3-embed-1b/invoke` with a Developer API Key. Provider-side access, availability, usage limits and applicable license terms are independent of local authentication.
+
+## OpenMind Studio Cloud tool calling
+
+The chat-completions gateway supports up to **64 declared function tools** and **64 tool calls within an assistant message**. This covers OpenMind Studio's 19 built-in tools without silently dropping, renaming, or truncating them. Tool schemas, tool-call IDs, roles and returned tool results are forwarded to NVIDIA unchanged. Inference requests are limited to **1 MiB** to prevent oversized nested tool-schema payloads.
+
+The old Laravel `max:12` check was an application-side validation bug, not evidence of a documented 12-tool NVIDIA limit. Provider-side limits may vary by selected model. If NVIDIA rejects a tool schema or payload, the backend returns a clear HTTP 422 with `error.type=upstream_error` and `error.upstream_status`, without exposing the upstream response body or server API credentials.
+
+A real desktop roundtrip with all 19 tools is still required after deployment to establish whether each NVIDIA model supports the workload. No client-side removal of agent tools or first-party signing secret is required.
