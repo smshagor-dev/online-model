@@ -219,7 +219,12 @@ export async function hostedMediaRequest(
     }
     if (signal.aborted) throw new WorkError("Media request was cancelled.", 499);
     const saved = await bridge("media/" + taskId + "/hosted/task/complete", { ...completed, provider_model: providerModel }, 45000);
-    if (!saved.ok) throw new WorkError("Media created but could not be saved.");
+    if (!saved.ok) throw new WorkError(
+      saved.status === 404 || saved.status === 409
+        ? "This media task was deleted or cancelled."
+        : "Media created but could not be saved.",
+      saved.status === 404 || saved.status === 409 ? 409 : 503,
+    );
     const result = await saved.json();
     if (result.status !== "complete" || result.id !== taskId) throw new WorkError("Media was not saved.");
     return Response.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
