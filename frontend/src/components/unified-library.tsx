@@ -131,7 +131,7 @@ export default function LibraryPanel({
             "video",
             "code",
           ].map((x) => (
-            <option key={x}>{x}</option>
+            <option key={x} value={x}>{x === "document_create" ? "Generated documents" : x}</option>
           ))}
         </select>
       </div>
