@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\DeveloperKeysController;
+use App\Http\Controllers\DeveloperPortalController;
 use App\Http\Controllers\OpenMindAiGatewayController;
 use App\Http\Controllers\NvidiaCosmosController;
 use App\Http\Controllers\AssistantGalleryController;
@@ -158,6 +159,8 @@ Route::prefix('v1')->group(function () {
         Route::patch('me', [AccountController::class, 'update']);
         Route::get('tokens', [AccountController::class, 'tokens']);
         Route::get('developer/keys', [DeveloperKeysController::class, 'index']);
+        Route::get('developer/catalog', [DeveloperPortalController::class, 'catalog']);
+        Route::get('developer/usage', [DeveloperPortalController::class, 'usage']);
         Route::post('developer/keys', [DeveloperKeysController::class, 'store'])->middleware('throttle:sensitive');
         Route::delete('developer/keys/{id}', [DeveloperKeysController::class, 'destroy'])->middleware('throttle:sensitive');
         Route::delete('tokens/{id}', [AccountController::class, 'revoke']);
