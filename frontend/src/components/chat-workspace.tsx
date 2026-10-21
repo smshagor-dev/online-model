@@ -631,6 +631,7 @@ export default function ChatWorkspace() {
     generationRef.current = controller;
     activeStream.current = null;
     let receivedMeta = false;
+    let autoMedia = false;
     try {
       await streamChat(
         {
@@ -658,6 +659,12 @@ export default function ChatWorkspace() {
             : {}),
         },
         (event, data) => {
+          if (event === "media" && Number.isSafeInteger(data.id) && Number(data.id) > 0) {
+            // A media task is stored in the existing private Library, not as a text chat turn.
+            autoMedia = true;
+            setInlineMedia((ids) => [...ids, Number(data.id)]);
+            setMessages(history);
+          }
           if (event === "meta") {
             receivedMeta = true;
             const cid = data.conversation_id as number | null;
@@ -739,7 +746,7 @@ export default function ChatWorkspace() {
               /* Mobile browsers may require service-worker notifications. */
             }
           }
-          if (event === "done")
+          if (event === "done" && !autoMedia)
             setMessages((previous) =>
               previous.map((m, i) =>
                 i === previous.length - 1

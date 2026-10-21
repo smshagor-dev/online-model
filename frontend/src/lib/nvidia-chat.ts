@@ -1,3 +1,5 @@
+import { routePrompt, serverRouterConfig } from "./prompt-router.ts";
+import { dispatchPromptMedia } from "./auto-dispatch.ts";
 import {
   plannerInstruction,
   researchLoop,
@@ -24,6 +26,7 @@ type Checkpoint = {
   content?: string;
   previousPart?: string;
   finished?: boolean;
+  modelId?: string;
   sources?: Source[];
 };
 type Lease = {
@@ -56,6 +59,43 @@ export async function nvidiaChat(
       { status: 503 },
     );
   const fetcher = options.fetcher || fetch;
+  const input = JSON.parse(body);
+  let routedModel = config.model;
+  // The classifier is a paid upstream call: confirm the Laravel session first.
+  // Existing injected test fixtures already exercise authenticated bridge responses.
+  if (!options.config && !input.resume_message_id &&
+      typeof input.message === "string" && input.message.length >= 40 &&
+      process.env.NVIDIA_ROUTER_CLASSIFIER !== "false") {
+    try {
+      const identity = await fetcher(base.replace(/\/$/, "") + "/me", {
+        headers: {Authorization: "Bearer " + token, Accept: "application/json"},
+        cache: "no-store", redirect: "error",
+        signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
+      });
+      if (!identity.ok)
+        return Response.json({message: "Please sign in again."},
+          {status: identity.status === 401 || identity.status === 403 ? identity.status : 503});
+    } catch {
+      return Response.json({message: "Cannot verify your session."}, {status: 503});
+    }
+  }
+  if (!input.resume_message_id && typeof input.message === "string") {
+    const decision = await routePrompt(input.message, serverRouterConfig(config.apiKey, config.model), {
+      fetcher,
+      signal,
+      hasAttachments: Array.isArray(input.attachment_ids) && input.attachment_ids.length > 0,
+      deepResearch: Boolean(input.deep_research),
+      webSearch: Boolean(input.web_search),
+      // Fixture calls inject config and exercise the stream without an additional classifier request.
+      enableClassifier: !options.config && process.env.NVIDIA_ROUTER_CLASSIFIER !== "false",
+    });
+    routedModel = decision.model;
+    if (decision.kind !== "chat") {
+      return dispatchPromptMedia(decision, input.message, token, base, signal, {
+        fetcher, apiKey: config.apiKey, bridgeKey: config.bridgeKey, chatModel: config.model,
+      });
+    }
+  }
   const backend = async (
     path: string,
     data: unknown,
@@ -84,7 +124,7 @@ export async function nvidiaChat(
       JSON.parse(body).resume_message_id ? "resume" : "begin",
       JSON.parse(body).resume_message_id
         ? { message_id: JSON.parse(body).resume_message_id }
-        : { ...JSON.parse(body), provider_model: config.model },
+        : { ...JSON.parse(body), provider_model: routedModel },
       JSON.parse(body).deep_research ? 80000 : 15000,
     );
     if (!prepared.ok) {
@@ -114,6 +154,8 @@ export async function nvidiaChat(
     );
   }
   const deep = Boolean(lease.deep_research ?? JSON.parse(body).deep_research);
+  // Resume uses the model stored with the checkpoint, not a fresh classification.
+  let activeModel = lease.checkpoint?.modelId || routedModel;
   const encoder = new TextEncoder();
   const upstreamAbort = new AbortController();
   let disconnected = signal.aborted;
@@ -142,6 +184,7 @@ export async function nvidiaChat(
             ticket: lease.ticket,
             state: {
               ...checkpoint,
+              modelId: activeModel,
               content,
               messages: generationMessages,
               previousPart,
@@ -249,7 +292,7 @@ export async function nvidiaChat(
                   Accept: "application/json",
                 },
                 body: JSON.stringify({
-                  model: config.model,
+                  model: activeModel,
                   stream: false,
                   temperature: 0.2,
                   messages: [
@@ -266,7 +309,7 @@ export async function nvidiaChat(
                         context,
                     },
                   ],
-                  ...(config.model === "nvidia/nemotron-3.5-lightning-30b-a3b"
+                  ...(activeModel === "nvidia/nemotron-3.5-lightning-30b-a3b"
                     ? { chat_template_kwargs: { enable_thinking: false } }
                     : {}),
                 }),
@@ -338,7 +381,7 @@ export async function nvidiaChat(
               generationMessages = original;
             }
           };
-          const response = await fetcher(endpoint, {
+          const requestStream = (model: string) => fetcher(endpoint, {
             method: "POST",
             redirect: "error",
             cache: "no-store",
@@ -348,11 +391,11 @@ export async function nvidiaChat(
               Accept: "text/event-stream",
             },
             body: JSON.stringify({
-              model: config.model,
+              model,
               messages: generationMessages,
               stream: true,
               temperature: 0.6,
-              ...(config.model === "nvidia/nemotron-3.5-lightning-30b-a3b"
+              ...(model === "nvidia/nemotron-3.5-lightning-30b-a3b"
                 ? { chat_template_kwargs: { enable_thinking: false } }
                 : {}),
             }),
@@ -361,6 +404,14 @@ export async function nvidiaChat(
               AbortSignal.timeout(110000),
             ]),
           });
+          let response = await requestStream(activeModel);
+          // Retry with the configured baseline only before any user-visible tokens.
+          // Never mix two models in one partially streamed answer.
+          if (([404, 410, 429].includes(response.status) || response.status >= 500) &&
+              activeModel !== config.model && !upstreamAbort.signal.aborted) {
+            activeModel = config.model;
+            response = await requestStream(activeModel);
+          }
           if (
             response.status !== 200 ||
             !response.body ||
@@ -469,7 +520,7 @@ export async function nvidiaChat(
           try {
             const r = await backend(
               "finish",
-              { ticket: lease.ticket, content, status, sources: lease.sources, provider_model: config.model },
+              { ticket: lease.ticket, content, status, sources: lease.sources, provider_model: activeModel },
               8000,
             );
             if (r.ok && (await r.json()).stored) {
@@ -504,7 +555,7 @@ export async function nvidiaChat(
                   Accept: "application/json",
                 },
                 body: JSON.stringify({
-                  model: config.model,
+                  model: activeModel,
                   stream: false,
                   max_tokens: 512,
                   messages: [
@@ -515,7 +566,7 @@ export async function nvidiaChat(
                     },
                     { role: "user", content: question },
                   ],
-                  ...(config.model === "nvidia/nemotron-3.5-lightning-30b-a3b"
+                  ...(activeModel === "nvidia/nemotron-3.5-lightning-30b-a3b"
                     ? { chat_template_kwargs: { enable_thinking: false } }
                     : {}),
                 }),
