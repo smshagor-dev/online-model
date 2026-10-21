@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { generateHostedImage, hostedImageEnabled } from "../src/lib/hosted-image.ts";
+import { generateHostedImage } from "../src/lib/hosted-image.ts";
 import { hostedMediaRequest, hostedMediaEnabled } from "../src/lib/hosted-media.ts";
 
 const imageUrl = "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell";
@@ -21,35 +21,19 @@ function installTestSecrets() {
   };
 }
 
-test("frontend image inference uses NVIDIA directly and Laravel only for storage", async () => {
+test("frontend image inference is only requested through Laravel, never directly through NVIDIA", async () => {
   const restore = installTestSecrets();
   try {
-    assert.equal(hostedImageEnabled(), true);
-    const seen = [];
-    const fetcher = async (url, init) => {
-      seen.push({ url, init });
-      if (url.endsWith("/media/hosted/begin"))
-        return Response.json({ id: 3, status: "running" }, { status: 202 });
-      if (url === imageUrl)
-        return Response.json({ artifacts: [{ base64: png, finishReason: "SUCCESS" }] });
-      if (url.endsWith("/media/3/hosted/finish"))
-        return Response.json({ id: 3, status: "complete" });
-      throw Error("Unexpected request: " + url);
-    };
-    const result = await generateHostedImage(
-      JSON.stringify({ prompt: "A sunrise" }), "user-token",
-      "https://cloud.openmindai.org/api/v1",
-      new AbortController().signal, { fetcher },
-    );
-    assert.equal(result.status, 201);
-    assert.deepEqual(seen.map(x => x.url), [
-      "https://cloud.openmindai.org/api/v1/media/hosted/begin", imageUrl,
-      "https://cloud.openmindai.org/api/v1/media/3/hosted/finish",
-    ]);
-    assert.equal(seen[1].init.headers.Authorization, "Bearer frontend-server-only-provider-key");
-    assert.equal(seen[0].init.headers.Authorization, "Bearer user-token");
-    assert.equal(seen[0].init.headers["X-Chat-Bridge-Key"], process.env.FRONTEND_CHAT_BRIDGE_KEY);
-    assert.doesNotMatch(JSON.stringify(await result.json()), /frontend-server-only-provider-key/);
+    const urls = [];
+    const result = await generateHostedImage(JSON.stringify({prompt:"A sunrise"}), "user-token",
+      "https://cloud.openmindai.org/api/v1", new AbortController().signal, {fetcher:async(url,init)=>{
+        urls.push({url,init});
+        return Response.json({id:3,ids:[3],status:"queued"}, {status:202});
+      }});
+    assert.equal(result.status,202);
+    assert.deepEqual(urls.map(x=>x.url),["https://cloud.openmindai.org/api/v1/media/cloud-image"]);
+    assert.equal(urls[0].init.headers.Authorization,"Bearer user-token");
+    assert.doesNotMatch(JSON.stringify(urls),/frontend-server-only-provider-key/);
   } finally { restore(); }
 });
 
@@ -91,10 +75,9 @@ test("server-only inference routing keeps provider keys private and relay URLs f
   const media = read("src/lib/hosted-media.ts");
   const route = read("src/app/api/backend/[...path]/route.ts");
   const env = read(".env.example");
-  for (const module of [chat, image, media]) {
-    assert.match(module, /process\.env\.NVIDIA_API_KEY/);
-
-  }
+  for (const module of [chat, media]) assert.match(module, /process\.env\.NVIDIA_API_KEY/);
+  assert.doesNotMatch(image, /ai\.api\.nvidia\.com|integrate\.api\.nvidia\.com/);
+  assert.match(image, /media\/cloud-image/);
   assert.match(chat, /frontend_inference_route/);
   assert.match(chat, /String\(url\) === endpoint/);
   assert.doesNotMatch(route, /hosted_inference_enabled/);
@@ -109,7 +92,6 @@ test("missing server NVIDIA key never advertises enabled media", () => {
   try {
     delete process.env.NVIDIA_API_KEY;
     process.env.FRONTEND_CHAT_BRIDGE_KEY = "x".repeat(32);
-    assert.equal(hostedImageEnabled(), false);
     assert.equal(hostedMediaEnabled(), false);
   } finally {
     if (prior === undefined) delete process.env.NVIDIA_API_KEY;
