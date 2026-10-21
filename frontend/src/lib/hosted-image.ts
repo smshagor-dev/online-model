@@ -1,5 +1,6 @@
 // Server-only hosted image integration. No provider credentials enter browser code.
 import { readProviderJson } from "./provider-response.ts";
+import { backendProviderFetcher } from "./backend-provider.ts";
 const IMAGE_ENDPOINT =
   "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell";
 const IMAGE_MODEL = "black-forest-labs/flux.1-schnell";
@@ -8,7 +9,7 @@ type ImageConfig = { apiKey: string; bridgeKey: string };
 type Fetcher = typeof fetch;
 
 export const hostedImageEnabled = () =>
-  Boolean(process.env.NVIDIA_API_KEY) &&
+  Boolean(process.env.FRONTEND_CHAT_BRIDGE_KEY) &&
   (process.env.FRONTEND_CHAT_BRIDGE_KEY?.length ?? 0) >= 32;
 
 class ImageFailure extends Error {
@@ -37,7 +38,7 @@ export async function generateHostedImage(
   options: { fetcher?: Fetcher; config?: ImageConfig } = {},
 ): Promise<Response> {
   const config = options.config ?? {
-    apiKey: process.env.NVIDIA_API_KEY || "",
+    apiKey: "backend-managed",
     bridgeKey: process.env.FRONTEND_CHAT_BRIDGE_KEY || "",
   };
   if (!config.apiKey || config.bridgeKey.length < 32)
@@ -52,7 +53,9 @@ export async function generateHostedImage(
   if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 4000)
     return Response.json({ message: "Enter an image description up to 4000 characters." }, { status: 422 });
 
-  const fetcher = options.fetcher || fetch;
+  const fetcher = options.config
+    ? (options.fetcher || fetch)
+    : backendProviderFetcher(backend, token, config.bridgeKey, options.fetcher || fetch);
   const base = backend.replace(/\/$/, "");
   const bridgeHeaders = {
     Authorization: "Bearer " + token,
