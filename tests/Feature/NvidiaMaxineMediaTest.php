@@ -168,7 +168,7 @@ class NvidiaMaxineMediaTest extends TestCase
             'id' => $id, 'status' => 'completed', 'output_mime' => 'text/csv',
         ]);
         $this->withToken($token)->get('/api/v1/openmindai/maxine/jobs/'.$id.'/download')->assertOk()
-            ->assertHeader('Content-Type', 'text/csv');
+            ->assertHeader('Content-Type', 'text/csv; charset=utf-8');
         $this->assertDatabaseCount('api_credit_usage', 1);
     }
 

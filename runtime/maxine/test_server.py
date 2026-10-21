@@ -73,12 +73,12 @@ def test_svd_preview_uses_official_v1_client_csv_output():
         script = root / spec["script"]
         script.parent.mkdir(parents=True, exist_ok=True)
         script.write_text("pass\\n")
-        video = b"\\x00\\x00\\x00\\x18ftypisom" + b"x" * 20
+        video = bytes([0, 0, 0, 24]) + b"ftypisom" + b"x" * 20
         with patch("runtime.maxine.server.subprocess.run") as execute:
             def finish(args, **kwargs):
                 assert "--save-csv" in args
                 assert "--output" not in args
-                pathlib.Path(args[args.index("--save-csv") + 1]).write_bytes(b"index,probability\\n0,0.450000\\n")
+                pathlib.Path(args[args.index("--save-csv") + 1]).write_bytes(b"index,probability" + bytes([10]) + b"0,0.450000" + bytes([10]))
             execute.side_effect = finish
             mime, data = run_model(
                 "nvidia-synthetic-video-detector", video,
@@ -95,7 +95,7 @@ def test_active_speaker_uses_video_and_diarization():
         script = root / spec["script"]
         script.parent.mkdir(parents=True, exist_ok=True)
         script.write_text("pass\\n")
-        video = b"\\x00\\x00\\x00\\x18ftypisom" + b"x" * 20
+        video = bytes([0, 0, 0, 24]) + b"ftypisom" + b"x" * 20
         with patch("runtime.maxine.server.subprocess.run") as execute:
             def finish(args, **kwargs):
                 assert "--diarization-input" in args

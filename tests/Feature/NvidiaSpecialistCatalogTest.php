@@ -55,7 +55,7 @@ class NvidiaSpecialistCatalogTest extends TestCase
         $resp = $this->withToken($key)->getJson('/api/v1/openmindai/catalog')->assertOk();
         $this->assertCount(42, $resp->json('data'));
         $model = collect($resp->json('data'))->firstWhere('id', 'nvidia-synthetic-video-detector');
-        $this->assertFalse($model['available']);
+        $this->assertFalse($model['provider_verified']);
         $this->assertSame('grpc_stream', $model['integration_requirements']['transport']);
         $this->assertStringContainsString('Private access', $model['integration_requirements']['requirement']);
         $cosmos = collect($resp->json('data'))->firstWhere('id', 'nvidia-cosmos3-nano');
