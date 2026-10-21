@@ -30,6 +30,14 @@
  <div class="entity-card-header"><div><h2 style="word-break:break-word">{{ $model->name }}</h2><p class="entity-meta">{{ $model->slug === 'nvidia-cosmos3-nano' ? 'Queued image/video generation' : ($model->api_protocol === 'chat' ? 'Chat completions' : 'Specialized JSON request') }}</p></div><span class="status-pill {{ $model->last_test_status === 'success' ? 'success' : 'warning' }}">{{ $model->last_test_status === 'success' ? 'Verified live' : ($model->api_ready ? 'API configured · not verified' : 'Custom protocol required') }}</span></div>
  <p class="entity-meta">{{ $model->summary }}</p>
  <p class="entity-meta"><a href="{{ $model->catalog_url }}" target="_blank" rel="noopener noreferrer">NVIDIA model card</a> · Free Endpoint (catalog)</p>
+ @if(isset($specialistModels[$model->slug]))
+ <div class="muted-note" style="margin:12px 0">
+   <strong>Integration needed:</strong> {{ $specialistModels[$model->slug]['requirement'] }}
+   <p class="entity-meta">{{ $specialistModels[$model->slug]['note'] }}</p>
+   <p class="entity-meta">Protocol: <code>{{ $specialistModels[$model->slug]['transport'] }}</code> · <a href="{{ $specialistModels[$model->slug]['reference'] }}" target="_blank" rel="noopener noreferrer">Official NVIDIA reference</a></p>
+   <p class="entity-meta">The model stays listed, but cannot be marked inference-ready until its transport has been implemented.</p>
+ </div>
+ @endif
  <form method="post" action="/admin/nvidia-models/{{ $model->slug }}">
   @csrf @method('PATCH')
   <div class="field"><label for="name-{{ $model->id }}">Display name</label><input id="name-{{ $model->id }}" name="name" value="{{ $model->name }}" required maxlength="120"></div>
