@@ -45,7 +45,7 @@ class CodeAgentsAdminController
             'search' => $q,
             'total' => $models->count(),
             'configured' => $models->where('api_ready', true)->count(),
-            'enabled' => $models->count(),
+            'enabled' => $models->where('enabled', true)->count(),
             'apiBase' => config('developer.public_base_url'),
             'nvidiaReady' => strlen((string) config('models.nvidia_key')) >= 12,
         ]);
