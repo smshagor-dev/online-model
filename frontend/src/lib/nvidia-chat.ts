@@ -106,13 +106,14 @@ export async function nvidiaChat(
       const catalog = await response.json();
       if (!Array.isArray(catalog.data))
         return Response.json({message: "Invalid model catalog."}, {status: 503});
-      permittedSlugs = catalog.data
+      const allowedSlugs: string[] = catalog.data
         .map((m: {id?: string}) => m.id)
         .filter((id: unknown): id is string => typeof id === "string");
-      if ((isAuto && permittedSlugs.length === 0) ||
-          (selected && !permittedSlugs.includes(selected.slug)))
+      permittedSlugs = allowedSlugs;
+      if ((isAuto && allowedSlugs.length === 0) ||
+          (selected && !allowedSlugs.includes(selected.slug)))
         return Response.json({message: "This model is not enabled."}, {status: 403});
-      if (inlineImage && !permittedSlugs.includes("openmindai-super"))
+      if (inlineImage && !allowedSlugs.includes("openmindai-super"))
         return Response.json({message: "Image understanding requires an enabled vision model."}, {status: 503});
     } catch {
       return Response.json({message: "Cannot verify available models."}, {status: 503});
