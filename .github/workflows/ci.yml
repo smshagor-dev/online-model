@@ -17,7 +17,7 @@ jobs:
       - run: composer install --no-interaction --prefer-dist
       - run: find app bootstrap config database routes tests -name '*.php' -print0 | xargs -0 -n1 php -l
       - run: cp .env.example .env
-      - run: php artisan test --filter=OpenMindAiGatewayTest
+      - run: php artisan test --filter='OpenMindAiGatewayTest|NvidiaModelCatalogAdminTest'
       - run: vendor/bin/pint --test
       - run: php artisan test
       - run: php artisan route:cache && php artisan view:cache && php artisan config:cache
