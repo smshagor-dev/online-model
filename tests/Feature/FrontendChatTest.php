@@ -164,6 +164,19 @@ class FrontendChatTest extends TestCase
         $this->postJson('/api/v1/chat/frontend/tool', $payload, $this->headers())->assertStatus(409);
     }
 
+    public function test_native_conversation_tools_use_an_owned_active_lease_without_research_mode(): void
+    {
+        $this->authenticate();
+        $this->mock(WebSearch::class)->shouldReceive('search')->once()->with('Evidence', ['limit' => 10, 'time_range' => null])->andReturn([]);
+        $r = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'Find evidence', 'conversation_tools' => true], $this->headers())->assertOk();
+        $payload = ['ticket' => $r->json('ticket'), 'action' => 'search', 'query' => 'Evidence'];
+        $this->postJson('/api/v1/chat/frontend/tool', $payload, $this->headers())->assertOk();
+        $this->assertFalse(Message::findOrFail($r->json('message_id'))->resumable);
+        $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $r->json('ticket'), 'content' => 'Partial', 'status' => 'failed'], $this->headers())->assertOk();
+        $this->postJson('/api/v1/chat/frontend/tool', $payload, $this->headers())->assertStatus(409);
+        $this->postJson('/api/v1/chat/frontend/resume', ['message_id' => $r->json('message_id')], $this->headers())->assertStatus(409);
+    }
+
     public function test_deleted_conversation_is_not_recreated_by_late_finish(): void
     {
         $this->authenticate();
