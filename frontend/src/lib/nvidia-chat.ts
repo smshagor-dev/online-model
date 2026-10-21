@@ -1,4 +1,4 @@
-import { routePrompt, serverRouterConfig } from "./prompt-router.ts";
+import { routePrompt, serverRouterConfig, catalogRouterConfig } from "./prompt-router.ts";
 import { dispatchPromptMedia } from "./auto-dispatch.ts";
 import { parseInlineImage, imageMessage } from "./vision-input.ts";
 import {
@@ -158,7 +158,7 @@ export async function nvidiaChat(
     }
   }
   const selected = catalog.find((model) => model.id === Number(input.model_id));
-  const isAuto = Number(input.model_id) === NVIDIA_AUTO_MODEL_ID;
+  const isAuto = input.model_id == null || Number(input.model_id) === NVIDIA_AUTO_MODEL_ID;
   if (!selected && !isAuto && !input.resume_message_id && !options.config)
     return Response.json({message: "Unknown hosted model."}, {status: 404});
   let permittedSlugs: string[] | null = null;
@@ -185,7 +185,7 @@ export async function nvidiaChat(
   // The classifier is a paid upstream call: confirm the Laravel session first.
   // Existing injected test fixtures already exercise authenticated bridge responses.
   if (!options.config && !input.resume_message_id &&
-      typeof input.message === "string" && input.message.length >= 40 &&
+      isAuto && typeof input.message === "string" && input.message.length >= 40 &&
       process.env.NVIDIA_ROUTER_CLASSIFIER !== "false") {
     try {
       const identity = await fetcher(base.replace(/\/$/, "") + "/me", {
@@ -201,30 +201,23 @@ export async function nvidiaChat(
     }
   }
   if (!input.resume_message_id && typeof input.message === "string") {
-    const available = permittedSlugs || [];
-    const routing = serverRouterConfig(inferenceRoute === "backend" ? "backend-managed" : config.apiKey, config.model);
-    if (isAuto && permittedSlugs) {
-      const fast = available.includes("openmindai-lite") ? NVIDIA_HOSTED_MODELS[2].provider :
-        available.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : (catalog.find((model) => model.slug === available[0])?.provider || config.model);
-      const reasoning = available.includes("openmindai-ultra") ? NVIDIA_HOSTED_MODELS[1].provider :
-        available.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : fast;
-      routing.fastModel = fast;
-      routing.reasoningModel = reasoning;
-      routing.visionModel = NVIDIA_HOSTED_MODELS[0].provider;
-      routing.classifierModel = fast; // honor admin availability for classification too
-      fallbackModel = fast;
-    }
+    const baseRouting = serverRouterConfig(inferenceRoute === "backend" ? "backend-managed" : config.apiKey, config.model);
+    const routing = permittedSlugs ? catalogRouterConfig(baseRouting, catalog) : baseRouting;
+    if (isAuto) fallbackModel = routing.fastModel || config.model;
     const decision = await routePrompt(input.message, routing, {
       fetcher,
       signal,
+      allowTools: isAuto,
       hasAttachments: Array.isArray(input.attachment_ids) && input.attachment_ids.length > 0,
       hasImage: Boolean(inlineImage),
       deepResearch: Boolean(input.deep_research),
       webSearch: Boolean(input.web_search),
       // Fixture calls inject config and exercise the stream without an additional classifier request.
-      enableClassifier: !options.config && process.env.NVIDIA_ROUTER_CLASSIFIER !== "false",
+      enableClassifier: isAuto && !options.config && process.env.NVIDIA_ROUTER_CLASSIFIER !== "false",
     });
     routedModel = decision.model;
+    if (decision.webSearch) backendInput.web_search = true;
+    if (decision.deepResearch) backendInput.deep_research = true;
     if (decision.kind !== "chat") {
       return dispatchPromptMedia(decision, input.message, token, base, signal, {
         fetcher, apiKey: config.apiKey, bridgeKey: config.bridgeKey, chatModel: config.model,
@@ -233,7 +226,7 @@ export async function nvidiaChat(
   }
   // An explicit model selection is honored for ordinary text chat;
   // automatic requests use the prompt's result. Images always require Super VL.
-  if (selected && !inlineImage && !options.config) routedModel = selected.provider;
+  if (selected && !inlineImage) { routedModel = selected.provider; fallbackModel = selected.provider; }
   const backend = async (
     path: string,
     data: unknown,
@@ -263,7 +256,7 @@ export async function nvidiaChat(
       JSON.parse(body).resume_message_id
         ? { message_id: JSON.parse(body).resume_message_id }
         : { ...backendInput, provider_model: routedModel },
-      JSON.parse(body).deep_research ? 80000 : 15000,
+      backendInput.deep_research ? 80000 : 15000,
     );
     if (!prepared.ok) {
       let data;
@@ -308,7 +301,7 @@ export async function nvidiaChat(
       message: "The previous image is no longer attached. Start a new message and attach it again.",
     }, {status: 409});
   }
-  const deep = Boolean(lease.deep_research ?? JSON.parse(body).deep_research);
+  const deep = Boolean(lease.deep_research ?? backendInput.deep_research);
   // Resume uses the model stored with the checkpoint, not a fresh classification.
   let activeModel = lease.checkpoint?.modelId || routedModel;
   const encoder = new TextEncoder();
