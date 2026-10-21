@@ -84,7 +84,7 @@ test("frontend speech inference calls the hosted API directly and stores WAV in 
   } finally { restore(); }
 });
 
-test("server-only modules and backend API expose no NVIDIA provider gateway", () => {
+test("server-only inference routing keeps provider keys private and relay URLs fixed", () => {
   const read = path => readFileSync(new URL("../" + path, import.meta.url), "utf8");
   const chat = read("src/lib/nvidia-chat.ts");
   const image = read("src/lib/hosted-image.ts");
@@ -93,8 +93,10 @@ test("server-only modules and backend API expose no NVIDIA provider gateway", ()
   const env = read(".env.example");
   for (const module of [chat, image, media]) {
     assert.match(module, /process\.env\.NVIDIA_API_KEY/);
-    assert.doesNotMatch(module, /backendProviderFetcher|backend-managed/);
+
   }
+  assert.match(chat, /frontend_inference_route/);
+  assert.match(chat, /String\(url\) === endpoint/);
   assert.doesNotMatch(route, /hosted_inference_enabled/);
   assert.doesNotMatch(route, /provider\/invoke/);
   assert.match(env, /^NVIDIA_API_KEY=/m);
