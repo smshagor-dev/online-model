@@ -61,17 +61,25 @@ class RunCosmosGeneration implements ShouldQueue
 
             $path = 'cosmos/'.$job->user_id.'/'.$job->id.($mime === 'video/mp4' ? '.mp4' : '.jpg');
             Storage::disk('local')->put($path, $bytes);
-            $changed = DB::table('cosmos_generations')->where('id', $job->id)
-                ->where('status', 'running')->update([
-                    'status' => 'completed', 'output_path' => $path, 'output_mime' => $mime,
-                    'bytes' => strlen($bytes), 'encrypted_request' => '',
-                    'updated_at' => now(),
-                ]);
+            $changed = DB::transaction(function () use ($job, $bytes, $path, $mime, $credits) {
+                $changed = DB::table('cosmos_generations')->where('id', $job->id)
+                    ->where('status', 'running')->update([
+                        'status' => 'completed', 'output_path' => $path, 'output_mime' => $mime,
+                        'bytes' => strlen($bytes), 'encrypted_request' => '',
+                        'updated_at' => now(),
+                    ]);
+                if ($changed === 1) {
+                    // Both the artifact status and its completed credit must
+                    // commit together, or the job remains retry-safe.
+                    $credits->completed($job->user_id, $job->connection_id, 'cosmos:'.$job->id);
+                }
+
+                return $changed;
+            });
             if ($changed !== 1) {
                 Storage::disk('local')->delete($path);
                 return;
             }
-            $credits->completed($job->user_id, $job->connection_id, 'cosmos:'.$job->id);
         } catch (Throwable $e) {
             if ($path) {
                 Storage::disk('local')->delete($path);
