@@ -106,10 +106,10 @@ Route::prefix('v1')->group(function () {
         // Server-only hosted image bridge; requires the existing 32+ character shared secret.
         Route::post('media/hosted/begin', [HostedImageController::class, 'begin'])->middleware('throttle:sensitive');
         Route::post('media/hosted/task/begin', [HostedMediaController::class, 'begin'])->middleware('throttle:sensitive');
-        Route::post('media/{id}/hosted/task/complete', [HostedMediaController::class, 'complete'])->middleware('throttle:sensitive');
-        Route::post('media/{id}/hosted/task/fail', [HostedMediaController::class, 'fail'])->middleware('throttle:sensitive');
-        Route::post('media/{id}/hosted/finish', [HostedImageController::class, 'finish'])->middleware('throttle:sensitive');
-        Route::post('media/{id}/hosted/fail', [HostedImageController::class, 'fail'])->middleware('throttle:sensitive');
+        Route::post('media/{id}/hosted/task/complete', [HostedMediaController::class, 'complete'])->middleware('throttle:media-callback');
+        Route::post('media/{id}/hosted/task/fail', [HostedMediaController::class, 'fail'])->middleware('throttle:media-callback');
+        Route::post('media/{id}/hosted/finish', [HostedImageController::class, 'finish'])->middleware('throttle:media-callback');
+        Route::post('media/{id}/hosted/fail', [HostedImageController::class, 'fail'])->middleware('throttle:media-callback');
         Route::get('media/{id}', [MediaController::class, 'show']);
         Route::get('media/{id}/output', [MediaController::class, 'output']);
         Route::delete('media/{id}', [MediaController::class, 'delete']);
