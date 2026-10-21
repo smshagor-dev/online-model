@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowRight, BookOpen, Box, ChartColumnIncreasing, ChevronRight, Code2, Cpu, KeyRound, LogOut, Menu, ShieldCheck, Sparkles, X } from "lucide-react";
+import { ArrowRight, BookOpen, Box, ChartColumnIncreasing, ChevronRight, Cpu, KeyRound, LogOut, Menu, ShieldCheck, Sparkles, X } from "lucide-react";
 import { api, Developer } from "@/lib/api";
 import Dashboard from "./dashboard";
 import PasswordInput from "./password-input";
@@ -25,6 +26,7 @@ export default function Portal({ view }: { view: View }) {
   const [user, setUser] = useState<Developer | null>(null);
   const [ready, setReady] = useState(false);
   const [menu, setMenu] = useState(false);
+  useEffect(() => { setMenu(false); }, [view]);
   useEffect(() => {
     let alive = true;
     api<Developer>("me").then((data) => {
@@ -50,7 +52,7 @@ export default function Portal({ view }: { view: View }) {
     <div className="site">
       <header className="topbar">
         <Link href="/" className="brand" aria-label="OpenMindAI Developer home">
-          <span className="brand-mark"><Code2 size={22} strokeWidth={2.4} /></span>
+          <span className="brand-mark"><Image className="brand-image" src="/openmindai-logo.png" width={38} height={38} alt="" priority /></span>
           <span>OpenMindAI <span className="brand-soft">Developers</span></span>
         </Link>
         <nav className="top-links" aria-label="Site navigation">
@@ -58,11 +60,11 @@ export default function Portal({ view }: { view: View }) {
           <Link href="/models">Models</Link>
           {user ? <Link href="/dashboard">Dashboard</Link> : <Link href="/login">Sign in</Link>}
           {!user && <Link className="button small primary" href="/register">Get API access <ArrowRight size={14}/></Link>}
-          {user && <button className="button small ghost" onClick={logout}><LogOut size={15}/> Sign out</button>}
+          {user && <button type="button" className="button small ghost" onClick={logout}><LogOut size={15}/> Sign out</button>}
         </nav>
-        <button className="menu-toggle" aria-label="Toggle navigation" aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? <X/> : <Menu/>}</button>
+        <button type="button" className="menu-toggle" aria-label={menu ? "Close navigation" : "Open navigation"} aria-controls="developer-mobile-nav" aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? <X/> : <Menu/>}</button>
       </header>
-      {menu && <nav className="mobile-links">{[...nav, { href: "/login", label: user ? "Switch account" : "Sign in", icon: ShieldCheck }].map((item) => <Link key={item.href} href={item.href} onClick={() => setMenu(false)}>{item.label}</Link>)}{user && <button onClick={logout}>Sign out</button>}</nav>}
+      {menu && <nav id="developer-mobile-nav" className="mobile-links" aria-label="Mobile navigation">{nav.filter((item) => !!user || item.href === "/docs").map((item) => <Link key={item.href} href={item.href} onClick={() => setMenu(false)}>{item.label}</Link>)}{user ? <button type="button" onClick={() => { setMenu(false); void logout(); }}>Sign out</button> : <><Link href="/login" onClick={() => setMenu(false)}>Sign in</Link><Link href="/register" onClick={() => setMenu(false)}>Create developer account</Link></>}</nav>}
       {(view === "home") && <Landing loggedIn={!!user}/>}
       {(view === "login" || view === "register" || view === "forgot") && <Auth view={view}/>}
       {view === "docs" && <Docs/>}
@@ -91,10 +93,10 @@ function Landing({ loggedIn }: { loggedIn: boolean }) {
       <h1>Build intelligent software.<br/><span>One API, your next idea.</span></h1>
       <p className="hero-lead">Connect your editor, coding assistant or product to OpenMindAI hosted models. Generate scoped keys, inspect model capabilities and keep usage in view.</p>
       <div className="button-row"><Link href={loggedIn ? "/dashboard" : "/register"} className="button primary">{loggedIn ? "Open developer dashboard" : "Start building"} <ArrowRight size={17}/></Link><Link href="/docs" className="button outline">Read API documentation <BookOpen size={17}/></Link></div>
-      <div className="hero-note"><ShieldCheck size={17}/> Keys are issued by Laravel, never included in frontend bundles.</div>
+      <div className="hero-note"><ShieldCheck size={17}/> Your keys stay private. Connect through this developer portal, not the backend.</div>
     </div>
     <div className="terminal-card">
-      <div className="terminal-header"><span className="terminal-dots"><i/><i/><i/></span> Your first API request <span className="language-tag">cURL</span></div>
+      <div className="terminal-header"><span className="terminal-dots" aria-hidden="true"><i/><i/><i/></span> Your first API request <span className="language-tag">cURL</span></div>
       <pre>{'curl "$OPENMINDAI_BASE_URL/chat/completions" \\\n  -H "Authorization: Bearer $OPENMINDAI_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"model":"openmindai-lite","messages":[{"role":"user","content":"Hello, OpenMindAI!"}]}\' '}</pre>
       <div className="terminal-bottom"><span className="dot"/> Private developer keys · OpenAI-compatible chat payload</div>
     </div>
@@ -154,7 +156,7 @@ function Auth({ view }: { view: "login" | "register" | "forgot" }) {
     } finally { setBusy(false); }
   }
   return <main className="auth-layout">
-    <div className="auth-context"><div className="eyebrow"><ShieldCheck size={14}/> SECURE DEVELOPER ACCESS</div><h1>Your workspace for<br/><span>building with AI.</span></h1><p>Use your OpenMindAI identity. Accounts and developer keys are managed by the same protected Laravel backend.</p><div className="auth-points"><span><KeyRound size={17}/> One-time API key disclosure</span><span><Box size={17}/> Hosted model catalog</span><span><ChartColumnIncreasing size={17}/> Per-model usage tracking</span></div></div>
+    <div className="auth-context"><div className="eyebrow"><ShieldCheck size={14}/> SECURE DEVELOPER ACCESS</div><h1>Your workspace for<br/><span>building with AI.</span></h1><p>Sign in with your OpenMindAI account to create private API keys, explore models and monitor usage.</p><div className="auth-points"><span><KeyRound size={17}/> One-time API key disclosure</span><span><Box size={17}/> Hosted model catalog</span><span><ChartColumnIncreasing size={17}/> Per-model usage tracking</span></div></div>
     <section className="auth-card">
       <h2>{view === "login" ? (challenge ? "Verify your sign-in" : "Welcome back") : view === "register" ? "Create your developer account" : "Reset your password"}</h2>
       <p className="subtle">{view === "login" ? "Sign in to manage your integrations." : view === "register" ? "Start issuing keys for your projects." : "We'll send a password reset link if your account exists."}</p>
@@ -166,7 +168,7 @@ function Auth({ view }: { view: "login" | "register" | "forgot" }) {
         {!challenge && <label>Email address<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required maxLength={254} autoComplete="email" placeholder="you@company.com"/></label>}
         {view !== "forgot" && !challenge && <label>Password<PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required minLength={view === "register" ? 6 : undefined} autoComplete={view === "login" ? "current-password" : "new-password"} placeholder="Enter your password"/></label>}
         {view === "register" && <label>Confirm password<PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={6} autoComplete="new-password" placeholder="Repeat your password"/></label>}
-        {view === "login" && (challenge || needs2FA) && <label>{challenge ? "Email verification code" : "Authenticator or recovery code"}<input value={code} onChange={(e) => setCode(e.target.value)} required={!!challenge} maxLength={64} autoComplete="one-time-code" placeholder="Enter your security code"/></label>}
+        {view === "login" && (challenge || needs2FA) && <label>{challenge ? "Email verification code" : "Authenticator or recovery code"}{challenge ? <div className="otp-control"><input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" aria-label="Six-digit email verification code"/><span className="otp-digits" aria-hidden="true">{Array.from({ length: 6 }, (_, i) => <span key={i}>{code[i] || ""}</span>)}</span></div> : <input value={code} onChange={(e) => setCode(e.target.value)} maxLength={64} autoComplete="one-time-code" placeholder="Authenticator or recovery code"/>}</label>}
         {view === "register" && emailVerification && <small>You'll need to verify your email before signing in.</small>}
         <button className="button primary full" disabled={busy || view === "register" && !canRegister} type="submit">{busy ? "Please wait…" : view === "login" ? (challenge ? "Verify and sign in" : "Sign in") : view === "register" ? "Create account" : "Send reset email"} <ArrowRight size={16}/></button>
       </form>
