@@ -758,8 +758,9 @@ export default function ChatWorkspace() {
               /* Mobile browsers may require service-worker notifications. */
             }
           }
-          if (event === "done" && data.status === "complete" && inlineImage)
-            setInlineImage(null);
+          // Keep the transient image in this composer for follow-up questions.
+          // New chat, conversation switch, logout, or Remove image clears it.
+          // The image remains in browser memory only, never in Laravel history.
           if (event === "done" && !autoMedia)
             setMessages((previous) =>
               previous.map((m, i) =>
