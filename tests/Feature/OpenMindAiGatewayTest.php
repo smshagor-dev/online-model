@@ -53,6 +53,8 @@ class OpenMindAiGatewayTest extends TestCase
         ])->assertOk()->assertJsonPath('choices.0.message.content', 'Cloud answer');
         $this->withToken($session)->getJson('/api/v1/openmindai/models')->assertForbidden();
         $developer = $user->createToken('developer:test', ['openmindai:invoke'])->plainTextToken;
+        // Sanctum caches the resolved guard within one PHPUnit request lifecycle.
+        $this->app['auth']->forgetGuards();
         $this->withToken($developer)->getJson('/api/v1/mobile/models')->assertForbidden();
         $this->withToken($developer)->postJson('/api/v1/mobile/chat/completions', [
             'model' => 'openmindai-lite',
