@@ -1,12 +1,19 @@
 // Server-only hosted media bridge. Browser never receives third-party credentials.
 import { readProviderJson } from "./provider-response.ts";
 export type HostedKind = "transcription" | "speech" | "video" | "document_create";
-type Work = { kind: HostedKind; prompt: string; input?: string; format?: "pdf" | "docx" };
+type Work = { kind: HostedKind; prompt: string; input?: string; format?: "pdf" | "docx"; language?: string };
 export type ProviderConfig = { apiKey: string; bridgeKey: string; chatModel?: string };
 const ASR = "https://1598d209-5e27-4d3c-8079-4751568b1081.invocation.api.nvcf.nvidia.com/v1/audio/transcriptions";
 const SPEECH = "https://877104f7-e885-42b9-8de8-f6e4c6303969.invocation.api.nvcf.nvidia.com/v1/audio/synthesize";
 const VIDEO = "https://ai.api.nvidia.com/v1/cosmos/nvidia/cosmos3-nano";
 const CHAT = "https://integrate.api.nvidia.com/v1/chat/completions";
+// The hosted service documents these locale/voice pairs. Keep provider
+// identifiers on the server, while the frontend only shows language names.
+const SPEECH_VOICES: Record<string, string> = {
+  "en-US": "Magpie-Multilingual.EN-US.Aria",
+  "es-US": "Magpie-Multilingual.ES-US.Diego",
+  "fr-FR": "Magpie-Multilingual.FR-FR.Louise",
+};
 export const hostedMediaEnabled = () =>
   !!process.env.NVIDIA_API_KEY && (process.env.FRONTEND_CHAT_BRIDGE_KEY?.length || 0) >= 32;
 
@@ -100,6 +107,10 @@ export async function hostedMediaRequest(
     return Response.json({ message: "Choose PDF or DOCX.", status: 422 }, { status: 422 });
   if (job.kind === "speech" && job.prompt.length > 1000)
     return Response.json({ message: "Speech text must be within 1000 characters." }, { status: 422 });
+  // Reject unknown voices before creating a task or consuming daily quota.
+  const speechLanguage = job.language ?? "en-US";
+  if (job.kind === "speech" && !Object.hasOwn(SPEECH_VOICES, speechLanguage))
+    return Response.json({ message: "This speech language is not available." }, { status: 422 });
   let input: Buffer | null = null;
   try {
     if (job.kind === "transcription") {
@@ -179,8 +190,8 @@ export async function hostedMediaRequest(
     } else if (job.kind === "speech") {
       const form = new FormData();
       form.set("text", job.prompt);
-      form.set("language", "en-US");
-      form.set("voice", "Magpie-Multilingual.EN-US.Aria");
+      form.set("language", speechLanguage);
+      form.set("voice", SPEECH_VOICES[speechLanguage]);
       form.set("encoding", "LINEAR_PCM");
       form.set("sample_rate_hz", "44100");
       const response = await invoke(SPEECH, form);
