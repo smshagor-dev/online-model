@@ -25,6 +25,58 @@ npm run dev
 
 Open `http://localhost:3100`. Set `LARAVEL_API_URL` to the full backend API URL ending in `/api/v1`. During local development, `http://127.0.0.1:8000/api/v1` is valid. Set `PORTAL_ORIGIN=http://localhost:3100` (the **exact** origin your browser opens). The Laravel `.env` must have its own valid `APP_URL`, SMTP settings if email confirmation is enabled, `NVIDIA_API_KEY` for inference, and a configured database.
 
+## Deploy on Vercel (recommended)
+
+Deploy this **separate** Developer API portal from the same GitHub repository as
+the main frontend. Its Vercel project must have **Root Directory: `Api`**;
+the Laravel root and the separate `frontend/` app must not be deployed in this
+project.
+
+| Vercel setting | Value |
+| --- | --- |
+| Framework | Next.js |
+| Root Directory | `Api` (case-sensitive) |
+| Node.js version | 22.x |
+| Install command | `npm install --no-audit --no-fund` |
+| Build command | `npm run typecheck && npm run build` |
+| Output directory | Framework default |
+| Production branch | `main` |
+
+There is currently no `Api/package-lock.json`. Use `npm install`, **not**
+`npm ci`, until a lockfile is committed. All declared package versions are
+currently exact, but transitive dependencies may change; generate and commit
+a lockfile before claiming reproducible installs.
+
+Set these **server-side** environment variables for Production and Preview:
+
+- `LARAVEL_API_URL=https://cloud.openmindai.org/api/v1`
+- `PORTAL_ORIGIN=https://YOUR-VERCEL-PORTAL-DOMAIN` (canonical production
+  HTTPS URL, **without** `/api/v1/openmindai`)
+
+The portal accepts the current Vercel deployment origin for authenticated
+browser mutations, so Preview URLs can be used without weakening the
+origin check. Preview developer-key responses use the Preview origin.
+
+The production public developer API base URL is
+`https://YOUR-VERCEL-PORTAL-DOMAIN/api/v1/openmindai`.
+Set that full URL as `DEVELOPER_API_BASE_URL` on **Laravel**, then clear
+Laravel configuration cache. Set the origin only (no path) as
+`NEXT_PUBLIC_DEVELOPER_PORTAL_URL` on the **main `frontend/` Vercel
+project**, then redeploy that project to display the new portal link.
+
+Do not put `NVIDIA_API_KEY` or Laravel's `APP_KEY` in this Developer API
+portal. Laravel handles provider credentials, developer-key verification,
+rate limits and credit accounting for the public Developer API gateway.
+The separate user-facing chat frontend has its own server-side NVIDIA
+credential and remains an independent Vercel project.
+
+For a post-deployment smoke test, open `/`, `/login`, `/docs`, and check
+that `/api/v1/openmindai/models` without a Bearer key returns HTTP 401
+JSON rather than HTML. Then sign in through Laravel, create a developer key,
+check model catalog and credits, and try an authenticated request. A
+successful Vercel build is not evidence that the Laravel backend, NVIDIA
+model account entitlements or authenticated API requests work.
+
 ## Production deployment
 
 1. Deploy Laravel first and run `php artisan migrate --force` followed by `php artisan optimize:clear`.
