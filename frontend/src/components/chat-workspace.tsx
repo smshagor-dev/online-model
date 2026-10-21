@@ -1824,6 +1824,22 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                   onSelect={selectWelcomeTool}
                 />
               </details>
+              {models.length > 1 && mediaMode === "chat" && (
+                <label className="composer-model-select" style={{display:"inline-flex", alignItems:"center", gap:6, maxWidth:"45%"}}>
+                  <span className="sr-only">OpenMindAI agent</span>
+                  <select
+                    aria-label="OpenMindAI agent"
+                    value={modelId ?? ""}
+                    onChange={(event) => setModelId(Number(event.target.value))}
+                    disabled={busy || loadingChat}
+                    style={{maxWidth:"100%", padding:"5px 8px", borderRadius:8, fontSize:12, background:"transparent", color:"inherit"}}
+                  >
+                    {models.map((model) => (
+                      <option key={model.id} value={model.id}>{model.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {(webSearch || mediaMode !== "chat") && (
                 <span className="composer-active-mode">
                   {mediaMode !== "chat"

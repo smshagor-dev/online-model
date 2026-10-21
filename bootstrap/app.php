@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\ActiveUser;
 use App\Http\Middleware\AdminOnly;
+use App\Http\Middleware\InteractiveSessionToken;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -11,6 +12,6 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(web: __DIR__.'/../routes/web.php', api: __DIR__.'/../routes/api.php', commands: __DIR__.'/../routes/console.php', health: '/up')
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(headers: Request::HEADER_X_FORWARDED_FOR);
-        $middleware->alias(['active' => ActiveUser::class, 'admin' => AdminOnly::class]);
+        $middleware->alias(['active' => ActiveUser::class, 'admin' => AdminOnly::class, 'interactive-token' => InteractiveSessionToken::class]);
         $middleware->redirectGuestsTo('/admin/login');
     })->withExceptions(function (Exceptions $exceptions): void {})->create();

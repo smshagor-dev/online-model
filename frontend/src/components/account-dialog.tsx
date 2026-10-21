@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Dialog from "./dialog";
 import SettingsPreferences from "./settings-preferences";
+import DeveloperApiSettings from "./developer-api-settings";
 import SettingsData, { IdentityFields } from "./settings-data";
 import ProfilePhoto from "./profile-photo";
 import { api as requestApi, type User } from "@/lib/api";
@@ -110,6 +111,7 @@ export default function AccountDialog({
             { id: "profile", title: "Account", icon: UserRound },
             { id: "security", title: "Security", icon: ShieldCheck },
             { id: "devices", title: "Devices", icon: Monitor },
+            { id: "developer", title: "Developer API", icon: KeyRound },
           ].map((item) => (
             <button
               key={item.id}
@@ -145,6 +147,7 @@ export default function AccountDialog({
               onChanged={onChanged}
             />
           )}
+          {tab === "developer" && <DeveloperApiSettings requiresTwoFactor={Boolean(user.two_factor_confirmed_at)} />}
           {tab === "data" && (
             <SettingsData
               user={user}
