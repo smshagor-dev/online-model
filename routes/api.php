@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\DeveloperKeysController;
+use App\Http\Controllers\OpenMindAiGatewayController;
 use App\Http\Controllers\AssistantGalleryController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CanvasController;
@@ -19,6 +21,13 @@ use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
+    // Trusted apps sign every request; no per-user API key is sent from their clients.
+    Route::get('first-party/models', [OpenMindAiGatewayController::class, 'internalModels'])->middleware('throttle:api');
+    Route::post('first-party/chat/completions', [OpenMindAiGatewayController::class, 'internalChat'])->middleware('throttle:chat');
+    Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
+        Route::get('openmindai/models', [OpenMindAiGatewayController::class, 'models']);
+        Route::post('openmindai/chat/completions', [OpenMindAiGatewayController::class, 'chat'])->middleware('throttle:chat');
+    });
     Route::get('public-config', fn () => ['registration_enabled' => app(\App\Services\AdminSettings::class)->enabled('registration_enabled'), 'site_name' => app(\App\Services\AdminSettings::class)->get('site_name'), 'registration_email_verification_enabled' => app(\App\Services\AdminSettings::class)->enabled('registration_email_verification_enabled')])->middleware('throttle:60,1');
     Route::get('explore/assistants', [AssistantGalleryController::class, 'index'])->middleware('throttle:60,1');
     Route::get('explore/assistants/{slug}', [AssistantGalleryController::class, 'show'])->middleware('throttle:60,1');
@@ -136,6 +145,9 @@ Route::prefix('v1')->group(function () {
         Route::get('me', [AccountController::class, 'show']);
         Route::patch('me', [AccountController::class, 'update']);
         Route::get('tokens', [AccountController::class, 'tokens']);
+        Route::get('developer/keys', [DeveloperKeysController::class, 'index']);
+        Route::post('developer/keys', [DeveloperKeysController::class, 'store'])->middleware('throttle:sensitive');
+        Route::delete('developer/keys/{id}', [DeveloperKeysController::class, 'destroy'])->middleware('throttle:sensitive');
         Route::delete('tokens/{id}', [AccountController::class, 'revoke']);
         Route::middleware('throttle:sensitive')->group(function () {
             Route::put('me/password', [AccountController::class, 'password']);
