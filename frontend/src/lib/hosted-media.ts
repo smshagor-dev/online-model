@@ -1,4 +1,5 @@
 // Server-only hosted media bridge. Browser never receives third-party credentials.
+import { readProviderJson } from "./provider-response";
 export type HostedKind = "transcription" | "speech" | "video" | "document_create";
 type Work = { kind: HostedKind; prompt: string; input?: string; format?: "pdf" | "docx" };
 export type ProviderConfig = { apiKey: string; bridgeKey: string; chatModel?: string };
@@ -63,9 +64,11 @@ async function readBounded(response: Response, limit: number): Promise<Buffer> {
   }
 }
 async function readJson(response: Response, limit: number): Promise<any> {
-  const raw = await readBounded(response, limit);
-  try { return JSON.parse(raw.toString("utf8")); }
-  catch { throw new WorkError("The media service returned an invalid response.", 502); }
+  try {
+    return await readProviderJson(response, limit);
+  } catch {
+    throw new WorkError("The media service returned an invalid or oversized response.", 502);
+  }
 }
 function validMedia(raw: Buffer, kind: HostedKind) {
   if (!raw.length || raw.length > 20000000) throw new WorkError("Invalid media output.", 502);
