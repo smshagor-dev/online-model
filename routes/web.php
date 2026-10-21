@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminAccountController;
 use App\Http\Controllers\CodeAgentsAdminController;
+use App\Http\Controllers\AdminDeveloperKeysController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ApiCreditsController;
 use App\Http\Controllers\AdminSettingsController;
@@ -45,6 +46,8 @@ Route::prefix('admin')->middleware(['auth', 'active', 'admin'])->group(function 
     Route::post('model-bundles', [ModelBundleController::class, 'import'])->middleware('throttle:hub');
     Route::post('model-bundles/{bundle}/download', [ModelBundleController::class, 'download']);
     Route::get('code-agents', [CodeAgentsAdminController::class, 'index']);
+    Route::post('code-agents/developer-keys', [AdminDeveloperKeysController::class, 'store'])->middleware('throttle:sensitive');
+    Route::delete('code-agents/developer-keys/{key}', [AdminDeveloperKeysController::class, 'destroy'])->middleware('throttle:sensitive');
     Route::get('nvidia-models', [CodeAgentsAdminController::class, 'catalog']);
     Route::patch('nvidia-models/{slug}', [CodeAgentsAdminController::class, 'model'])->middleware('throttle:sensitive');
     Route::patch('code-agents/{slug}', [CodeAgentsAdminController::class, 'model'])->middleware('throttle:sensitive');
