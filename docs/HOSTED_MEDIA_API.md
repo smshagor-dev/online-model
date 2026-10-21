@@ -31,9 +31,12 @@ endpoint. The frontend converts compatible recorded/uploaded audio into
 browser codecs produce an error instead of a false success. Alternative
 languages require a compatible ASR model and language-specific routing.
 
-Speech generation currently selects a documented en-US Magpie voice. Generated
-WAV is saved privately. Other languages/voices require an explicit selection
-and availability verification; do not assume Bengali support. Live voice
+Speech generation now offers documented English (en-US), Spanish (es-US)
+and French (fr-FR) voices, selected from the Media studio. The server maps
+each locale to its allowed voice and rejects unsupported languages before
+reserving user quota. Generated WAV is saved privately. Additional languages
+and voices require verified endpoint support; Bengali is not supported by
+this hosted voice configuration. Live voice
 has a hosted speech-to-text fallback when the separate private warm voice
 runtime is unavailable. Chat responses are played back with the browser's
 speech synthesis; this is sequential turn-taking, not native duplex streaming.
