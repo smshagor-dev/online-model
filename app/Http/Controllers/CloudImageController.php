@@ -42,6 +42,7 @@ class CloudImageController
         $count = (int) ($data['count'] ?? 1);
         abort_if(trim($data['prompt']) === '', 422, 'Enter an image description.');
         $engine->options($mode, $ratio);
+        abort_if($mode !== 'generate' && $ratio !== '1:1', 422, 'Editing preserves the input image aspect ratio.');
         abort_if($mode === 'generate' && (isset($data['image']) || isset($data['mask'])), 422, 'Image inputs require image editing mode.');
         abort_if($mode !== 'generate' && ! isset($data['image']), 422, 'An input image is required for editing.');
         abort_if(in_array($mode, ['inpaint', 'outpaint'], true) && ! isset($data['mask']), 422, 'A PNG mask is required.');
@@ -49,6 +50,12 @@ class CloudImageController
 
         $image = isset($data['image']) ? $this->inputImage($data['image'], false) : null;
         $mask = isset($data['mask']) ? $this->inputImage($data['mask'], true) : null;
+        if ($mask !== null && $image !== null) {
+            $originalSize = @getimagesizefromstring($image);
+            $maskSize = @getimagesizefromstring($mask);
+            abort_unless($originalSize && $maskSize && $originalSize[0] === $maskSize[0] && $originalSize[1] === $maskSize[1],
+                422, 'The PNG mask must match the source image dimensions.');
+        }
         $user = $request->user();
         abort_unless($user && $user->is_active, 401);
         $ids = Cache::lock('media-user:'.$user->id, 30)->block(3, function () use ($user, $data, $count, $image, $mask, $ratio, $mode) {
