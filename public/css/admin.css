@@ -229,3 +229,36 @@ body.admin-shell{margin:0;min-height:100vh;font:14px/1.5 Inter,ui-sans-serif,sys
  .admin-shell .info-row{gap:8px}
 }
 @media(prefers-reduced-motion:reduce){.admin-shell *{scroll-behavior:auto!important;transition:none!important}}
+
+
+/* Private application request-credit analytics */
+.admin-shell .credit-overview-top{display:grid;grid-template-columns:minmax(240px,1fr) minmax(260px,1.4fr);gap:22px;align-items:center;margin:16px 0 25px}
+.admin-shell .credit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:17px;margin-top:20px}
+.admin-shell .credit-model-card{min-width:0;padding:19px;border:1px solid #e4eaf4;border-radius:13px;background:#f9fbff}
+.admin-shell .credit-model-card h3{margin:0 0 6px;font-size:14px;color:#243953;overflow-wrap:anywhere}
+.admin-shell .credit-model-card .entity-card-header{display:flex;flex-wrap:wrap;gap:12px}
+.admin-shell .credit-model-card .entity-card-header>div{min-width:0;flex:1}
+.admin-shell .credit-model-card .status-pill{font-size:10px;white-space:nowrap}
+.admin-shell .credit-model-card .entity-meta{font-size:12px;margin:0 0 16px}
+.admin-shell .credit-meter{display:flex;align-items:center;gap:17px;min-width:0;padding:9px 0}
+.admin-shell .credit-donut{--used-percent:0%;flex:0 0 100px;width:100px;height:100px;border-radius:50%;background:conic-gradient(#396ed5 0 var(--used-percent),#dbe5f5 var(--used-percent) 100%);display:grid;place-items:center;position:relative}
+.admin-shell .credit-donut::before{content:"";position:absolute;inset:17px;border-radius:50%;background:#fff}
+.admin-shell .credit-donut span{font-weight:800;position:relative;z-index:1;font-size:18px;color:#253a58}
+.admin-shell .credit-donut.credit-unset{background:conic-gradient(#dfe7f3,#dfe7f3)}
+.admin-shell .credit-figures{min-width:0;display:flex;flex-direction:column;gap:5px;color:#3e5473;font-size:12px}
+.admin-shell .credit-figures strong{font-size:15px;color:#253953;overflow-wrap:anywhere}
+.admin-shell .credit-figures small{font-size:11px;color:#8797ad}
+.admin-shell .credit-users-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:14px}
+.admin-shell .credit-user-card{display:block;min-width:0;padding:14px;border:1px solid #e4eaf4;border-radius:12px;background:#fff;color:inherit}
+.admin-shell .credit-user-card .credit-donut{width:74px;height:74px;flex-basis:74px}
+.admin-shell .credit-user-card .credit-donut::before{inset:12px}
+.admin-shell .credit-user-card .credit-donut span{font-size:13px}
+.admin-shell .credit-user-card .credit-figures strong{font-size:13px}
+.admin-shell .credit-limit-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px;border-top:1px solid #e4eaf4;padding-top:15px}
+.admin-shell .credit-limit-form label{font-size:11px;font-weight:700;color:#49607e;min-width:0}
+.admin-shell .credit-limit-form input:not([type=checkbox]){display:block;width:100%;min-width:0;margin-top:7px;padding:9px;border:1px solid #d5e0ef;border-radius:8px;font-size:13px;background:#fff;color:#253953}
+.admin-shell .credit-limit-form button{align-self:end;min-height:39px}
+.admin-shell .credit-date{font-size:11px;line-height:1.5;color:#768ba6;margin:10px 0 0;overflow-wrap:anywhere}
+.admin-shell .credit-usage-list .info-row{overflow-wrap:anywhere}
+@media(max-width:820px){.admin-shell .credit-overview-top{grid-template-columns:minmax(0,1fr)}.admin-shell .credit-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr))}}
+@media(max-width:520px){.admin-shell .credit-meter{gap:10px}.admin-shell .credit-donut{width:78px;height:78px;flex-basis:78px}.admin-shell .credit-donut::before{inset:13px}.admin-shell .credit-donut span{font-size:14px}.admin-shell .credit-figures strong{font-size:13px}.admin-shell .credit-limit-form{grid-template-columns:minmax(0,1fr)}}
