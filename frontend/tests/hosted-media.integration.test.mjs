@@ -13,7 +13,7 @@ wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34);
 wav.write("data", 36); wav.writeUInt32LE(8, 40);
 const video = Buffer.from([0, 0, 0, 16, 102, 116, 121, 112, 105, 115, 111, 109, 0, 0, 0, 0]);
 
-function scenario() {
+function scenario({ oversizedSpeech = false } = {}) {
   const calls = [];
   const fetcher = async (url, init) => {
     calls.push({ url, init });
@@ -26,7 +26,10 @@ function scenario() {
     if (url.endsWith("/audio/transcriptions"))
       return Response.json({ text: "This is a sample transcript." });
     if (url.endsWith("/audio/synthesize"))
-      return new Response(wav, { headers: { "Content-Type": "audio/wav" } });
+      return new Response(wav, { headers: {
+        "Content-Type": "audio/wav",
+        ...(oversizedSpeech ? { "Content-Length": "20000001" } : {}),
+      } });
     if (url.endsWith("/cosmos3-nano"))
       return Response.json({ b64_video: video.toString("base64") });
     if (url.endsWith("/chat/completions"))
@@ -60,7 +63,14 @@ test("rejects invalid audio before provider invocation", async () => {
   const s = scenario();
   const result = await run(s, "transcription", { input: Buffer.from("bad").toString("base64") });
   assert.equal(result.status, 422);
-  assert.equal(s.calls.at(-1).url.endsWith("/fail"), true);
+  assert.equal(s.calls.length, 0, "Reject malformed audio before quota reservation.");
+});
+test("oversized generated audio is never read into memory or saved", async () => {
+  const s = scenario({ oversizedSpeech: true });
+  const result = await run(s, "speech");
+  assert.equal(result.status, 502);
+  assert.equal(s.calls.length, 3);
+  assert.equal(s.calls[2].url.endsWith("/fail"), true);
 });
 test("audio generation sends text and stores validated WAV", async () => {
   const s = scenario();
