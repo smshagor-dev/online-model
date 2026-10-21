@@ -11,6 +11,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Vercel Fluid Compute (Hobby): allow hosted chat, research and media to finish.
+// This is an upper bound, not a guarantee when Laravel or NVIDIA time out.
+export const maxDuration = 300;
 const cookieName = "openmindai_token";
 const publicPaths = new Set([
   "login",
@@ -39,8 +42,13 @@ async function proxy(
   if (!routes[request.method]?.test(endpoint))
     return NextResponse.json({ message: "Not found." }, { status: 404 });
   if (!["GET", "HEAD"].includes(request.method)) {
-    const expectedOrigin = new URL(process.env.FRONTEND_URL || request.url)
-      .origin;
+    // Each Vercel preview has its own origin. A production-only FRONTEND_URL
+    // must not break preview login and authenticated mutation requests.
+    // On Vercel, request.nextUrl.origin is the request's own trusted origin.
+    const expectedOrigin =
+      process.env.VERCEL === "1"
+        ? request.nextUrl.origin
+        : new URL(process.env.FRONTEND_URL || request.url).origin;
     if (request.headers.get("origin") !== expectedOrigin)
       return NextResponse.json(
         { message: "Invalid request origin." },
