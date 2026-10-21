@@ -526,8 +526,9 @@ export async function nvidiaChat(
                 : generationMessages,
               stream: true,
               temperature: 0.6,
+              // Explicit output budget avoids the provider's short default on code requests.
+              max_tokens: inlineImage ? 8192 : 16384,
               ...(inlineImage ? {
-                max_tokens: 4096,
                 chat_template_kwargs: {enable_thinking: false},
               } : {}),
               ...(model === "nvidia/nemotron-3.5-lightning-30b-a3b"
@@ -536,7 +537,7 @@ export async function nvidiaChat(
             }),
             signal: AbortSignal.any([
               upstreamAbort.signal,
-              AbortSignal.timeout(110000),
+              AbortSignal.timeout(240000),
             ]),
           });
           let response = await requestStream(activeModel);

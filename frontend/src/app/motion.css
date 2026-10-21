@@ -51,8 +51,10 @@
 .workspace .message-actions {
   transition: opacity 180ms ease;
 }
+/* Streamed content stays opaque: repeated fades made code look like a shadow. */
 .workspace .response-streaming > :not(.response-cursor, .typing-indicator) {
-  animation: response-appear 180ms ease both;
+  animation: none;
+  opacity: 1;
 }
 .workspace .response-streaming > p:last-of-type {
   display: inline;

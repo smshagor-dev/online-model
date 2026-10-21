@@ -380,3 +380,24 @@ test("blank backend bridge rejection has an actionable error", async () => {
   assert.equal(response.status, 403);
   assert.match((await response.json()).message, /FRONTEND_CHAT_BRIDGE_KEY/);
 });
+
+test("long code responses have an explicit budget and continue after a token boundary", async () => {
+  const baseFixture = fixture();
+  let streams = 0;
+  const fetcher = async (url, options) => {
+    if (url === "https://integrate.api.nvidia.com/v1/chat/completions" && JSON.parse(options.body).stream) {
+      const input = JSON.parse(options.body);
+      assert.equal(input.max_tokens, 16384);
+      streams++;
+      if (streams === 2) assert.match(input.messages.at(-1).content, /Continue exactly/);
+      const text = streams === 1 ? "```html\n<html><body>" : "Bottle design</body></html>\n```";
+      return new Response(`data: ${JSON.stringify({choices: [{delta: {content: text}, finish_reason: streams === 1 ? "length" : "stop"}]})}\n\ndata: [DONE]\n\n`, {headers: {"Content-Type": "text/event-stream"}});
+    }
+    return baseFixture.fetcher(url, options);
+  };
+  const response = await nvidiaChat(JSON.stringify({model_id: -1, message: "make a html css design for a water bottle company with 3d design"}), "token", "https://backend.test/api/v1", new AbortController().signal, {config, fetcher, pollMs: 100000});
+  const body = await response.text();
+  assert.equal(streams, 2);
+  assert.match(body, /Bottle design<\/body><\/html>/);
+  assert.match(body, /"status":"complete"/);
+});
