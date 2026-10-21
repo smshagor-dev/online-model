@@ -1,3 +1,4 @@
+import { groundResearchAnswer } from "./research-evidence.ts";
 import { runConversationTools } from "./conversation-tools.ts";
 import { generateHostedImage } from "./hosted-image.ts";
 import { hostedMediaRequest } from "./hosted-media.ts";
@@ -224,7 +225,7 @@ export async function nvidiaChat(
       JSON.parse(body).resume_message_id
         ? { message_id: JSON.parse(body).resume_message_id }
         : { ...backendInput, provider_model: routedModel },
-      backendInput.deep_research ? 80000 : 15000,
+      backendInput.deep_research ? 80000 : backendInput.web_search ? 60000 : 15000,
     );
     if (!prepared.ok) {
       let data;
@@ -385,7 +386,7 @@ export async function nvidiaChat(
             progress: label => emit("research", {label, sources:lease.sources}),
             delta: text => {content += text; emit("delta", {content:text});},
             web: async action => {
-              const response = await backend("tool", {ticket:lease.ticket, ...action}, 20000, upstreamAbort.signal);
+              const response = await backend("tool", {ticket:lease.ticket, ...action}, 30000, upstreamAbort.signal);
               if (!response.ok) throw new Error("Tool unavailable");
               const data = await response.json();
               if (Array.isArray(data.sources)) {
@@ -394,6 +395,11 @@ export async function nvidiaChat(
                   if (typeof source.url === "string") sources.set(source.url, {url:source.url,title:String(source.title || source.url).slice(0,200),snippet:String(source.snippet || "").slice(0,2000)});
                 }
                 lease.sources = [...sources.values()].slice(0,40).map((source,index)=>({...source,citation:index+1}));
+              }
+              if (action.action === "read" && typeof data.url === "string") {
+                const existing = lease.sources.find(source=>source.url === data.url);
+                const source = {...(existing || {url:data.url,title:data.url.slice(0,200),citation:lease.sources.length+1}),read_status:data.read_status === "read" ? "read" : "unavailable"};
+                lease.sources = [...lease.sources.filter(item=>item.url !== data.url),source];
               }
               emit("research", {label:action.action === "search" ? "Reviewing search results" : "Reading sources", sources:lease.sources});
               return data;
@@ -445,7 +451,7 @@ export async function nvidiaChat(
                     JSON.parse(body).search_time_range ||
                     null,
                 },
-                15000,
+                30000,
                 upstreamAbort.signal,
               );
               if (!r.ok)
@@ -697,6 +703,11 @@ export async function nvidiaChat(
         if (poll) clearInterval(poll);
         upstreamAbort.abort();
         signal.removeEventListener("abort", abort);
+        if (status === "complete" && lease.sources.length) {
+          const grounded = groundResearchAnswer(content, lease.sources);
+          content = grounded.text + grounded.footer;
+          emit("answer", {content});
+        }
         let saved = false;
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
