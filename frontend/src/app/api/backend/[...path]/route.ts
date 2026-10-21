@@ -6,7 +6,7 @@ import {
   nvidiaModels,
   isNvidiaModelId,
 } from "@/lib/nvidia-chat";
-import { generateHostedImage, hostedImageEnabled } from "@/lib/hosted-image";
+import { generateHostedImage } from "@/lib/hosted-image";
 import { hostedMediaRequest, hostedMediaEnabled } from "@/lib/hosted-media";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -30,7 +30,7 @@ const publicPaths = new Set([
   "email/change/confirm",
 ]);
 const routes: Record<string, RegExp> = {
-  GET: /^(developer\/keys|public-config|teams(?:\/\d+(?:\/(documents|threads)\/\d+)?)?|connectors|explore\/assistants(?:\/[a-f0-9-]{36})?|assistants|tasks(?:\/\d+\/runs)?|canvases\/\d+\/versions(?:\/\d+)?|conversations\/\d+\/branches|media(?:\/\d+(?:\/output)?)?|me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
+  GET: /^(developer\/keys|public-config|teams(?:\/\d+(?:\/(documents|threads)\/\d+)?)?|connectors|explore\/assistants(?:\/[a-f0-9-]{36})?|assistants|tasks(?:\/\d+\/runs)?|canvases\/\d+\/versions(?:\/\d+)?|conversations\/\d+\/branches|media(?:\/image-capabilities|\/\d+(?:\/output)?)?|me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
   POST: /^(guest\/chat|developer\/keys|teams(?:\/\d+\/(preview|invites|documents|threads(?:\/\d+)?))?|team-invites\/\d+\/accept|connectors\/[a-zA-Z0-9_-]{1,80}\/(connect|tools|call)|live\/(start|input|stop)|explore\/assistants\/[a-f0-9-]{36}\/copy|assistants(?:\/\d+\/publish)?|tasks(?:\/\d+\/runs(?:\/\d+\/resume)?)?|me\/(avatar|email)|email\/change\/confirm|settings\/data|media(?:\/(?:image|transcription|speech|video|document_create))?|login(?:\/verify-ip)?|register|forgot-password|reset-password|email\/resend|email\/verify-code|logout|logout-all|web-search|chat(?:\/(stream|resume))?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
   PATCH: /^(me|preferences|conversations\/\d+)$/,
   PUT: /^(teams\/\d+\/(members|documents)\/\d+|assistants\/\d+|tasks\/\d+|me\/password|projects\/\d+|canvases\/\d+|memories\/\d+|conversations\/\d+\/messages\/\d+\/feedback)$/,
@@ -91,7 +91,7 @@ async function proxy(
         size += value.byteLength;
         if (
           size >
-          (endpoint === "media" || endpoint === "live/input" || endpoint === "media/transcription"
+          (endpoint === "media" || endpoint === "media/image" || endpoint === "live/input" || endpoint === "media/transcription"
             ? 11_000_000
             : endpoint === "chat/stream" && nvidiaEnabled()
               ? 6_000_000 // one 4 MB image plus conversation metadata
@@ -265,15 +265,15 @@ async function proxy(
     }
     // NVIDIA runs on the Next.js server; Laravel needs only the shared bridge
     // secret for authenticated usage/history/media storage, not an NVIDIA key.
-    if (endpoint === "capabilities" && upstream.ok && (hostedImageEnabled() || hostedMediaEnabled())) {
+    if (endpoint === "capabilities" && upstream.ok && hostedMediaEnabled()) {
       const advertised = Array.isArray(data.media)
         ? data.media.filter((item): item is string => typeof item === "string")
         : [];
       data.media = Array.from(new Set([
-        ...advertised, ...(hostedImageEnabled() ? ["image"] : []),
+        ...advertised, 
         ...(hostedMediaEnabled() ? ["transcription", "speech", "document_create", "video"] : []),
       ]));
-      data.image_generation = hostedImageEnabled() || data.image_generation === true;
+      data.image_generation = data.image_generation === true;
       data.voice_transcription = hostedMediaEnabled() || data.voice_transcription === true;
     }
     if (["login", "login/verify-ip", "register"].includes(endpoint) && upstream.ok && typeof data.token === "string") {

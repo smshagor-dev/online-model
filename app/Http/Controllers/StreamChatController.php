@@ -11,7 +11,6 @@ use App\Services\ChatContext;
 use App\Services\HostedChatActivity;
 use App\Services\ResearchCompletion;
 use App\Services\WebResearch;
-use App\Services\WebSearch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;

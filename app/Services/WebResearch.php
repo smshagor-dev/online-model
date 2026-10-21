@@ -29,6 +29,7 @@ class WebResearch
             }
         }
         unset($source);
+
         return $sources;
     }
 

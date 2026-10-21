@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CanvasController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ChatProviderController;
+use App\Http\Controllers\CloudImageController;
 use App\Http\Controllers\ConnectorController;
 use App\Http\Controllers\DeveloperKeysController;
 use App\Http\Controllers\DeveloperPortalController;
@@ -141,6 +142,8 @@ Route::prefix('v1')->group(function () {
         Route::get('canvases/{id}/versions/{version}', [CanvasController::class, 'version']);
         Route::get('media', [MediaController::class, 'index']);
         Route::post('media', [MediaController::class, 'create'])->middleware('throttle:sensitive');
+        Route::get('media/image-capabilities', [CloudImageController::class, 'capabilities']);
+        Route::post('media/cloud-image', [CloudImageController::class, 'create'])->middleware('throttle:sensitive');
         // Server-only hosted image bridge; requires the existing 32+ character shared secret.
         Route::post('media/hosted/begin', [HostedImageController::class, 'begin'])->middleware('throttle:sensitive');
         Route::post('media/hosted/task/begin', [HostedMediaController::class, 'begin'])->middleware('throttle:sensitive');

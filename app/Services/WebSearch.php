@@ -75,6 +75,7 @@ class WebSearch
     {
         if ($provider === 'searxng') {
             $data = json_decode($body, true);
+
             return is_array($data['results'] ?? null) ? $data['results'] : [];
         }
         if (stripos($body, '<!DOCTYPE') !== false && $provider === 'bing_rss') {
@@ -109,6 +110,7 @@ class WebSearch
                     $rows[] = ['url' => $url, 'title' => $link->textContent, 'content' => ''];
                 }
             }
+
             return $rows;
         } finally {
             libxml_clear_errors();

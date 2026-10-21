@@ -51,6 +51,13 @@ export default function MediaDialog({
   const [kind, setKind] = useState<Kind>(initialKind);
   const [format, setFormat] = useState<"pdf" | "docx">("docx");
   const [speechLanguage, setSpeechLanguage] = useState("en-US");
+  const [imageMode, setImageMode] = useState<"generate" | "edit" | "reference" | "inpaint" | "outpaint">("generate");
+  const [imageRatio, setImageRatio] = useState("1:1");
+  const [imageCount, setImageCount] = useState(1);
+  const [imageSeed, setImageSeed] = useState(0);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [maskFile, setMaskFile] = useState<File | null>(null);
+  const [imageConfig, setImageConfig] = useState<{image_editing:boolean;image_masking:boolean;ratios:string[];native_resolution:string} | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
@@ -69,6 +76,12 @@ export default function MediaDialog({
     kind === "vision" || kind === "transcription" || kind === "document";
 
   useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => {
+    const c = new AbortController();
+    api<{image_editing:boolean;image_masking:boolean;ratios:string[];native_resolution:string}>("media/image-capabilities", "GET", undefined, c.signal)
+      .then(setImageConfig).catch(() => {});
+    return () => c.abort();
+  }, []);
   useEffect(() => {
     const c = new AbortController();
     api<{ media: Kind[] }>("capabilities", "GET", undefined, c.signal)
@@ -146,6 +159,21 @@ export default function MediaDialog({
     };
   }, [task?.id, task?.status, task?.output_mime]);
 
+  async function encodeImage(file: File, mask = false) {
+    if (file.size > 4_000_000 || file.size === 0) throw new Error("Image must be 4 MB or smaller.");
+    if (!["image/png", ...(mask ? [] : ["image/jpeg"])].includes(file.type))
+      throw new Error(mask ? "Upload a PNG mask." : "Upload a PNG or JPEG reference image.");
+    const value = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("Unable to read image."));
+      reader.readAsDataURL(file);
+    });
+    const expected = "data:" + file.type + ";base64,";
+    if (!value.startsWith(expected)) throw new Error("Unsupported image input.");
+    return value.slice(expected.length);
+  }
+
   async function create() {
     const c = new AbortController();
     controller.current = c;
@@ -166,7 +194,15 @@ export default function MediaDialog({
         });
       }
       if (c.signal.aborted) return;
-      const result = await api<Task>(
+      const imageData = kind === "image" && imageMode !== "generate" && imageFile
+        ? await encodeImage(imageFile) : undefined;
+      const maskData = kind === "image" && ["inpaint", "outpaint"].includes(imageMode) && maskFile
+        ? await encodeImage(maskFile, true) : undefined;
+      if (kind === "image" && imageMode !== "generate" && !imageData)
+        throw new Error("Choose a reference image to edit.");
+      if (kind === "image" && ["inpaint", "outpaint"].includes(imageMode) && !maskData)
+        throw new Error("Choose a PNG mask.");
+      const result = await api<Task & {ids?:number[]}>(
         ["image", "transcription", "speech", "video", "document_create"].includes(kind)
           ? "media/" + kind
           : "media",
@@ -174,6 +210,8 @@ export default function MediaDialog({
         { kind, prompt, input,
           ...(kind === "document_create" ? { format } : {}),
           ...(kind === "speech" ? { language: speechLanguage } : {}),
+          ...(kind === "image" ? {mode:imageMode, aspect_ratio:imageRatio, count:imageCount, seed:imageSeed,
+            ...(imageData ? {image:imageData} : {}), ...(maskData ? {mask:maskData} : {})} : {}),
         },
         c.signal,
       );
@@ -263,6 +301,40 @@ export default function MediaDialog({
                 <option value="pdf">PDF (.pdf)</option>
               </select>
             </label>
+          )}
+          {kind === "image" && (
+            <>
+              <label>Image operation
+                <select value={imageMode} disabled={busy} onChange={(e) => setImageMode(e.target.value as typeof imageMode)}>
+                  <option value="generate">Create from prompt</option>
+                  {imageConfig?.image_editing && <option value="edit">Edit an uploaded image</option>}
+                  {imageConfig?.image_editing && <option value="reference">Generate from a reference image</option>}
+                  {imageConfig?.image_masking && <option value="inpaint">Inpaint selected area</option>}
+                  {imageConfig?.image_masking && <option value="outpaint">Outpaint using mask</option>}
+                </select>
+              </label>
+              {imageMode === "generate" && <label>Aspect ratio
+                <select value={imageRatio} disabled={busy} onChange={(e) => setImageRatio(e.target.value)}>
+                  {(imageConfig?.ratios || ["1:1","16:9","9:16","5:4","4:5","3:2","2:3"]).map(ratio => <option key={ratio} value={ratio}>{ratio}</option>)}
+                </select>
+              </label>}
+              <label>Variations (separate provider requests)
+                <select value={imageCount} disabled={busy} onChange={(e) => setImageCount(Number(e.target.value))}>
+                  {[1,2,3,4].map(count => <option key={count} value={count}>{count}</option>)}
+                </select>
+              </label>
+              <label>Seed (0 = random)
+                <input type="number" min="0" max="4294967295" value={imageSeed} disabled={busy}
+                  onChange={(e) => setImageSeed(Math.max(0,Number(e.target.value) || 0))} />
+              </label>
+              {imageMode !== "generate" && <label>Reference image (PNG/JPEG, up to 4 MB)
+                <input type="file" accept="image/png,image/jpeg" disabled={busy} onChange={e => setImageFile(e.target.files?.[0] || null)} />
+              </label>}
+              {["inpaint","outpaint"].includes(imageMode) && <label>Mask (PNG, up to 4 MB)
+                <input type="file" accept="image/png" disabled={busy} onChange={e => setMaskFile(e.target.files?.[0] || null)} />
+              </label>}
+              <p className="muted">Native pixel size is model-defined; only the aspect ratio is selectable. Each variation uses one credit upon successful generation.</p>
+            </>
           )}
           <label>
             {kind === "speech" ? "Text to speak" : "Prompt"}
