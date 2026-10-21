@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'app/Http/Controllers/NvidiaCosmosController.php'
+      - 'app/Http/Controllers/CodeAgentsAdminController.php'
       - 'app/Jobs/RunCosmosGeneration.php'
       - 'app/Services/HostedCodeAgents.php'
       - 'app/Http/Controllers/OpenMindAiGatewayController.php'
@@ -15,6 +16,7 @@ on:
   pull_request:
     paths:
       - 'app/Http/Controllers/NvidiaCosmosController.php'
+      - 'app/Http/Controllers/CodeAgentsAdminController.php'
       - 'app/Jobs/RunCosmosGeneration.php'
       - 'app/Services/HostedCodeAgents.php'
       - 'app/Http/Controllers/OpenMindAiGatewayController.php'

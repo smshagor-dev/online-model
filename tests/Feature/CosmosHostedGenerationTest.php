@@ -174,6 +174,28 @@ class CosmosHostedGenerationTest extends TestCase
         ])->assertStatus(429);
     }
 
+    public function test_cosmos_hosted_provider_id_cannot_be_replaced_through_admin(): void
+    {
+        $admin = User::create([
+            'name' => 'Admin',
+            'email' => 'cosmos-admin@example.com',
+            'password' => 'GoodPassword123',
+        ]);
+        $admin->forceFill(['is_admin' => true, 'email_verified_at' => now()])->save();
+        $this->actingAs($admin)->withSession(['admin_verified' => true]);
+
+        $this->patchJson('/admin/nvidia-models/nvidia-cosmos3-nano', [
+            'provider_model' => 'arbitrary/alternative-model',
+            'api_ready' => true,
+        ])->assertUnprocessable();
+        $this->assertDatabaseHas('hosted_code_agents', [
+            'slug' => 'nvidia-cosmos3-nano',
+            'provider_model' => 'nvidia/cosmos3-nano',
+            'api_origin' => 'ai.api.nvidia.com',
+            'api_path' => '/v1/cosmos/nvidia/cosmos3-nano',
+        ]);
+    }
+
     public function test_unsupported_generation_modes_are_rejected_without_queueing(): void
     {
         Queue::fake();
