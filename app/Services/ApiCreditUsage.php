@@ -99,12 +99,18 @@ class ApiCreditUsage
                 $join->on('u.user_id', '=', 'users.id')
                     ->where('u.created_at', '>=', $from);
             })
-            ->select('users.id', 'users.name', 'users.email')
+            ->select('users.id', 'users.name', 'users.email', 'users.monthly_credit_limit')
             ->selectRaw('COALESCE(SUM(u.credits),0) as used')
-            ->groupBy('users.id', 'users.name', 'users.email')
+            ->groupBy('users.id', 'users.name', 'users.email', 'users.monthly_credit_limit')
             ->orderByDesc('used')->limit(20)->get()
-            ->map(fn ($row) => ['id' => (int) $row->id,
-                'name' => $row->name, 'email' => $row->email, 'used' => (int) $row->used])->all();
+            ->map(function ($row) {
+                $limit = $row->monthly_credit_limit === null ? null : (int) $row->monthly_credit_limit;
+
+                return ['id' => (int) $row->id, 'name' => $row->name,
+                    'email' => $row->email, 'used' => (int) $row->used,
+                    'limit' => $limit,
+                    'remaining' => $limit === null ? null : max(0, $limit - (int) $row->used)];
+            })->all();
     }
 
     public function userModels(int $user): array
