@@ -24,7 +24,16 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('hub', fn ($r) => Limit::perMinute(10)->by('hub:'.$r->user()->id));
         RateLimiter::for('api', fn ($r) => Limit::perMinute(60)->by($r->user()?->id ?: $r->ip()));
         RateLimiter::for('sensitive', fn ($r) => Limit::perMinute(5)->by('sensitive:'.$r->user()->id));
-        RateLimiter::for('chat', fn ($r) => [Limit::perMinute(10)->by('chat:'.$r->user()->id), Limit::perDay(app(AdminSettings::class)->limit('chat_daily_limit'))->by('chat-day:'.$r->user()->id)]);
+        RateLimiter::for('media', fn ($r) => Limit::perMinute(20)->by('media:'.$r->user()->id));
+        RateLimiter::for('chat', function ($r) {
+            $limits = [Limit::perMinute(10)->by('chat:'.$r->user()->id)];
+            $daily = app(AdminSettings::class)->limit('chat_daily_limit');
+            if ($daily > 0) {
+                $limits[] = Limit::perDay($daily)->by('chat-day:'.$r->user()->id);
+            }
+
+            return $limits;
+        });
         ResetPassword::createUrlUsing(fn ($user, $token) => rtrim(config('app.frontend_url') ?: config('app.url'), '/').'/reset-password?'.http_build_query(['token' => $token, 'email' => $user->email]));
     }
 }

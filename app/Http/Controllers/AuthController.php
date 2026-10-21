@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
-use App\Services\AdminSettings;
-use App\Services\UnfamiliarLogin;
 use App\Notifications\VerifyEmail;
+use App\Services\AdminSettings;
 use App\Services\TwoFactor;
+use App\Services\UnfamiliarLogin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;

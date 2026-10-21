@@ -171,6 +171,7 @@ class AuthenticationSecuritySettingsTest extends TestCase
         $this->postJson('/api/v1/login', $this->payload())->assertOk();
         Notification::assertNothingSent();
     }
+
     public function test_email_change_invalidates_pending_ip_challenge(): void
     {
         app(AdminSettings::class)->save(['unusual_ip_verification_enabled' => '1']);
@@ -186,5 +187,4 @@ class AuthenticationSecuritySettingsTest extends TestCase
             'challenge_id' => $challenge->json('challenge_id'), 'code' => $code,
         ])->assertStatus(422);
     }
-
 }

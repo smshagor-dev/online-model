@@ -93,6 +93,7 @@ class HostedImageController
                 $connection = app(ApiCreditUsage::class)->connection('nvidia', $d['provider_model'], 'image');
                 app(ApiCreditUsage::class)->completed($task->user_id, $connection, 'media:'.$task->id);
             }
+
             return response()->json($task->fresh());
         });
     }
@@ -107,6 +108,7 @@ class HostedImageController
             'error' => 'Image generation was not completed. Please try again later.',
             'bytes' => 0,
         ]);
+
         return response()->noContent();
     }
 }

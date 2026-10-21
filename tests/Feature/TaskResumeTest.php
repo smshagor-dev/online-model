@@ -7,6 +7,7 @@ use App\Models\AiModel;
 use App\Models\ScheduledTask;
 use App\Models\TaskRun;
 use App\Models\User;
+use App\Services\AdminSettings;
 use App\Services\TaskCheckpoint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +33,7 @@ class TaskResumeTest extends TestCase
     public function test_interrupted_answer_resumes_from_encrypted_checkpoint_without_new_daily_request(): void
     {
         $task = $this->task();
-        config(['models.task_daily_limit' => 1]);
+        app(AdminSettings::class)->save(['task_daily_limit' => '1']);
         $run = TaskRun::create(['scheduled_task_id' => $task->id]);
         $calls = 0;
         Http::fake(function ($request) use (&$calls) {

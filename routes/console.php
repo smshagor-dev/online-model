@@ -8,6 +8,7 @@ use App\Models\Message;
 use App\Models\ScheduledTask;
 use App\Models\TaskRun;
 use App\Models\User;
+use App\Services\AdminSettings;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
@@ -59,7 +60,7 @@ Schedule::call(function () {
                 }
                 $active = TaskRun::where('scheduled_task_id', $t->id)->whereIn('status', ['queued', 'running'])->exists();
                 $daily = TaskRun::whereIn('scheduled_task_id', ScheduledTask::where('user_id', $t->user_id)->select('id'))->whereDate('created_at', today())->count();
-                $dailyLimit = app(\App\Services\AdminSettings::class)->limit('task_daily_limit');
+                $dailyLimit = app(AdminSettings::class)->limit('task_daily_limit');
                 if ($active) {
                     $t->update(['next_run_at' => now()->addMinutes(5)]);
 
