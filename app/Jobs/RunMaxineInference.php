@@ -45,11 +45,12 @@ class RunMaxineInference implements ShouldQueue
             abort_unless(strlen($key) >= 32, 503, 'Maxine worker unavailable.');
             $input = Storage::disk('local')->get($job->input_path);
             $data = ['model' => $job->model, 'data' => base64_encode($input)];
-            if ($job->model === 'nvidia-3d-body-pose') {
+            if (in_array($job->model, ['nvidia-3d-body-pose', 'nvidia-active-speaker-detection'], true)) {
                 if (! $job->aux_path || ! Storage::disk('local')->exists($job->aux_path)) {
                     throw new \RuntimeException('missing_tracking_annotations');
                 }
-                $data['bbox'] = base64_encode(Storage::disk('local')->get($job->aux_path));
+                $data[$job->model === 'nvidia-3d-body-pose' ? 'bbox' : 'diarization']
+                    = base64_encode(Storage::disk('local')->get($job->aux_path));
             }
             $response = Http::withToken($key)->acceptJson()
                 ->connectTimeout(10)->timeout(config('maxine.timeout', 840))
@@ -75,6 +76,14 @@ class RunMaxineInference implements ShouldQueue
                 }
                 foreach ($records as $record) {
                     json_decode($record, true, 64, JSON_THROW_ON_ERROR);
+                }
+            } elseif ($job->model === 'nvidia-active-speaker-detection') {
+                if (substr($binary, 4, 4) !== 'ftyp') {
+                    throw new \RuntimeException('invalid_video');
+                }
+            } elseif ($job->model === 'nvidia-synthetic-video-detector') {
+                if (! str_starts_with($binary, "index,probability\n")) {
+                    throw new \RuntimeException('invalid_detector_csv');
                 }
             } elseif (!(substr($binary, 0, 4) === 'RIFF' && substr($binary, 8, 4) === 'WAVE')) {
                 throw new \RuntimeException('invalid_wave');

@@ -40,6 +40,20 @@ SPECS = {
         "max_bytes": 32000000,
         "extra": [],
     },
+    "nvidia-active-speaker-detection": {
+        "script": "active-speaker-detection/scripts/active_speaker_detection.py",
+        "function": "f286f937-05c4-454b-8312-fba67a2a6fa7",
+        "input_option": "--video-input", "input_ext": ".mp4",
+        "output_ext": ".mp4", "mime": "video/mp4",
+        "max_bytes": 20000000, "extra": [],
+    },
+    "nvidia-synthetic-video-detector": {
+        "script": "synthetic-video-detector/scripts/v1/synthetic-video-detector.py",
+        "function": "847b6e53-0133-452d-ab85-d7acf3ace723",
+        "input_option": "--video-input", "input_ext": ".mp4",
+        "output_ext": ".csv", "mime": "text/csv",
+        "max_bytes": 20000000, "extra": [],
+    },
     "nvidia-3d-body-pose": {
         "script": "body-pose/scripts/body_pose.py",
         "function": "254b3621-bb66-4b7b-9c89-621c352b4d91",
@@ -53,7 +67,7 @@ SPECS = {
 }
 
 
-def run_model(model: str, payload: bytes, *, root: Path, api_key: str, boxes: bytes | None = None) -> tuple[str, bytes]:
+def run_model(model: str, payload: bytes, *, root: Path, api_key: str, boxes: bytes | None = None, diarization: bytes | None = None) -> tuple[str, bytes]:
     spec = SPECS.get(model)
     if spec is None:
         raise ValueError("Unknown model")
@@ -81,6 +95,18 @@ def run_model(model: str, payload: bytes, *, root: Path, api_key: str, boxes: by
                 raise ValueError("Tracked bounding-box annotations required")
             bbox_path = Path(temp) / "bbox.txt"
             bbox_path.write_bytes(boxes)
+        diarization_path = None
+        if model == "nvidia-active-speaker-detection":
+            if not diarization or len(diarization) > 1048576:
+                raise ValueError("Speaker diarization JSON required")
+            import json
+            try:
+                if not isinstance(json.loads(diarization), (dict, list)):
+                    raise ValueError("Invalid diarization")
+            except (ValueError, UnicodeError) as exc:
+                raise ValueError("Invalid diarization") from exc
+            diarization_path = Path(temp) / "diarization.json"
+            diarization_path.write_bytes(diarization)
         cmd = [
             sys.executable,
             str(script),
@@ -90,11 +116,16 @@ def run_model(model: str, payload: bytes, *, root: Path, api_key: str, boxes: by
             "--function-id", spec["function"],
             "--api-key", api_key,
             spec["input_option"], str(incoming),
-            "--output", str(outgoing),
             *spec["extra"],
         ]
+        if model == "nvidia-synthetic-video-detector":
+            cmd += ["--save-csv", str(outgoing)]
+        else:
+            cmd += ["--output", str(outgoing)]
         if bbox_path:
             cmd += ["--bbox-input", str(bbox_path)]
+        if diarization_path:
+            cmd += ["--diarization-input", str(diarization_path), "--skip-audio"]
         try:
             subprocess.run(
                 cmd, check=True, stdout=subprocess.DEVNULL,
@@ -118,6 +149,10 @@ def run_model(model: str, payload: bytes, *, root: Path, api_key: str, boxes: by
                     raise ValueError("Empty pose output")
             except (ValueError, UnicodeError) as exc:
                 raise RuntimeError("Invalid pose JSON Lines output") from exc
+        if model == "nvidia-active-speaker-detection" and result[4:8] != b"ftyp":
+            raise RuntimeError("Invalid MP4 output")
+        if model == "nvidia-synthetic-video-detector" and not result.startswith(b"index,probability\n"):
+            raise RuntimeError("Invalid CSV output")
         return spec["mime"], result
 
 
@@ -149,9 +184,16 @@ async def infer(request: Request, authorization: str | None = Header(default=Non
             if not isinstance(raw_boxes, str) or len(raw_boxes) > 1500000:
                 raise ValueError("Bounding-box file required")
             boxes = base64.b64decode(raw_boxes, validate=True)
+        diarization = None
+        if model == "nvidia-active-speaker-detection":
+            raw_diarization = data.get("diarization")
+            if not isinstance(raw_diarization, str) or len(raw_diarization) > 1500000:
+                raise ValueError("Diarization file required")
+            diarization = base64.b64decode(raw_diarization, validate=True)
         output_mime, output_bytes = run_model(
             model, binary, root=Path(os.environ.get("NVIDIA_NIM_CLIENTS_ROOT", "/opt/nim-clients")),
             api_key=os.environ.get("NVIDIA_API_KEY", ""), boxes=boxes,
+            diarization=diarization,
         )
     except (ValueError, KeyError, TypeError, binascii.Error):
         raise HTTPException(status_code=422, detail="Invalid media request")

@@ -19,6 +19,16 @@ return [
             'max_bytes' => 32000000, 'output_mime' => 'audio/wav',
             'output_extension' => 'wav',
         ],
+        'nvidia-active-speaker-detection' => [
+            'mime' => 'video/mp4', 'extension' => 'mp4',
+            'max_bytes' => 20000000, 'output_mime' => 'video/mp4',
+            'output_extension' => 'mp4',
+        ],
+        'nvidia-synthetic-video-detector' => [
+            'mime' => 'video/mp4', 'extension' => 'mp4',
+            'max_bytes' => 20000000, 'output_mime' => 'text/csv',
+            'output_extension' => 'csv',
+        ],
         'nvidia-3d-body-pose' => [
             'mime' => 'video/mp4', 'extension' => 'mp4',
             'max_bytes' => 20000000, 'output_mime' => 'application/x-ndjson',

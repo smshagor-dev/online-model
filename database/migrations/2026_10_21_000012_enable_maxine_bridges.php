@@ -11,6 +11,8 @@ return new class extends Migration
             'nvidia-background-noise-removal',
             'nvidia-studio-voice',
             'nvidia-3d-body-pose',
+            'nvidia-active-speaker-detection',
+            'nvidia-synthetic-video-detector',
         ])->update([
             'api_ready' => true,
             'api_protocol' => 'json',
@@ -29,6 +31,8 @@ return new class extends Migration
             'nvidia-background-noise-removal',
             'nvidia-studio-voice',
             'nvidia-3d-body-pose',
+            'nvidia-active-speaker-detection',
+            'nvidia-synthetic-video-detector',
         ])->update(['api_ready' => false, 'updated_at' => now()]);
     }
 };

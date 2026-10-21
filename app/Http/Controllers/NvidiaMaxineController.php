@@ -39,15 +39,23 @@ class NvidiaMaxineController
         $bytes = $file->get();
         abort_if(strlen($bytes) > $info['max_bytes'], 413, 'Input exceeds this model limit.');
         $bboxBytes = null;
-        if ($slug === 'nvidia-3d-body-pose') {
-            $request->validate(['bbox_file' => 'required|file|max:1024']);
-            $bboxBytes = $request->file('bbox_file')->get();
-            $lines = preg_split('/\\r?\\n/', trim($bboxBytes));
-            abort_unless(strlen($bboxBytes) <= 1048576
-                && preg_match('/^[0-9]{1,4}$/D', $lines[0] ?? '')
-                && count($lines) >= 2
-                && preg_match('/^[0-9eE+., \\t\\-]+$/D', trim($lines[1] ?? '')),
-                422, 'Tracked bounding-box TXT annotations are required.');
+        if (in_array($slug, ['nvidia-3d-body-pose', 'nvidia-active-speaker-detection'], true)) {
+            $field = $slug === 'nvidia-3d-body-pose' ? 'bbox_file' : 'diarization_file';
+            $request->validate([$field => 'required|file|max:1024']);
+            $bboxBytes = $request->file($field)->get();
+            if ($slug === 'nvidia-active-speaker-detection') {
+                $diarization = json_decode($bboxBytes, true);
+                abort_unless(strlen($bboxBytes) <= 1048576
+                    && is_array($diarization) && count($diarization) > 0,
+                    422, 'A nonempty speaker diarization JSON file is required.');
+            } else {
+                $lines = preg_split('/\\r?\\n/', trim($bboxBytes));
+                abort_unless(strlen($bboxBytes) <= 1048576
+                    && preg_match('/^[0-9]{1,4}$/D', $lines[0] ?? '')
+                    && count($lines) >= 2
+                    && preg_match('/^[0-9eE+., \\t\\-]+$/D', trim($lines[1] ?? '')),
+                    422, 'Tracked bounding-box TXT annotations are required.');
+            }
         }
         if ($info['mime'] === 'audio/wav') {
             abort_unless(strlen($bytes) >= 44 && substr($bytes, 0, 4) === 'RIFF'
@@ -77,7 +85,8 @@ class NvidiaMaxineController
             $id = (string) Str::uuid();
             $path = 'maxine/'.$user->id.'/'.$id.'.input.'.$info['extension'];
             Storage::disk('local')->put($path, $bytes);
-            $bboxPath = $bboxBytes === null ? null : 'maxine/'.$user->id.'/'.$id.'.bbox.txt';
+            $bboxPath = $bboxBytes === null ? null : 'maxine/'.$user->id.'/'.$id.
+                ($slug === 'nvidia-active-speaker-detection' ? '.diarization.json' : '.bbox.txt');
             if ($bboxPath) {
                 Storage::disk('local')->put($bboxPath, $bboxBytes);
             }
