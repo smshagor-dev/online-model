@@ -42,6 +42,25 @@ class DeveloperPortalTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_developer_keys_do_not_consume_device_login_slots(): void
+    {
+        $user = User::create([
+            'name' => 'Desktop Developer',
+            'email' => 'ten-keys@example.com',
+            'password' => 'CorrectPassword123',
+        ]);
+        $user->forceFill(['email_verified_at' => now()])->save();
+        for ($i = 0; $i < 10; $i++) {
+            $user->createToken('developer:tool-'.$i, ['openmindai:invoke'], now()->addDays(90));
+        }
+
+        $this->postJson('/api/v1/login', [
+            'email' => 'ten-keys@example.com',
+            'password' => 'CorrectPassword123',
+            'device_name' => 'OpenMindAI Developer Portal',
+        ])->assertOk()->assertJsonStructure(['token', 'user']);
+    }
+
     public function test_unauthenticated_users_cannot_read_developer_usage_or_model_catalog(): void
     {
         $this->getJson('/api/v1/developer/usage')->assertUnauthorized();

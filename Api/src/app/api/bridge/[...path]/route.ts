@@ -37,10 +37,22 @@ export async function handler(request: NextRequest, context: { params: Promise<{
   }
   let body: string | undefined;
   if (request.method !== "GET") {
-    body = await request.text();
-    if (Buffer.byteLength(body) > 16_384) {
-      return NextResponse.json({ message: "Request too large." }, { status: 413 });
+    const reader = request.body?.getReader();
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        length += value.byteLength;
+        if (length > 16_384) {
+          await reader.cancel();
+          return NextResponse.json({ message: "Request too large." }, { status: 413 });
+        }
+        chunks.push(value);
+      }
     }
+    body = Buffer.concat(chunks).toString("utf8");
     try { JSON.parse(body); } catch {
       return NextResponse.json({ message: "Invalid JSON." }, { status: 400 });
     }
@@ -52,7 +64,10 @@ export async function handler(request: NextRequest, context: { params: Promise<{
       headers: {
         "Accept": "application/json",
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-        ...(session && !publicRoutes.has(endpoint) ? { Authorization: "Bearer " + session } : {})
+        ...(session && !publicRoutes.has(endpoint) ? { Authorization: "Bearer " + session } : {}),
+        ...(process.env.TRUST_PROXY_HEADERS === "true" && request.headers.get("x-forwarded-for")
+          ? { "X-Forwarded-For": request.headers.get("x-forwarded-for")! }
+          : {})
       },
       body,
       cache: "no-store",

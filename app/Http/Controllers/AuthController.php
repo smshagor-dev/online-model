@@ -69,7 +69,7 @@ class AuthController
         if ($u->two_factor_confirmed_at) {
             abort_unless($two->verify($u, $d['code'] ?? ''), 422, 'A valid two-factor or recovery code is required.');
         }
-        abort_if($u->tokens()->count() >= 10, 422, 'Revoke an existing device first.');
+        abort_if($u->tokens()->where('name', 'not like', 'developer:%')->count() >= 10, 422, 'Revoke an existing device first.');
 
         $challenge = $login->challenge($u, $r, $d['device_name']);
         if ($challenge) {
