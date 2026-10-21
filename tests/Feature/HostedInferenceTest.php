@@ -94,8 +94,12 @@ class HostedInferenceTest extends TestCase
                 'text' => 'Bonjour', 'language' => 'fr-FR', 'voice' => 'evil',
             ],
         ])->assertOk()->assertHeader('Content-Type', 'audio/wav');
-        Http::assertSent(fn ($r) => $r['language'] === 'fr-FR'
-            && $r['voice'] === 'Magpie-Multilingual.FR-FR.Louise');
+        // Speech uses a multipart request: inspect the serialized fields rather
+        // than treating the body as JSON key/value pairs.
+        Http::assertSent(fn ($r) => str_contains($r->body(), 'name="language"')
+            && str_contains($r->body(), 'fr-FR')
+            && str_contains($r->body(), 'name="voice"')
+            && str_contains($r->body(), 'Magpie-Multilingual.FR-FR.Louise'));
         $this->postJson('/api/v1/provider/invoke', [
             'service' => 'speech', 'payload' => ['text' => 'Bonjour', 'language' => 'xx-XX'],
         ])->assertStatus(422);
