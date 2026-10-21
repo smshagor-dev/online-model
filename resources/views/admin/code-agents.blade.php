@@ -24,13 +24,6 @@
   <p class="entity-meta">User keys are generated in OpenMindAI Account → Developer API. Keys are shown once, expire after 90 days and can be revoked.</p>
 </section>
 <div class="section-separator"><h2>Trusted OpenMindAI apps</h2><p>Your own server can sign requests without asking each end user for an API key. A secret is still required on each trusted app server.</p></div>
-@if(session('first_party_secret'))
-<section class="admin-card" style="margin-bottom:18px" role="status">
-  <h2>Application credentials created</h2><p>The App ID and signing secret can also be retrieved later with admin password and two-factor verification.</p>
-  <div class="field"><label>App ID</label><input readonly value="{{ session('first_party_id') }}"></div>
-  <p class="entity-meta">Sign in to the app's credential controls below to reveal its encrypted signing secret.</p>
-</section>
-@endif
 <div class="card-grid">
 <section class="admin-card">
   <h2>Register first-party app</h2>

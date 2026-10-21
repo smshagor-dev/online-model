@@ -105,8 +105,7 @@ class CodeAgentsAdminController
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        return back()->with('status', 'First-party app registered. Keep the signing secret in a trusted server environment.')
-            ->with('first_party_id', $appId)->with('first_party_secret', $secret);
+        return back()->with('status', 'First-party app registered. Reveal and copy its signing secret below after verifying your administrator credentials.');
     }
 
     public function revealAppSecret(Request $request, int $app, TwoFactor $two)
