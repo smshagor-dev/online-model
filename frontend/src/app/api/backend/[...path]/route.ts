@@ -111,7 +111,7 @@ async function proxy(
     const data = JSON.parse(body!);
     // Never trust the browser's requested engine or provider URL.
     const response = await hostedMediaRequest(
-      JSON.stringify({ kind, prompt: data.prompt ?? "", input: data.input, format: data.format }),
+      JSON.stringify({ kind, prompt: data.prompt ?? "", input: data.input, format: data.format, language: data.language }),
       token!, base, request.signal,
     );
     if (response.status === 401) jar.delete(cookieName);
