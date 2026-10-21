@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import PasswordInput from "./password-input";
 import { ArrowRight, LoaderCircle, Mail, ShieldCheck } from "lucide-react";
 import Dialog from "./dialog";
 import OtpCodeInput from "./otp-code-input";
@@ -173,13 +174,13 @@ export default function AuthDialog({
           />
         </label>}
         {!ipChallengeId && (mode === "verify-email" || mode === "reset") && <OtpCodeInput key={mode + email} name="code" disabled={busy} />}
-        {!ipChallengeId && mode === "reset" && <><label>New password<input name="password" type="password" autoComplete="new-password" minLength={6} required /></label><label>Confirm new password<input name="password_confirmation" type="password" autoComplete="new-password" minLength={6} required /></label></>}
+        {!ipChallengeId && mode === "reset" && <><label>New password<PasswordInput name="password"  autoComplete="new-password" minLength={6} required /></label><label>Confirm new password<PasswordInput name="password_confirmation"  autoComplete="new-password" minLength={6} required /></label></>}
         {!ipChallengeId && (mode === "login" || mode === "register") && (
           <label>
             Password
-            <input
+            <PasswordInput
               name="password"
-              type="password"
+              
               autoComplete={
                 mode === "register" ? "new-password" : "current-password"
               }
@@ -195,9 +196,9 @@ export default function AuthDialog({
             </small>
             <label>
               Confirm password
-              <input
+              <PasswordInput
                 name="password_confirmation"
-                type="password"
+                
                 autoComplete="new-password"
                 required
                 minLength={6}
