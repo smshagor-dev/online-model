@@ -4,8 +4,6 @@ type ImageConfig = { apiKey?: string; bridgeKey?: string };
 type Fetcher = typeof fetch;
 type ImageOptions = { fetcher?: Fetcher; config?: ImageConfig; waitForCompletion?: boolean };
 
-export const hostedImageEnabled = () => true; // Only Laravel's authenticated capabilities determine availability.
-
 export async function generateHostedImage(
   body: string, token: string, backend: string, signal: AbortSignal, options: ImageOptions = {},
 ): Promise<Response> {
