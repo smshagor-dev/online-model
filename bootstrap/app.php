@@ -14,4 +14,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(headers: Request::HEADER_X_FORWARDED_FOR);
         $middleware->alias(['active' => ActiveUser::class, 'admin' => AdminOnly::class, 'interactive-token' => InteractiveSessionToken::class]);
         $middleware->redirectGuestsTo('/admin/login');
-    })->withExceptions(function (Exceptions $exceptions): void {})->create();
+    })->withExceptions(function (Exceptions $exceptions): void {
+        // API consumers must receive machine-readable errors even when the
+        // caller sends */* or omits Accept (for example a CLI or desktop IDE).
+        // Admin pages continue to use the existing sign-in redirects.
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request) => $request->is('api/*') || $request->expectsJson()
+        );
+    })->create();
