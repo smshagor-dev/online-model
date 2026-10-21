@@ -69,7 +69,7 @@ test("production-mode hosted chat sends inference from Next.js and saves through
     process.env.FRONTEND_CHAT_BRIDGE_KEY = "k".repeat(32);
     const f = fixture();
     const fetcher = (url, options) => {
-      if (url.endsWith("/openmindai/models"))
+      if (url.endsWith("/chat/hosted-models"))
         return Promise.resolve(Response.json({ data: [{ id: "openmindai-lite" }] }));
       return f.fetcher(url, options);
     };
