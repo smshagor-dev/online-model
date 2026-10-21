@@ -153,6 +153,7 @@ export async function nvidiaChat(
       routing.fastModel = fast;
       routing.reasoningModel = reasoning;
       routing.visionModel = NVIDIA_HOSTED_MODELS[0].provider;
+      routing.classifierModel = fast; // honor admin availability for classification too
       fallbackModel = fast;
     }
     const decision = await routePrompt(input.message, routing, {
