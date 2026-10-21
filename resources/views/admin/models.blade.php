@@ -2,6 +2,7 @@
 @section('title', 'Model library')
 @section('section', 'Chat models')
 @section('content')
+<div class="muted-note" style="margin-bottom:18px">Looking for NVIDIA-backed coding models? <a href="/admin/code-agents"><strong>Manage OpenMindAI Super, Ultra and Lite →</strong></a></div>
 <div class="admin-page-heading"><div><span class="eyebrow">AI OPERATIONS</span><h1>Chat model library</h1><p>Discover, import and configure verified GGUF weights for the chat runtime.</p></div><div class="heading-actions"><a class="subtle-label" href="/admin/model-bundles">Media model snapshots →</a></div></div>
 <div class="muted-note" style="margin-bottom:21px"><strong>Downloads and inference are separate.</strong> Downloading stores model weights privately; a compatible inference server must load them. Review the model card and license before importing.</div>
 <div class="card-grid" style="margin-bottom:23px">
