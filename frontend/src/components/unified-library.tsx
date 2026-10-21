@@ -125,6 +125,7 @@ export default function LibraryPanel({
             "image",
             "vision",
             "document",
+            "document_create",
             "transcription",
             "speech",
             "video",
