@@ -132,7 +132,7 @@ class CodeAgentsAdminController
                 ->post('https://'.$model->api_origin.$model->api_path, $payload);
             $httpCode = $upstream->status();
             $result = $upstream->json();
-            if ($upstream->ok() && is_array($result) && !empty($result)) {
+            if ($upstream->ok() && is_array($result) && (($model->api_protocol === 'chat' && isset($result['choices'][0])) || ($model->api_path === '/v1/embeddings' && isset($result['data'][0]['embedding'])) || ($model->slug === 'nvidia-nemotron-3.5-rerank-8b' && (isset($result['rankings']) || isset($result['results']))))) {
                 $status = 'success';
             } elseif (in_array($httpCode, [401, 402, 403], true)) {
                 $status = 'access_denied';
