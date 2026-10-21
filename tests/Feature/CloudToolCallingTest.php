@@ -117,8 +117,8 @@ class CloudToolCallingTest extends TestCase
     public function test_streaming_forwards_all_nineteen_tools_and_completes_sse(): void
     {
         config(['models.nvidia_key' => 'server-nvidia-token-123']);
-        $stream = "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"OK\"},\"finish_reason\":null}]}\\n\\n"
-            ."data: [DONE]\\n\\n";
+        $stream = "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"OK\"},\"finish_reason\":null}]}\n\n"
+            ."data: [DONE]\n\n";
         Http::fake(['integrate.api.nvidia.com/*' =>
             Http::response($stream, 200, ['Content-Type' => 'text/event-stream'])]);
 
