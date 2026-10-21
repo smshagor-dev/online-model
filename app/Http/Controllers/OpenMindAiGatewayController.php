@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\PersonalAccessToken;
-use Throwable;
 
 class OpenMindAiGatewayController
 {
@@ -55,8 +54,19 @@ class OpenMindAiGatewayController
         $data = $request->validate([
             'model' => 'required|string|max:60',
             'messages' => 'required|array|min:1|max:40',
-            'messages.*.role' => 'required|in:system,user,assistant',
-            'messages.*.content' => 'required|string|max:16000',
+            'messages.*.role' => 'required|in:system,user,assistant,tool',
+            'messages.*.content' => 'present|string|max:16000',
+            'messages.*.tool_call_id' => 'sometimes|string|max:120',
+            'messages.*.tool_calls' => 'sometimes|array|max:12',
+            'messages.*.tool_calls.*.id' => 'required|string|max:120',
+            'messages.*.tool_calls.*.type' => 'required|in:function',
+            'messages.*.tool_calls.*.function.name' => 'required|string|max:120',
+            'messages.*.tool_calls.*.function.arguments' => 'required|string|max:32000',
+            'tools' => 'sometimes|array|max:12',
+            'tools.*.type' => 'required|in:function',
+            'tools.*.function.name' => 'required|string|max:120',
+            'tools.*.function.description' => 'sometimes|string|max:1000',
+            'tools.*.function.parameters' => 'required|array',
             'stream' => 'sometimes|boolean',
             'max_tokens' => 'sometimes|integer|min:1|max:8192',
             'temperature' => 'sometimes|numeric|min:0|max:1',
@@ -85,6 +95,9 @@ class OpenMindAiGatewayController
                 'max_tokens' => $data['max_tokens'] ?? 2048,
                 'stream' => $stream,
             ];
+            if (isset($data['tools'])) {
+                $payload['tools'] = $data['tools'];
+            }
             if (isset($data['temperature'])) {
                 $payload['temperature'] = $data['temperature'];
             }
@@ -114,7 +127,7 @@ class OpenMindAiGatewayController
             $held = false;
             return response()->stream(function () use ($upstream, $credits, $user, $connection, $usageKey, $lock, $agent) {
                 $body = $upstream->toPsrResponse()->getBody();
-                $tail = '';
+                $buffer = '';
                 $done = false;
                 try {
                     while (! $body->eof()) {
@@ -125,15 +138,35 @@ class OpenMindAiGatewayController
                         if ($chunk === '') {
                             break;
                         }
-                        $tail = substr($tail.$chunk, -128);
-                        if (str_contains($tail, 'data: [DONE]')) {
-                            $done = true;
+                        $buffer .= str_replace("\r\n", "\n", $chunk);
+                        if (strlen($buffer) > 1048576) {
+                            break; // Reject unexpectedly large or malformed SSE frames.
                         }
-                        echo $chunk;
-                        if (ob_get_level() > 0) {
-                            @ob_flush();
+                        while (($end = strpos($buffer, "\n\n")) !== false) {
+                            $frame = substr($buffer, 0, $end);
+                            $buffer = substr($buffer, $end + 2);
+                            foreach (explode("\n", $frame) as $line) {
+                                if (! str_starts_with($line, 'data:')) {
+                                    continue;
+                                }
+                                $json = trim(substr($line, 5));
+                                if ($json === '[DONE]') {
+                                    $done = true;
+                                    echo "data: [DONE]\n\n";
+                                    break 2;
+                                }
+                                $decoded = json_decode($json, true);
+                                if (! is_array($decoded)) {
+                                    continue;
+                                }
+                                $decoded['model'] = $agent->slug;
+                                echo 'data: '.json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)."\n\n";
+                            }
+                            if (ob_get_level() > 0) {
+                                @ob_flush();
+                            }
+                            flush();
                         }
-                        flush();
                     }
                     if ($done) {
                         $credits->completed($user->id, $connection, $usageKey);
