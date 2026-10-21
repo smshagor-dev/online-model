@@ -141,6 +141,27 @@ class MediaTest extends TestCase
         ])->assertStatus(409);
     }
 
+    public function test_generated_documents_are_searchable_in_private_media_library(): void
+    {
+        $this->setupEngine();
+        config(['models.frontend_chat_key' => str_repeat('s', 32)]);
+        $this->withHeaders(['X-Chat-Bridge-Key' => str_repeat('s', 32)]);
+        $created = $this->postJson('/api/v1/media/hosted/task/begin', [
+            'kind' => 'document_create', 'prompt' => 'A summary',
+        ])->assertStatus(202);
+        $id = $created->json('id');
+
+        $this->getJson('/api/v1/media?kind=document_create')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $id)
+            ->assertJsonPath('data.0.kind', 'document_create');
+
+        $other = $this->user();
+        Sanctum::actingAs($other);
+        $this->getJson('/api/v1/media?kind=document_create')
+            ->assertOk()->assertJsonCount(0, 'data');
+    }
+
     public function test_hosted_audio_and_document_formats_are_validated_before_storage(): void
     {
         $this->setupEngine();
