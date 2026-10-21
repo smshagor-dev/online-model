@@ -121,13 +121,16 @@ class CloudImagePipelineTest extends TestCase
     public function test_language_bridge_preserves_source_and_falls_back_when_unavailable(): void
     {
         $this->signIn();
-        Http::fake(['integrate.api.nvidia.com/*' => Http::response([
-            'choices' => [['message' => ['content' => 'A blue futuristic robot in Dhaka']]],
-        ])]);
+        $unavailable = false;
+        Http::fake(['integrate.api.nvidia.com/*' => function () use (&$unavailable) {
+            return $unavailable
+                ? Http::response([], 503)
+                : Http::response(['choices' => [['message' => ['content' => 'A blue futuristic robot in Dhaka']]]]);
+        }]);
         $source = 'dhaka te ekta nil robot er chobi banao';
         $normalized = app(CloudImagePrompt::class)->normalize($source);
         $this->assertSame('A blue futuristic robot in Dhaka', $normalized);
-        Http::fake(['integrate.api.nvidia.com/*' => Http::response([], 503)]);
+        $unavailable = true;
         $this->assertSame($source, app(CloudImagePrompt::class)->normalize($source));
     }
 
