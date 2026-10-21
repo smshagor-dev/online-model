@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\RunCloudImage;
 use App\Models\MediaTask;
+use App\Services\ApiCreditUsage;
 use App\Services\CloudImageEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -16,6 +17,7 @@ class CloudImageController
     public function capabilities(CloudImageEngine $engine)
     {
         $enabled = config('cloud_images.enabled') && strlen((string) config('cloud_images.key')) >= 12;
+
         return response()->json([
             'enabled' => (bool) $enabled,
             'ratios' => CloudImageEngine::ratios(),
@@ -71,7 +73,7 @@ class CloudImageController
                 abort_if($row->requests + $count > config('media.image_daily_limit'), 429, 'Daily image request limit reached.');
                 $pending = (clone $tasks)->whereIn('status', ['queued', 'running'])->count();
                 abort_if($pending + $count > 4, 429, 'Too many active image requests.');
-                $month = app(\App\Services\ApiCreditUsage::class)->monthStart();
+                $month = app(ApiCreditUsage::class)->monthStart();
                 $usedCredits = (int) DB::table('api_credit_usage')->where('user_id', $user->id)
                     ->where('created_at', '>=', $month)->sum('credits');
                 abort_if($user->monthly_credit_limit !== null
@@ -114,9 +116,11 @@ class CloudImageController
                 foreach ($ids as $id) {
                     RunCloudImage::dispatch($id)->onConnection('media')->onQueue('media')->afterCommit();
                 }
+
                 return $ids;
             });
         });
+
         return response()->json(['id' => $ids[0], 'ids' => $ids, 'status' => 'queued', 'kind' => 'image'], 202)
             ->header('Cache-Control', 'no-store');
     }
@@ -133,6 +137,7 @@ class CloudImageController
         $dimensions = @getimagesizefromstring($bytes);
         abort_unless($dimensions && $dimensions[0] * $dimensions[1] <= 16000000,
             422, 'Image dimensions are too large.');
+
         return $bytes;
     }
 }
