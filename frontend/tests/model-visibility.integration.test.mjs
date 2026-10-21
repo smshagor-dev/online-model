@@ -17,7 +17,11 @@ test("chat header is static while existing model routing remains active", () => 
     new URL("../src/components/chat-workspace.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(workspace, /<span className="topbar-brand">OpenMindAI<\/span>/);
+  assert.match(workspace, /className="topbar-brand"/);
+  assert.match(workspace, /className="topbar-brand-logo"/);
+  assert.match(workspace, /className="sidebar-brand-copy"/);
+  assert.match(workspace, /className="welcome-identity"/);
+  assert.match(workspace, /src="\/openmindai-logo.png"/);
   assert.doesNotMatch(workspace, /className="model-picker"/);
   assert.doesNotMatch(workspace, /className="active-model-label"/);
   assert.doesNotMatch(workspace, /className="model-menu-wrapper"/);

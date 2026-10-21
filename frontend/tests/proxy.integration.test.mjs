@@ -193,6 +193,8 @@ test("workspace renders the welcome layout", async () => {
   const r = await fetch(origin);
   const html = await r.text();
   assert.ok(html.includes("What can I help with?"));
+  assert.ok(html.includes("OpenMindAI"));
+  assert.ok(html.includes("openmindai-logo.png"));
   assert.ok(html.includes("New chat"));
   assert.ok(html.includes("Ask anything"));
 });
