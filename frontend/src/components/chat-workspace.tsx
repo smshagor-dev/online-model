@@ -179,6 +179,8 @@ export default function ChatWorkspace() {
   const uploadRequest = useRef<AbortController | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [models, setModels] = useState<Model[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelReload, setModelReload] = useState(0);
   const [modelId, setModelId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [historyPage, setHistoryPage] = useState(1);
@@ -240,6 +242,7 @@ export default function ChatWorkspace() {
     delete document.documentElement.dataset.reducedMotion;
     delete document.documentElement.dataset.theme;
     setModels([]);
+    setModelsLoading(false);
     setModelId(null);
     setConversations([]);
     setMessages([]);
@@ -300,16 +303,29 @@ export default function ChatWorkspace() {
   useEffect(() => {
     if (!user) return;
     const controller = new AbortController();
+    setModelsLoading(true);
     api<Model[]>("models", "GET", undefined, controller.signal)
       .then((result) => {
+        if (controller.signal.aborted) return;
+        if (!Array.isArray(result)) throw new Error("Invalid chat connection response.");
         setModels(result);
-        setModelId((previous) =>
-          result.some((model) => model.id === previous)
-            ? previous
-            : (result[0]?.id ?? null),
-        );
+        setModelId((previous) => result.some((model) => model.id === previous)
+          ? previous : (result[0]?.id ?? null));
       })
-      .catch(report);
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setModels([]);
+        setModelId(null);
+        if (error instanceof ApiError && error.status === 401) report(error);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setModelsLoading(false);
+      });
+    return () => controller.abort();
+  }, [user?.id, modelReload, report]);
+  useEffect(() => {
+    if (!user) return;
+    const controller = new AbortController();
     void api<{ web_search: boolean; media: string[] }>(
       "capabilities",
       "GET",
@@ -695,10 +711,9 @@ export default function ChatWorkspace() {
       setError("Image chat requires OpenMindAI hosted vision to be enabled.");
       return;
     }
+    if (modelsLoading) return;
     if (!modelId && !override?.resumeId) {
-      setError(
-        "No model is available yet. Ask your administrator to enable one.",
-      );
+      setError("Reconnect to chat and try again.");
       return;
     }
     const history = override?.history ?? messages;
@@ -1815,12 +1830,6 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
               </button>
             </div>
           )}
-          {!initializing && user && !models.length && (
-            <p className="model-warning">
-              No models available yet. An administrator can add one from the
-              model library.
-            </p>
-          )}
           {assistant && (
             <div className="attachment-chips">
               <span>Assistant: {assistant.name}</span>
@@ -1987,6 +1996,14 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                   onSelect={selectWelcomeTool}
                 />
               </details>
+              {user && mediaMode === "chat" && modelsLoading && (
+                <LoaderCircle size={16} className="spin" role="status" aria-label="Connecting to chat" />
+              )}
+              {user && mediaMode === "chat" && !modelsLoading && !modelId && (
+                <button type="button" className="icon-button" onClick={() => {setError(""); setModelReload((value) => value + 1);}} aria-label="Reconnect to chat" title="Reconnect to chat">
+                  <RotateCcw size={16} />
+                </button>
+              )}
               {models.length > 1 && mediaMode === "chat" && (
                 <label className="composer-model-select" style={{display:"inline-flex", alignItems:"center", gap:6, maxWidth:"45%"}}>
                   <span className="sr-only">OpenMindAI model</span>
@@ -1994,7 +2011,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                     aria-label="OpenMindAI model"
                     value={modelId ?? ""}
                     onChange={(event) => setModelId(Number(event.target.value))}
-                    disabled={busy || loadingChat}
+                    disabled={busy || loadingChat || modelsLoading}
                     style={{maxWidth:"100%", padding:"5px 8px", borderRadius:8, fontSize:12, background:"transparent", color:"inherit"}}
                   >
                     {models.map((model) => (
@@ -2045,7 +2062,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                       busy ||
                       loadingChat ||
                       initializing ||
-                      (!!user && !modelId)
+                      (!!user && (modelsLoading || !modelId))
                     }
                   >
                     {busy ? (
