@@ -7,6 +7,7 @@ use App\Services\TwoFactor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\Rule;
 
 class CodeAgentsAdminController
@@ -53,6 +54,7 @@ class CodeAgentsAdminController
             'api_ready' => 'sometimes|boolean',
             'include_model' => 'sometimes|boolean',
             'api_protocol' => 'sometimes|in:chat,json',
+            'api_origin' => 'sometimes|in:integrate.api.nvidia.com,ai.api.nvidia.com,health.api.nvidia.com',
             'name' => 'sometimes|required|string|min:2|max:120',
             'provider_model' => ['sometimes', 'required', 'string', 'max:190',
                 'regex:/^[a-zA-Z0-9][a-zA-Z0-9._\\/-]*$/',
@@ -78,8 +80,80 @@ class CodeAgentsAdminController
             $data['api_path'] = '/v1/chat/completions';
             $data['api_ready'] = true;
         }
-        DB::table('hosted_code_agents')->where('slug', $slug)->update([...$data, 'enabled' => true, 'updated_at' => now()]);
+        DB::table('hosted_code_agents')->where('slug', $slug)->update([
+            ...$data, 'enabled' => true, 'last_tested_at' => null,
+            'last_test_status' => null, 'last_test_http_status' => null, 'updated_at' => now(),
+        ]);
         return back()->with('status', 'NVIDIA model configuration saved.');
+    }
+
+    public function testModel(Request $request, string $slug, TwoFactor $two)
+    {
+        $this->verify($request, $two);
+        $model = DB::table('hosted_code_agents')->where('slug', $slug)->first();
+        abort_unless($model, 404);
+        abort_unless($model->api_ready, 422, 'Configure the NVIDIA API route first.');
+        abort_unless(in_array($model->api_origin, [
+            'integrate.api.nvidia.com', 'ai.api.nvidia.com', 'health.api.nvidia.com',
+        ], true), 422, 'Unsupported NVIDIA API host.');
+        if ($model->api_protocol === 'chat') {
+            $payload = [
+                'model' => $model->provider_model,
+                'messages' => [['role' => 'user', 'content' => 'Reply OK.']],
+                'max_tokens' => 12, 'stream' => false,
+            ];
+            if ($slug === 'nvidia-riva-translate-4b-instruct-v2') {
+                $payload['messages'] = [
+                    ['role' => 'system', 'content' => 'en-ru'],
+                    ['role' => 'user', 'content' => 'Hello.'],
+                ];
+            }
+        } elseif ($model->api_path === '/v1/embeddings') {
+            $payload = [
+                'model' => $model->provider_model, 'input' => 'OpenMindAI connection test',
+                'input_type' => 'query',
+            ];
+        } elseif ($slug === 'nvidia-nemotron-3.5-rerank-8b') {
+            $payload = [
+                'model' => $model->provider_model,
+                'query' => ['text' => 'test'],
+                'passages' => [['text' => 'test document']],
+            ];
+        } else {
+            abort(422, 'This service requires a real task-specific payload. Use its documented /invoke endpoint instead of a potentially expensive automated test.');
+        }
+        $key = (string) config('models.nvidia_key');
+        abort_unless(strlen($key) >= 12, 503, 'Configure NVIDIA_API_KEY on your Laravel server.');
+        $status = 'unavailable';
+        $httpCode = null;
+        try {
+            $upstream = Http::withToken($key)->acceptJson()->connectTimeout(10)->timeout(45)
+                ->withOptions(['allow_redirects' => false])
+                ->post('https://'.$model->api_origin.$model->api_path, $payload);
+            $httpCode = $upstream->status();
+            $result = $upstream->json();
+            if ($upstream->ok() && is_array($result) && !empty($result)) {
+                $status = 'success';
+            } elseif (in_array($httpCode, [401, 402, 403], true)) {
+                $status = 'access_denied';
+            } elseif ($httpCode === 429) {
+                $status = 'rate_limited';
+            } elseif (in_array($httpCode, [400, 404, 422], true)) {
+                $status = 'invalid_request';
+            }
+        } catch (\Throwable $e) {
+            // Never expose an upstream exception, credential, or stack trace.
+            $status = 'unreachable';
+        }
+        DB::table('hosted_code_agents')->where('id', $model->id)->update([
+            'last_tested_at' => now(),
+            'last_test_status' => $status,
+            'last_test_http_status' => $httpCode,
+            'updated_at' => now(),
+        ]);
+        return back()->with('status', $status === 'success'
+            ? $model->name.': live NVIDIA inference verified.'
+            : $model->name.': NVIDIA test returned '.$status.'; check the model, access and quotas.');
     }
 
     private function verify(Request $request, TwoFactor $two): void

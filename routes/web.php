@@ -50,6 +50,7 @@ Route::prefix('admin')->middleware(['auth', 'active', 'admin'])->group(function 
     Route::delete('code-agents/developer-keys/{key}', [AdminDeveloperKeysController::class, 'destroy'])->middleware('throttle:sensitive');
     Route::get('nvidia-models', [CodeAgentsAdminController::class, 'catalog']);
     Route::patch('nvidia-models/{slug}', [CodeAgentsAdminController::class, 'model'])->middleware('throttle:sensitive');
+    Route::post('nvidia-models/{slug}/test', [CodeAgentsAdminController::class, 'testModel'])->middleware('throttle:sensitive');
     Route::patch('code-agents/{slug}', [CodeAgentsAdminController::class, 'model'])->middleware('throttle:sensitive');
     Route::post('code-agents/apps', [CodeAgentsAdminController::class, 'addApp'])->middleware('throttle:sensitive');
     Route::post('code-agents/apps/{app}/reveal', [CodeAgentsAdminController::class, 'revealAppSecret'])->middleware('throttle:sensitive');
