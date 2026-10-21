@@ -71,7 +71,13 @@ class CodeAgentsAdminController
             && !isset(config('maxine.models', [])[$slug])
             && (($data['api_ready'] ?? false) || (($data['api_protocol'] ?? $model->api_protocol) === 'chat')),
             422, 'This model needs a dedicated provider integration before activation.');
-        if (array_key_exists('api_ready', $data) && $data['api_ready']) {
+        if (isset(config('maxine.models', [])[$slug])) {
+            abort_if((isset($data['api_path']) && $data['api_path'] !== '')
+                || (isset($data['provider_model']) && $data['provider_model'] !== $model->provider_model)
+                || (isset($data['api_protocol']) && $data['api_protocol'] !== 'json'),
+                422, 'Maxine gRPC media uses a fixed, reviewed integration.');
+        }
+        if (!isset(config('maxine.models', [])[$slug]) && array_key_exists('api_ready', $data) && $data['api_ready']) {
             $path = $data['api_path'] ?? $model->api_path;
             abort_unless($path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$~D', $path) && ! str_contains($path, '..'),
                 422, 'Configure a verified NVIDIA /v1/ API path before enabling inference.');
