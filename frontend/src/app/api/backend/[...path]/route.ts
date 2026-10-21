@@ -251,7 +251,9 @@ async function proxy(
         );
       }
     }
-    if (endpoint === "capabilities" && upstream.ok && data.hosted_inference_enabled === true && (hostedImageEnabled() || hostedMediaEnabled())) {
+    // NVIDIA runs on the Next.js server; Laravel needs only the shared bridge
+    // secret for authenticated usage/history/media storage, not an NVIDIA key.
+    if (endpoint === "capabilities" && upstream.ok && (hostedImageEnabled() || hostedMediaEnabled())) {
       const advertised = Array.isArray(data.media)
         ? data.media.filter((item): item is string => typeof item === "string")
         : [];
