@@ -147,7 +147,7 @@ export default function AccountDialog({
               onChanged={onChanged}
             />
           )}
-          {tab === "developer" && <DeveloperApiSettings />}
+          {tab === "developer" && <DeveloperApiSettings requiresTwoFactor={Boolean(user.two_factor_confirmed_at)} />}
           {tab === "data" && (
             <SettingsData
               user={user}
