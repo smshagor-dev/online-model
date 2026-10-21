@@ -726,7 +726,7 @@ export default function ChatWorkspace() {
     const id = override ? override.conversationId : conversationId;
     setError("");
     setBusy(true);
-    setResearchProgress("Gathering initial sources");
+    setResearchProgress("Thinking about your request");
     setMemoryNotice("");
     if (!override?.resumeId) setDraft("");
     setMessages(
@@ -768,6 +768,9 @@ export default function ChatWorkspace() {
         },
         (event, data) => {
           if (controller.signal.aborted) return;
+          if (event === "artifact" && Number.isSafeInteger(data.id) && Number(data.id) > 0) {
+            setInlineMedia((ids) => ids.includes(Number(data.id)) ? ids : [...ids, Number(data.id)]);
+          }
           if (event === "media" && Number.isSafeInteger(data.id) && Number(data.id) > 0) {
             // A media task is stored in the existing private Library, not as a text chat turn.
             autoMedia = true;
@@ -1960,8 +1963,9 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                 {memoryNotice}
               </p>
             )}
-            {busy && deepResearch && (
-              <p className="muted" role="status">
+            {busy && (deepResearch || researchProgress) && (
+              <p className="muted tool-progress" role="status">
+                <LoaderCircle size={14} className="spin" aria-hidden="true" />
                 {researchProgress ||
                   "Researching sources and drafting your report…"}
               </p>
