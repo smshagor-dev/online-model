@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Services\TwoFactor;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class DeveloperKeysController
@@ -16,12 +17,16 @@ class DeveloperKeysController
         ];
     }
 
-    public function store(Request $request)
+    public function store(Request $request, TwoFactor $two)
     {
         $data = $request->validate([
             'name' => 'required|string|min:3|max:64',
             'password' => 'required|current_password',
+            'code' => 'nullable|string|max:64',
         ]);
+        if ($request->user()->two_factor_confirmed_at) {
+            abort_unless($two->verify($request->user(), (string) ($data['code'] ?? '')), 422, 'A valid two-factor code is required.');
+        }
         abort_if($request->user()->tokens()->where('name', 'like', 'developer:%')->count() >= 10, 422, 'Maximum 10 active API keys.');
         $name = 'developer:'.trim($data['name']);
         $token = $request->user()->createToken($name, ['openmindai:invoke'], now()->addDays(90));
