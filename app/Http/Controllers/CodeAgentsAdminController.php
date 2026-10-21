@@ -16,7 +16,9 @@ class CodeAgentsAdminController
     {
         return view('admin.code-agents', [
             'agents' => $agents->codeAgents(),
-            'developerKeys' => $request->user()->tokens()->where('name', 'like', 'developer:%')->latest()->get(['id', 'name', 'created_at', 'last_used_at', 'expires_at']),
+            'developerKeys' => $request->user()->tokens()->where('name', 'like', 'developer:%')->where(function ($query) {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })->latest()->get(['id', 'name', 'created_at', 'last_used_at', 'expires_at']),
             'apps' => DB::table('first_party_apps')->orderByDesc('created_at')->get(),
             'apiBase' => rtrim(config('app.url'), '/').'/api/v1',
             'nvidiaReady' => strlen((string) config('models.nvidia_key')) >= 12,
