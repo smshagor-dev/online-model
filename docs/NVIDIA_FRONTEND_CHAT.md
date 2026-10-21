@@ -44,3 +44,39 @@ Automated tests cover direct NVIDIA request construction with a provider fixture
 Official references:
 - https://build.nvidia.com/nvidia/nemotron-3.5-lightning-30b-a3b/build
 - https://build.nvidia.com/nvidia/nemotron-3.5-lightning-30b-a3b/modelcard
+
+
+## Automatic prompt routing
+
+The default hosted **OpenMindAI** chat entrypoint now selects a server-side model
+per request. NVIDIA model IDs and credentials remain private to Next.js; the
+browser does not select a provider, model ID or upstream URL. The existing
+Laravel chat begin/status/checkpoint/finish bridge is unchanged.
+
+- General conversation runs on NVIDIA_FAST_MODEL (or the existing NVIDIA_MODEL).
+- Coding, mathematical reasoning and research use NVIDIA_REASONING_MODEL.
+- Visual interpretation prompts prefer NVIDIA_VISION_MODEL for text chat. Actual
+  raw image/video inputs are **not** attached to the chat stream by this change:
+  existing file processing still uses its separate private media workflow.
+- Direct requests to create an image, spoken audio, short video, or PDF/DOCX
+  are sent through the existing hosted media bridge. The output appears in the
+  existing Library/inline preview rather than as a newly saved text chat turn.
+- Ambiguous actionable prompts can be classified by NVIDIA_ROUTER_MODEL using a
+  constrained JSON decision. Unknown outputs, timeouts and errors safely
+  return to ordinary chat. Set NVIDIA_ROUTER_CLASSIFIER=false to disable the
+  extra classifier API request. A simple request never needs that extra call.
+- Uploaded text attachments, deep research and web search requests stay in the
+  chat workflow. Chat model IDs are saved in existing response checkpoints
+  and honored on resume. On an early provider error (before any streamed answer)
+  the configured NVIDIA_MODEL is tried once as fallback. No switching mid-stream.
+
+No Laravel migrations are required. The existing model selector still exposes
+the single OpenMindAI hosted entry and any independently configured local
+models. The frontend's media-mode selector remains available for explicit
+user control; it is no longer required for clear creation requests.
+
+See frontend/tests/prompt-router.integration.test.mjs for routing regression
+coverage. The recorded test fixtures do not prove NVIDIA account eligibility.
+Before production rollout verify both Nemotron IDs against the account key,
+especially rate limits and output handling. For PDF output in Bangla or other
+non-Latin scripts, use DOCX until the PDF font renderer gains Unicode support.
