@@ -24,13 +24,6 @@
   <p class="entity-meta">User keys are generated in OpenMindAI Account → Developer API. Keys are shown once, expire after 90 days and can be revoked.</p>
 </section>
 <div class="section-separator"><h2>Trusted OpenMindAI apps</h2><p>Your own server can sign requests without asking each end user for an API key. A secret is still required on each trusted app server.</p></div>
-@if(session('first_party_secret'))
-<section class="admin-card" style="margin-bottom:18px" role="status">
-  <h2>Save the signing credentials now</h2><p>This secret will not be shown again.</p>
-  <div class="field"><label>App ID</label><input readonly value="{{ session('first_party_id') }}"></div>
-  <div class="field"><label>Private signing secret</label><input readonly value="{{ session('first_party_secret') }}" autocomplete="off"></div>
-</section>
-@endif
 <div class="card-grid">
 <section class="admin-card">
   <h2>Register first-party app</h2>
@@ -44,18 +37,66 @@
 </section>
 <section class="admin-card">
   <h2>Registered applications</h2>
+  <p class="entity-meta">Each application has two credentials: an App ID and a private signing secret. Copy the ID directly; re-enter your password (and 2FA if enabled) to reveal its encrypted secret.</p>
   @forelse($apps as $app)
-    <div class="entity-card-header" style="padding:12px 0;border-bottom:1px solid var(--tblr-border-color, #ddd)">
-      <div><strong>{{ $app->name }}</strong><p class="entity-meta"><code>{{ $app->app_id }}</code> · {{ $app->enabled ? 'Active' : 'Revoked' }}</p></div>
-      @if($app->enabled)<form method="post" action="/admin/code-agents/apps/{{ $app->id }}">
-        @csrf @method('DELETE')
-        <input type="password" name="current_password" required placeholder="Admin password" aria-label="Admin password" style="max-width:130px">
-        @if(auth()->user()->two_factor_confirmed_at)<input name="code" required placeholder="2FA" aria-label="2FA code" style="max-width:90px">@endif
-        <button class="btn-primary-admin" type="submit">Revoke</button>
-      </form>@endif
+  <div class="registered-app" data-registered-app style="padding:16px 0;border-bottom:1px solid var(--tblr-border-color, #ddd)">
+    <div class="entity-card-header">
+      <div><strong>{{ $app->name }}</strong><p class="entity-meta">{{ $app->enabled ? 'Active' : 'Revoked' }} @if($app->last_used_at) · Last used {{ $app->last_used_at }} @endif</p></div>
+      <span class="status-pill {{ $app->enabled ? 'success' : 'warning' }}">{{ $app->enabled ? 'Active' : 'Revoked' }}</span>
     </div>
+    <div class="field">
+      <label for="app-id-{{ $app->id }}">App ID</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="app-id-{{ $app->id }}" data-app-id readonly value="{{ $app->app_id }}" style="flex:1;min-width:180px" />
+        <button type="button" class="btn-primary-admin" data-copy-app-id>Copy App ID</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="app-secret-{{ $app->id }}">Private signing secret</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="app-secret-{{ $app->id }}" data-app-secret type="password" readonly value="" placeholder="{{ $app->enabled ? 'Locked — verify to reveal' : 'Revoked' }}" autocomplete="off" spellcheck="false" style="flex:1;min-width:180px" />
+        <button type="button" class="btn-primary-admin" data-copy-app-secret disabled>Copy Secret</button>
+        <button type="button" class="btn-primary-admin" data-hide-app-secret disabled>Hide</button>
+      </div>
+    </div>
+    @if($app->enabled)
+    <form data-reveal-app-form method="post" action="/admin/code-agents/apps/{{ $app->id }}/reveal">
+      @csrf
+      <div class="field"><label for="reveal-password-{{ $app->id }}">Admin password</label><input id="reveal-password-{{ $app->id }}" name="current_password" type="password" required autocomplete="current-password" /></div>
+      @if(auth()->user()->two_factor_confirmed_at)
+        <div class="field"><label for="reveal-code-{{ $app->id }}">2FA code</label><input id="reveal-code-{{ $app->id }}" name="code" type="text" required autocomplete="one-time-code" /></div>
+      @endif
+      <div class="form-actions"><button class="btn-primary-admin" type="submit">Reveal signing secret</button></div>
+    </form>
+    @else
+      <p class="entity-meta">This application's secret is no longer usable. Delete the application to remove the stored credentials.</p>
+    @endif
+    <p class="entity-meta" data-app-feedback role="status" aria-live="polite"></p>
+    @if($app->enabled)
+    <details style="margin-top:10px">
+      <summary>Revoke application access</summary>
+      <form method="post" action="/admin/code-agents/apps/{{ $app->id }}">
+        @csrf @method('DELETE')
+        <div class="field"><label>Admin password</label><input type="password" name="current_password" required autocomplete="current-password" /></div>
+        @if(auth()->user()->two_factor_confirmed_at)<div class="field"><label>2FA code</label><input name="code" required autocomplete="one-time-code" /></div>@endif
+        <div class="form-actions"><button class="btn-primary-admin" type="submit">Revoke access</button></div>
+      </form>
+    </details>
+    @endif
+    <details style="margin-top:10px">
+      <summary>Delete application permanently</summary>
+      <form method="post" action="/admin/code-agents/apps/{{ $app->id }}/permanent" data-delete-app-form>
+        @csrf @method('DELETE')
+        <p class="entity-meta">Permanent deletion cannot be undone. This App ID and its signing secret will stop working immediately.</p>
+        <div class="field"><label>Admin password</label><input type="password" name="current_password" required autocomplete="current-password" /></div>
+        @if(auth()->user()->two_factor_confirmed_at)<div class="field"><label>2FA code</label><input name="code" required autocomplete="one-time-code" /></div>@endif
+        <div class="form-actions"><button class="btn-primary-admin" type="submit">Delete permanently</button></div>
+      </form>
+    </details>
+  </div>
   @empty <p>No first-party apps registered.</p> @endforelse
 </section>
 </div>
+<script src="{{ asset('js/admin-first-party-apps.js') }}" defer></script>
 <p class="entity-meta" style="margin-top:20px">Signed endpoints: <code>{{ $apiBase }}/first-party/models</code> and <code>{{ $apiBase }}/first-party/chat/completions</code>. Use HMAC-SHA256 over timestamp, nonce, HTTP method, full request path and SHA-256 body, joined by newlines. See docs/OPENMINDAI_GATEWAY.md.</p>
 @endsection

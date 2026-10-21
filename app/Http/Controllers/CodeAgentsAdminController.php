@@ -105,8 +105,32 @@ class CodeAgentsAdminController
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        return back()->with('status', 'First-party app registered. Save its signing secret now.')
-            ->with('first_party_id', $appId)->with('first_party_secret', $secret);
+        return back()->with('status', 'First-party app registered. Reveal and copy its signing secret below after verifying your administrator credentials.');
+    }
+
+    public function revealAppSecret(Request $request, int $app, TwoFactor $two)
+    {
+        // Viewing stored signing material requires reauthentication on every
+        // request. Never send encrypted_secret to the Blade page or its data.
+        $this->verify($request, $two);
+        $row = DB::table('first_party_apps')->where('id', $app)->where('enabled', true)->first();
+        abort_unless($row, 404, 'Active application not found.');
+
+        return response()->json([
+            'app_id' => $row->app_id,
+            'signing_secret' => Crypt::decryptString($row->encrypted_secret),
+        ])->header('Cache-Control', 'no-store, private')
+            ->header('Pragma', 'no-cache')
+            ->header('X-Content-Type-Options', 'nosniff')
+            ->header('Referrer-Policy', 'no-referrer');
+    }
+
+    public function deleteApp(Request $request, int $app, TwoFactor $two)
+    {
+        $this->verify($request, $two);
+        abort_unless(DB::table('first_party_apps')->where('id', $app)->delete() === 1, 404);
+
+        return back()->with('status', 'Registered application permanently deleted. Its signing credentials can no longer be used.');
     }
 
     public function disableApp(Request $request, int $app, TwoFactor $two)
