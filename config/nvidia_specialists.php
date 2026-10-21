@@ -11,10 +11,10 @@ return [
             'reference' => 'https://build.nvidia.com/nvidia/body-pose/api',
         ],
         'nvidia-nemotron-voicechat' => [
-            'transport' => 'realtime_audio',
-            'requirement' => 'Early access and bidirectional audio bridge',
-            'note' => 'The hosted demo requires early access; full-duplex speech is not a JSON request.',
-            'reference' => 'https://build.nvidia.com/nvidia/nemotron-voicechat',
+            'transport' => 'realtime_websocket',
+            'requirement' => 'Early-access approval and GPU-hosted private realtime relay',
+            'note' => 'The backend issues one-time user tickets for NVIDIA official /v1/realtime PCM16 WebSocket. Streaming requires a deployed WSS relay and approved VoiceChat NIM; no public REST inference endpoint is available.',
+            'reference' => 'https://developer.nvidia.com/nemotron-voicechat-early-access',
         ],
         'nvidia-background-noise-removal' => [
             'transport' => 'grpc_stream',

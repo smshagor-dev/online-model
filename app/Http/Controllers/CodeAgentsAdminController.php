@@ -73,6 +73,7 @@ class CodeAgentsAdminController
             && !isset(config('nvidia_av.routes', [])[$slug])
             && $slug !== 'nvidia-cosmos-transfer2.5-2b'
             && $slug !== 'nvidia-magpie-tts-zeroshot'
+            && $slug !== 'nvidia-nemotron-voicechat'
             && $slug !== 'nvidia-streampetr'
             && (($data['api_ready'] ?? false) || (($data['api_protocol'] ?? $model->api_protocol) === 'chat')),
             422, 'This model needs a dedicated provider integration before activation.');
@@ -84,6 +85,16 @@ class CodeAgentsAdminController
             $data['api_protocol'] = 'json';
             $data['api_path'] = null;
             $data['api_ready'] = true;
+            $data['include_model'] = false;
+        }
+        if ($slug === 'nvidia-nemotron-voicechat') {
+            abort_if((isset($data['provider_model']) && $data['provider_model'] !== $model->provider_model)
+                || (isset($data['api_path']) && $data['api_path'] !== '')
+                || (isset($data['api_protocol']) && $data['api_protocol'] !== 'json'),
+                422, 'VoiceChat uses the fixed secure streaming relay.');
+            $data['api_ready'] = true;
+            $data['api_path'] = null;
+            $data['api_protocol'] = 'json';
             $data['include_model'] = false;
         }
         if ($slug === 'nvidia-magpie-tts-zeroshot') {
@@ -127,6 +138,7 @@ class CodeAgentsAdminController
         if (!isset(config('maxine.models', [])[$slug]) && !isset(config('nvidia_av.routes', [])[$slug]) && $slug !== 'nvidia-streampetr'
             && $slug !== 'nvidia-cosmos-transfer2.5-2b'
             && $slug !== 'nvidia-magpie-tts-zeroshot'
+            && $slug !== 'nvidia-nemotron-voicechat'
             && array_key_exists('api_ready', $data) && $data['api_ready']) {
             $path = $data['api_path'] ?? $model->api_path;
             abort_unless($path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$~D', $path) && ! str_contains($path, '..'),

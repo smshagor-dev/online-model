@@ -85,6 +85,8 @@ class OpenMindAiGatewayController
     private function invokeModel(Request $request, string $slug, bool $firstParty, HostedCodeAgents $agents, ApiCreditUsage $credits)
     {
         $user = $this->actor($request, $firstParty);
+        abort_if($slug === 'nvidia-nemotron-voicechat', 422,
+            'Use /api/v1/openmindai/voicechat/sessions for WebSocket realtime audio.');
         abort_if($slug === 'nvidia-magpie-tts-zeroshot', 422,
             'Use /api/v1/openmindai/tts/generations for queued Magpie speech synthesis.');
         abort_if($slug === 'nvidia-cosmos-transfer2.5-2b', 422,
