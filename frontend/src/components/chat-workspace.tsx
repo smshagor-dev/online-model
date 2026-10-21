@@ -1052,6 +1052,10 @@ export default function ChatWorkspace() {
             >
               <Image src="/openmindai-logo.png" alt="" width={30} height={30} />
             </button>
+            <span className="sidebar-brand-copy">
+              <strong>OpenMindAI</strong>
+              <span>AI Workspace</span>
+            </span>
           </div>
           <button
             className="icon-button sidebar-toggle"
@@ -1396,7 +1400,10 @@ export default function ChatWorkspace() {
                 <Menu size={21} />
               </button>
             )}
-            <span className="topbar-brand">OpenMindAI</span>
+            <span className="topbar-brand">
+              <Image src="/openmindai-logo.png" width={28} height={28} alt="" className="topbar-brand-logo" />
+              <span>OpenMindAI</span>
+            </span>
           </div>
           <div className="topbar-right">
             <button
@@ -1467,6 +1474,10 @@ export default function ChatWorkspace() {
         <div className="chat-scroll" ref={scrollRef}>
           {messages.length === 0 && !loadingChat ? (
             <section className="welcome">
+              <div className="welcome-identity">
+                <Image src="/openmindai-logo.png" width={36} height={36} alt="" />
+                <strong>OpenMindAI</strong>
+              </div>
               <h1>What can I help with?</h1>
             </section>
           ) : (
