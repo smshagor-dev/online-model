@@ -45,7 +45,7 @@ class HostedInferenceTest extends TestCase
     public function test_image_model_parameters_cannot_be_overridden_by_frontend(): void
     {
         $this->login();
-        Http::fake(['ai.api.nvidia.com/*' =>
+        Http::fake(['https://ai.api.nvidia.com/*' =>
             Http::response(['artifacts' => [['base64' => 'test']]], 200)]);
         $this->bridge()->postJson('/api/v1/provider/invoke', [
             'service' => 'image',
@@ -64,7 +64,7 @@ class HostedInferenceTest extends TestCase
     public function test_chat_models_must_be_enabled_in_admin_catalog(): void
     {
         $this->login();
-        Http::fake(['integrate.api.nvidia.com/*' => Http::response([
+        Http::fake(['https://integrate.api.nvidia.com/*' => Http::response([
             'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hello']]],
         ])]);
         $this->bridge()->postJson('/api/v1/provider/invoke', [
