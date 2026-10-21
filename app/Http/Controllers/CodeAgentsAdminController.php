@@ -70,15 +70,29 @@ class CodeAgentsAdminController
         abort_unless($model, 404);
         abort_if(isset(config('nvidia_specialists.models', [])[$slug])
             && !isset(config('maxine.models', [])[$slug])
+            && $slug !== 'nvidia-streampetr'
             && (($data['api_ready'] ?? false) || (($data['api_protocol'] ?? $model->api_protocol) === 'chat')),
             422, 'This model needs a dedicated provider integration before activation.');
+        if ($slug === 'nvidia-streampetr') {
+            abort_if((isset($data['provider_model']) && $data['provider_model'] !== 'nvidia/streampetr')
+                || (isset($data['api_path']) && $data['api_path'] !== '/v1/av/nvidia/streampetr')
+                || (isset($data['api_protocol']) && $data['api_protocol'] !== 'json'),
+                422, 'StreamPETR uses the fixed hosted scene API.');
+            $data['provider_model'] = 'nvidia/streampetr';
+            $data['api_origin'] = 'ai.api.nvidia.com';
+            $data['api_path'] = '/v1/av/nvidia/streampetr';
+            $data['api_protocol'] = 'json';
+            $data['api_ready'] = true;
+            $data['include_model'] = false;
+        }
         if (isset(config('maxine.models', [])[$slug])) {
             abort_if((isset($data['api_path']) && $data['api_path'] !== '')
                 || (isset($data['provider_model']) && $data['provider_model'] !== $model->provider_model)
                 || (isset($data['api_protocol']) && $data['api_protocol'] !== 'json'),
                 422, 'Maxine gRPC media uses a fixed, reviewed integration.');
         }
-        if (!isset(config('maxine.models', [])[$slug]) && array_key_exists('api_ready', $data) && $data['api_ready']) {
+        if (!isset(config('maxine.models', [])[$slug]) && $slug !== 'nvidia-streampetr'
+            && array_key_exists('api_ready', $data) && $data['api_ready']) {
             $path = $data['api_path'] ?? $model->api_path;
             abort_unless($path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$~D', $path) && ! str_contains($path, '..'),
                 422, 'Configure a verified NVIDIA /v1/ API path before enabling inference.');

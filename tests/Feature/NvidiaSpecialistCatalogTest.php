@@ -26,10 +26,11 @@ class NvidiaSpecialistCatalogTest extends TestCase
         foreach ($models as $slug => $info) {
             $this->assertDatabaseHas('hosted_code_agents', [
                 'slug' => $slug, 'enabled' => true,
-                'api_ready' => isset(config('maxine.models', [])[$slug]),
+                'api_ready' => isset(config('maxine.models', [])[$slug]) || $slug === 'nvidia-streampetr',
             ]);
             $this->assertNotEmpty($info['transport']);
-            $this->assertStringStartsWith('https://build.nvidia.com/', $info['reference']);
+            $this->assertTrue(str_starts_with($info['reference'], 'https://build.nvidia.com/')
+                || str_starts_with($info['reference'], 'https://docs.api.nvidia.com/'));
         }
     }
 
