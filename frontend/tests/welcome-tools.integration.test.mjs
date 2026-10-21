@@ -24,7 +24,7 @@ test("menu actions connect to real supported chat workflows", () => {
   assert.match(workspace, /setMediaOpen\(true\)/);
   assert.match(workspace, /setWorkspaceOpen\(true\)/);
   assert.match(workspace, /setDeepResearch\(action === "research" && !turningOff\)/);
-  assert.match(workspace, /mediaMode === "image" \? "media\/image" : "media"/);
+  assert.match(workspace, /\["image", "speech", "video", "document_create"\]\.includes\(mediaMode\) \? "media\/" \+ mediaMode : "media"/);
 });
 
 test("browser links require valid public URL forms and do not read native tabs", () => {
