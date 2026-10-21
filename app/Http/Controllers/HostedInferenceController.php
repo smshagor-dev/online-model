@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
@@ -127,6 +127,7 @@ class HostedInferenceController
 
         if (! $response->successful()) {
             $code = $response->status();
+
             // Never expose third-party error bodies, URLs or credentials.
             return response()->json([
                 'message' => $code === 429
@@ -192,6 +193,7 @@ class HostedInferenceController
         if ($kind === 'speech') {
             abort_unless(strlen($body) >= 44 && strlen($body) <= 20000000 &&
                 str_starts_with($body, 'RIFF') && substr($body, 8, 4) === 'WAVE', 502, 'Invalid generated speech.');
+
             return response($body, 200, [
                 'Content-Type' => 'audio/wav', 'Cache-Control' => 'private, no-store',
                 'X-Content-Type-Options' => 'nosniff',

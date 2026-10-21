@@ -463,6 +463,7 @@ CATALOG, true, 512, JSON_THROW_ON_ERROR);
             ];
             if ($model['original']) {
                 DB::table('hosted_code_agents')->where('slug', $model['slug'])->update($record);
+
                 continue;
             }
             DB::table('hosted_code_agents')->insertOrIgnore([

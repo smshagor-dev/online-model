@@ -88,7 +88,6 @@ Schedule::call(function () {
     TaskRun::where('status', 'queued')->where('updated_at', '<', now()->subDay())->update(['status' => 'failed', 'error' => 'Task worker did not start in time.']);
 })->everyFiveMinutes();
 
-
 // Cosmos hosted media is private and short-lived. Remove expired output and
 // clear orphaned state if a shared-hosting cron worker terminates unexpectedly.
 Schedule::call(function () {

@@ -31,11 +31,11 @@ class CodeAgentsAdminController
         $q = trim((string) $request->query('q', ''));
         $category = trim((string) $request->query('category', ''));
         $categories = $models->pluck('category')->unique()->sort()->values()->all();
-        $filtered = $models->filter(fn ($model) =>
-            ($category === '' || $model->category === $category) &&
+        $filtered = $models->filter(fn ($model) => ($category === '' || $model->category === $category) &&
             ($q === '' || str_contains(mb_strtolower(
                 $model->name.' '.$model->slug.' '.$model->provider_model),
                 mb_strtolower($q))));
+
         return view('admin.nvidia-models', [
             'grouped' => $filtered->groupBy('category'),
             'specialistModels' => config('nvidia_specialists.models', []),
@@ -72,7 +72,7 @@ class CodeAgentsAdminController
             422, 'This model needs a dedicated provider integration before activation.');
         if (array_key_exists('api_ready', $data) && $data['api_ready']) {
             $path = $data['api_path'] ?? $model->api_path;
-            abort_unless($path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$~D', $path) && !str_contains($path, '..'),
+            abort_unless($path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$~D', $path) && ! str_contains($path, '..'),
                 422, 'Configure a verified NVIDIA /v1/ API path before enabling inference.');
             if (($data['api_protocol'] ?? $model->api_protocol) === 'chat') {
                 abort_unless($path === '/v1/chat/completions', 422, 'Chat models must use the chat completions endpoint.');
@@ -103,6 +103,7 @@ class CodeAgentsAdminController
             ...$data, 'enabled' => true, 'last_tested_at' => null,
             'last_test_status' => null, 'last_test_http_status' => null, 'updated_at' => now(),
         ]);
+
         return back()->with('status', 'NVIDIA model configuration saved.');
     }
 
@@ -170,6 +171,7 @@ class CodeAgentsAdminController
             'last_test_http_status' => $httpCode,
             'updated_at' => now(),
         ]);
+
         return back()->with('status', $status === 'success'
             ? $model->name.': live NVIDIA inference verified.'
             : $model->name.': NVIDIA test returned '.$status.'; check the model, access and quotas.');
@@ -199,6 +201,7 @@ class CodeAgentsAdminController
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
         return back()->with('status', 'First-party app registered. Reveal and copy its signing secret below after verifying your administrator credentials.');
     }
 
@@ -231,6 +234,7 @@ class CodeAgentsAdminController
     {
         $this->verify($request, $two);
         abort_unless(DB::table('first_party_apps')->where('id', $app)->update(['enabled' => false, 'updated_at' => now()]), 404);
+
         return back()->with('status', 'First-party app access revoked.');
     }
 }

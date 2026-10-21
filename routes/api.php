@@ -1,26 +1,27 @@
 <?php
 
 use App\Http\Controllers\AccountController;
-use App\Http\Controllers\DeveloperKeysController;
-use App\Http\Controllers\DeveloperPortalController;
-use App\Http\Controllers\OpenMindAiGatewayController;
-use App\Http\Controllers\NvidiaCosmosController;
 use App\Http\Controllers\AssistantGalleryController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CanvasController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ConnectorController;
+use App\Http\Controllers\DeveloperKeysController;
+use App\Http\Controllers\DeveloperPortalController;
 use App\Http\Controllers\FrontendChatController;
-use App\Http\Controllers\MediaController;
 use App\Http\Controllers\HostedImageController;
-use App\Http\Controllers\HostedMediaController;
 use App\Http\Controllers\HostedInferenceController;
+use App\Http\Controllers\HostedMediaController;
+use App\Http\Controllers\MediaController;
+use App\Http\Controllers\NvidiaCosmosController;
+use App\Http\Controllers\OpenMindAiGatewayController;
 use App\Http\Controllers\RealtimeController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StreamChatController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\ToolsController;
 use App\Http\Controllers\WorkspaceController;
+use App\Services\AdminSettings;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -38,7 +39,7 @@ Route::prefix('v1')->group(function () {
         Route::post('openmindai/models/{slug}/invoke', [OpenMindAiGatewayController::class, 'invoke'])->middleware('throttle:chat');
         Route::post('openmindai/chat/completions', [OpenMindAiGatewayController::class, 'chat'])->middleware('throttle:chat');
     });
-    Route::get('public-config', fn () => ['registration_enabled' => app(\App\Services\AdminSettings::class)->enabled('registration_enabled'), 'site_name' => app(\App\Services\AdminSettings::class)->get('site_name'), 'registration_email_verification_enabled' => app(\App\Services\AdminSettings::class)->enabled('registration_email_verification_enabled')])->middleware('throttle:60,1');
+    Route::get('public-config', fn () => ['registration_enabled' => app(AdminSettings::class)->enabled('registration_enabled'), 'site_name' => app(AdminSettings::class)->get('site_name'), 'registration_email_verification_enabled' => app(AdminSettings::class)->enabled('registration_email_verification_enabled')])->middleware('throttle:60,1');
     Route::get('explore/assistants', [AssistantGalleryController::class, 'index'])->middleware('throttle:60,1');
     Route::get('explore/assistants/{slug}', [AssistantGalleryController::class, 'show'])->middleware('throttle:60,1');
     Route::get('shared/{token}', [WorkspaceController::class, 'shared'])->middleware('throttle:60,1');

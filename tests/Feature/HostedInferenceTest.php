@@ -45,8 +45,7 @@ class HostedInferenceTest extends TestCase
     public function test_image_model_parameters_cannot_be_overridden_by_frontend(): void
     {
         $this->login();
-        Http::fake(['https://ai.api.nvidia.com/*' =>
-            Http::response(['artifacts' => [['base64' => 'test']]], 200)]);
+        Http::fake(['https://ai.api.nvidia.com/*' => Http::response(['artifacts' => [['base64' => 'test']]], 200)]);
         $this->bridge()->postJson('/api/v1/provider/invoke', [
             'service' => 'image',
             'payload' => [
@@ -54,10 +53,9 @@ class HostedInferenceTest extends TestCase
                 'url' => 'https://untrusted.invalid/', 'model' => 'foreign/model',
             ],
         ])->assertOk()->assertJsonPath('artifacts.0.base64', 'test');
-        Http::assertSent(fn ($r) =>
-            $r->url() === 'https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell'
+        Http::assertSent(fn ($r) => $r->url() === 'https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell'
             && $r['prompt'] === 'Sunset' && $r['height'] === 1024
-            && !isset($r['url']) && !isset($r['model'])
+            && ! isset($r['url']) && ! isset($r['model'])
             && $r->hasHeader('Authorization', 'Bearer backend-only-provider-key'));
     }
 
@@ -87,7 +85,7 @@ class HostedInferenceTest extends TestCase
     public function test_laravel_selects_speech_voice_not_untrusted_caller(): void
     {
         $this->login();
-        $wave = "RIFF".pack('V', 36)."WAVEfmt ".pack('VvvVVvv', 16, 1, 1, 16000, 32000, 2, 16)."data".pack('V', 0);
+        $wave = 'RIFF'.pack('V', 36).'WAVEfmt '.pack('VvvVVvv', 16, 1, 1, 16000, 32000, 2, 16).'data'.pack('V', 0);
         Http::fake(['*' => Http::response($wave, 200, ['Content-Type' => 'audio/wav'])]);
         $this->bridge()->postJson('/api/v1/provider/invoke', [
             'service' => 'speech', 'payload' => [
