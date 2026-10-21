@@ -74,5 +74,6 @@ $navigation = [
 </div>
 <script src="{{ asset('js/admin-photo.js') }}" defer></script>
 <script src="{{ asset('js/admin-console.js') }}" defer></script>
+<script src="{{ asset('js/password-visibility.js') }}" defer></script>
 </body>
 </html>
