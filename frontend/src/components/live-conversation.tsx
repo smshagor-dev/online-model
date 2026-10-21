@@ -176,7 +176,7 @@ export default function LiveConversation({
     const cleaned = text.replace(/[`*_#]/g, "").trim();
     // This voice is English-only; use the browser voice for other languages
     // instead of sending unsupported text to the hosted speech service.
-    if (cleaned.length > 1000 || /[^\\x00-\\x7F]/.test(cleaned)) {
+    if (cleaned.length > 1000 || Array.from(cleaned).some((letter) => letter.codePointAt(0)! > 127)) {
       speak(cleaned, version);
       return;
     }
