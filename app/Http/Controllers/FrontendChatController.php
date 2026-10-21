@@ -31,7 +31,7 @@ class FrontendChatController
     public function begin(Request $r, ChatContext $context)
     {
         $this->guard($r);
-        $d = $r->validate(['message' => 'required|string|max:16000', 'conversation_id' => 'nullable|integer', 'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('user_id', $r->user()->id)], 'assistant_id' => ['nullable', 'integer', Rule::exists('assistants', 'id')->where('user_id', $r->user()->id)], 'attachment_ids' => 'sometimes|array|max:5', 'attachment_ids.*' => 'integer', 'temporary' => 'sometimes|boolean', 'web_search' => 'sometimes|boolean', 'deep_research' => 'sometimes|boolean', 'search_time_range' => 'sometimes|in:day,week,month,year', 'history' => 'sometimes|array|max:20', 'history.*.role' => 'required|in:user,assistant', 'history.*.content' => 'required|string|max:16000', 'provider_model' => 'sometimes|string|max:190']);
+        $d = $r->validate(['message' => 'required|string|max:16000', 'conversation_id' => 'nullable|integer', 'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('user_id', $r->user()->id)], 'assistant_id' => ['nullable', 'integer', Rule::exists('assistants', 'id')->where('user_id', $r->user()->id)], 'attachment_ids' => 'sometimes|array|max:5', 'attachment_ids.*' => 'integer', 'temporary' => 'sometimes|boolean', 'web_search' => 'sometimes|boolean', 'deep_research' => 'sometimes|boolean', 'search_time_range' => 'sometimes|in:day,week,month,year', 'history' => 'sometimes|array|max:20', 'history.*.role' => 'required|in:user,assistant', 'history.*.content' => 'required|string|max:16000', 'provider_model' => 'sometimes|string|max:190', 'conversation_tools' => 'sometimes|boolean']);
         if (! empty($d['provider_model'])) {
             app(ApiCreditUsage::class)->connection('nvidia', $d['provider_model'], 'chat');
         }
@@ -77,8 +77,8 @@ class FrontendChatController
                 });
             }
             $ticket = bin2hex(random_bytes(32));
-            $assistant?->update(['inference_token' => hash('sha256', $ticket), 'inference_checkpoint' => ['messages' => $messages, 'deep_research' => $deep, 'search_time_range' => $d['search_time_range'] ?? null]]);
-            Cache::put('frontend-chat:'.hash('sha256', $ticket), ['user_id' => $r->user()->id, 'message_id' => $assistant?->id, 'user_message_id' => $question?->id, 'conversation_id' => $temporary ? null : $c->id, 'lock_owner' => $lock->owner(), 'done' => false, 'deep_research' => $deep], 600);
+            $assistant?->update(['inference_token' => hash('sha256', $ticket), 'inference_checkpoint' => ['messages' => $messages, 'deep_research' => $deep, 'search_time_range' => $d['search_time_range'] ?? null, 'conversation_tools' => ! empty($d['conversation_tools'])]]);
+            Cache::put('frontend-chat:'.hash('sha256', $ticket), ['user_id' => $r->user()->id, 'message_id' => $assistant?->id, 'user_message_id' => $question?->id, 'conversation_id' => $temporary ? null : $c->id, 'lock_owner' => $lock->owner(), 'done' => false, 'deep_research' => $deep, 'conversation_tools' => ! empty($d['conversation_tools'])], 600);
 
             return ['ticket' => $ticket, 'messages' => $messages, 'conversation_id' => $temporary ? null : $c->id, 'user_message_id' => $question?->id, 'message_id' => $assistant?->id, 'sources' => $sources, 'automatic_memory' => ! $temporary && $r->user()->automatic_memory && $r->user()->memory_enabled];
         } catch (Throwable $e) {
@@ -183,7 +183,7 @@ class FrontendChatController
     public function tool(Request $r)
     {
         [, $lease] = $this->lease($r);
-        abort_unless(! $lease['done'] && ! empty($lease['deep_research']), 409);
+        abort_unless(! $lease['done'] && (! empty($lease['deep_research']) || ! empty($lease['conversation_tools'])), 409);
         abort_if($lease['message_id'] && (! Message::whereKey($lease['message_id'])->where('status', 'generating')->exists() || Cache::get('stop-message:'.$lease['message_id'])), 409, 'Research stopped.');
         $d = $r->validate(['action' => 'required|in:search,read', 'query' => 'required_if:action,search|string|max:500', 'url' => 'required_if:action,read|string|max:2000', 'time_range' => 'nullable|in:day,week,month,year']);
         if ($d['action'] === 'search') {
