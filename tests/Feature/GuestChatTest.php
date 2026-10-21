@@ -67,4 +67,23 @@ class GuestChatTest extends TestCase
         $payload['model'] = 'arbitrary-model';
         $this->postJson('/api/v1/chat/provider', $payload, $headers)->assertForbidden();
     }
+    public function test_native_function_definitions_and_results_survive_the_backend_relay(): void
+    {
+        Sanctum::actingAs(User::create(['name' => 'Tools', 'email' => 'native-tools@example.com', 'password' => 'StrongPassword123']));
+        $payload = [
+            'model' => 'nvidia/nemotron-3.5-lightning-30b-a3b', 'stream' => false,
+            'messages' => [
+                ['role' => 'user', 'content' => 'Find sources'],
+                ['role' => 'assistant', 'content' => null, 'tool_calls' => [['id' => 'call_1', 'type' => 'function', 'function' => ['name' => 'web_search', 'arguments' => '{"query":"Evidence"}']]]],
+                ['role' => 'tool', 'tool_call_id' => 'call_1', 'content' => '{"sources":[]}'],
+            ],
+            'tools' => [['type' => 'function', 'function' => ['name' => 'web_search', 'description' => 'Search', 'parameters' => ['type' => 'object', 'properties' => ['query' => ['type' => 'string']]]]]],
+            'tool_choice' => 'auto',
+        ];
+        $this->postJson('/api/v1/chat/provider', $payload, ['X-Chat-Bridge-Key' => str_repeat('b', 32)])->assertOk();
+        Http::assertSent(fn ($request) => $request['tools'][0]['function']['name'] === 'web_search' && $request['messages'][1]['tool_calls'][0]['id'] === 'call_1' && $request['messages'][2]['tool_call_id'] === 'call_1');
+        $payload['tools'][0]['function']['name'] = 'arbitrary_shell';
+        $this->postJson('/api/v1/chat/provider', $payload, ['X-Chat-Bridge-Key' => str_repeat('b', 32)])->assertUnprocessable();
+    }
+
 }
