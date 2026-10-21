@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, LoaderCircle, Mail, ShieldCheck } from "lucide-react";
 import Dialog from "./dialog";
 import { api, type User } from "@/lib/api";
-type Mode = "login" | "register" | "forgot";
+type Mode = "login" | "register" | "forgot" | "verify-email" | "reset";
 export default function AuthDialog({
   onClose,
   onLogin,
@@ -68,17 +68,26 @@ export default function AuthDialog({
       } else if (mode === "register") {
         const result = await api<{ user?: User; verification_required?: boolean }>("register", "POST", data);
         if (result.verification_required) {
-          setMode("login");
+          setMode("verify-email");
           setShowCode(false);
-          setNotice("Account created. Check your email for a verification link, then sign in.");
+          setNotice("Enter the six-digit verification code sent to your email.");
         } else if (result.user) {
           onLogin(result.user);
         } else {
           throw new Error("The registration response was incomplete.");
         }
-      } else {
+      } else if (mode === "forgot") {
         await api("forgot-password", "POST", data);
-        setNotice("If an account exists, a password reset link has been sent.");
+        setMode("reset");
+        setNotice("If your account exists, enter the six-digit reset code sent to your email.");
+      } else if (mode === "verify-email") {
+        await api("email/verify-code", "POST", { email, code: data.code });
+        change("login");
+        setNotice("Email verified. You can now sign in.");
+      } else if (mode === "reset") {
+        await api("reset-password", "POST", { ...data, email });
+        change("login");
+        setNotice("Password updated. Sign in with your new password.");
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : "Unable to continue.";
@@ -97,7 +106,7 @@ export default function AuthDialog({
     setError("");
     try {
       await api("email/resend", "POST", { email });
-      setNotice("If eligible, a verification email has been sent.");
+      setNotice("If eligible, a six-digit verification code has been sent.");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -109,7 +118,7 @@ export default function AuthDialog({
       title={
         ipChallengeId
           ? "Verify new sign-in location"
-          : mode === "register"
+          : mode === "verify-email" ? "Verify your email" : mode === "reset" ? "Set a new password" : mode === "register"
           ? "Create your account"
           : mode === "forgot"
             ? "Reset your password"
@@ -122,10 +131,10 @@ export default function AuthDialog({
       <p className="dialog-description">
         {ipChallengeId
           ? "We detected a login from a new network. Enter the six-digit email code to continue."
-          : mode === "register"
+          : mode === "verify-email" || mode === "reset" ? "Enter the six-digit code from your email." : mode === "register"
           ? (registrationEmailVerification ? "Create an account, then verify your email address before signing in." : "A space for your ideas. Your conversations, saved in one place.")
           : mode === "forgot"
-            ? "We'll send a reset link to your email address."
+            ? "We'll send a six-digit reset code to your email address."
             : "Pick up where you left off."}
       </p>
       <form onSubmit={submit} className="form-stack">
@@ -153,7 +162,9 @@ export default function AuthDialog({
             autoFocus={mode !== "register"}
           />
         </label>}
-        {!ipChallengeId && mode !== "forgot" && (
+        {!ipChallengeId && (mode === "verify-email" || mode === "reset") && <label>Six-digit email code<input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required placeholder="123456" /></label>}
+        {!ipChallengeId && mode === "reset" && <><label>New password<input name="password" type="password" autoComplete="new-password" minLength={6} required /></label><label>Confirm new password<input name="password_confirmation" type="password" autoComplete="new-password" minLength={6} required /></label></>}
+        {!ipChallengeId && (mode === "login" || mode === "register") && (
           <label>
             Password
             <input
@@ -240,7 +251,8 @@ export default function AuthDialog({
                 : mode === "register"
                 ? "Create account"
                 : mode === "forgot"
-                  ? "Send reset link"
+                  ? "Send reset code"
+                  : mode === "verify-email" ? "Verify email" : mode === "reset" ? "Reset password"
                   : "Continue"}
               <ArrowRight size={17} />
             </>
@@ -271,7 +283,7 @@ export default function AuthDialog({
               disabled={busy}
               onClick={resend}
             >
-              Resend verification email
+              Resend verification code
             </button>
           </>
         ) : (
