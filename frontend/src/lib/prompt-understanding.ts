@@ -16,6 +16,8 @@ export type PromptMessage = {role: string; content: string};
 export function withPromptUnderstanding<T extends PromptMessage>(messages: T[]): T[] {
   if (messages[0]?.role === "system") {
     if (messages[0].content.includes(PROMPT_UNDERSTANDING_MARKER)) return messages;
+    // The Laravel relay limits individual system messages to 16,000 characters.
+    if (messages[0].content.length + 1 + PROMPT_UNDERSTANDING_INSTRUCTIONS.length > 16000) return messages;
     return [{...messages[0], content: messages[0].content + "\n" + PROMPT_UNDERSTANDING_INSTRUCTIONS}, ...messages.slice(1)];
   }
   return [{role: "system", content: "You are OpenMindAI. Be accurate and clear.\n" + PROMPT_UNDERSTANDING_INSTRUCTIONS} as T, ...messages];
