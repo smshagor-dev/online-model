@@ -25,7 +25,8 @@ class NvidiaSpecialistCatalogTest extends TestCase
         $this->assertCount(11, $models);
         foreach ($models as $slug => $info) {
             $this->assertDatabaseHas('hosted_code_agents', [
-                'slug' => $slug, 'enabled' => true, 'api_ready' => false,
+                'slug' => $slug, 'enabled' => true,
+                'api_ready' => isset(config('maxine.models', [])[$slug]),
             ]);
             $this->assertNotEmpty($info['transport']);
             $this->assertStringStartsWith('https://build.nvidia.com/', $info['reference']);
