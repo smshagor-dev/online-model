@@ -41,6 +41,7 @@ class HostedCodeAgents
             'name' => $model->name,
             'type' => $model->category,
             'available' => (bool) $model->api_ready,
+            'provider_verified' => $model->last_test_status === 'success',
             'operation' => $model->api_protocol === 'chat' ? 'chat.completions' : 'invoke',
         ])->all();
     }
@@ -58,8 +59,11 @@ class HostedCodeAgents
                 'description' => $model->summary,
                 'free_endpoint' => (bool) $model->free_endpoint,
                 'listed' => true,
-                'provider_access' => 'unverified',
+                'provider_access' => $model->last_test_status === 'success' ? 'verified' : 'unverified',
                 'available' => (bool) $model->api_ready,
+                'provider_verified' => $model->last_test_status === 'success',
+                'last_test_status' => $model->last_test_status,
+                'last_tested_at' => $model->last_tested_at,
                 'operation' => $model->api_protocol === 'chat' ? 'chat.completions' : 'invoke',
                 'path' => $model->api_ready
                     ? ($model->api_protocol === 'chat' ? '/chat/completions' : '/models/'.$model->slug.'/invoke')
