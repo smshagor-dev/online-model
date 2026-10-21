@@ -1,18 +1,18 @@
 # Hosted image generation
 
-Image generation uses the existing Next.js server-side NVIDIA API key and
-the existing Laravel shared bridge secret. No image model download or GPU
+Image generation uses the Laravel backend-only NVIDIA API key and
+the existing shared bridge secret on Laravel and Next.js. No image model download or GPU
 runtime is required for this path. The model/provider name is not displayed in
 the customer-facing interface.
 
 ## Deployment
 
 On the Next.js server, set:
-- NVIDIA_API_KEY to the existing server-only key (never NEXT_PUBLIC_).
 - FRONTEND_CHAT_BRIDGE_KEY to the same 32+ character value as Laravel.
-- LARAVEL_API_URL and FRONTEND_URL as for normal chat.
+- LARAVEL_API_URL=https://cloud.openmindai.org/api/v1 and FRONTEND_URL.
+- Do NOT set NVIDIA_API_KEY in Next.js.
 
-On Laravel, set FRONTEND_CHAT_BRIDGE_KEY to that same secret. Run
+On Laravel, set NVIDIA_API_KEY and FRONTEND_CHAT_BRIDGE_KEY to that same shared bridge secret. Run
 php artisan migrate --force to ensure media_tasks and media_daily_usage exist,
 then run php artisan config:cache. The normal media GPU runtime
 (MEDIA_RUNTIME_URL, MEDIA_RUNTIME_KEY, MEDIA_ENABLED_KINDS) is not needed
@@ -23,7 +23,7 @@ marked failed.
 Allow JSON image uploads/responses up to 28 MB on Next.js-to-Laravel ingress
 (PHP post_max_size at least 32M, adequate memory_limit, proxy request limits);
 generated image binaries are limited to 20 MB and 16 megapixels.
-Ensure the Next.js host can reach Laravel and the fixed provider HTTPS endpoint.
+Ensure the Next.js host can reach Laravel and Laravel can reach the fixed provider HTTPS endpoint.
 Provider calls can take up to 110 seconds. Configure host request timeouts
 accordingly; serverless platforms with short execution limits may require
 moving provider work to a durable worker. The request is synchronous, not a
@@ -44,8 +44,8 @@ the scheduler cleans it up.
    active task concurrency and private storage quota, then creates a running
    task. Requests are rejected before contacting the inference provider if
    the user lacks quota.
-5. Next.js invokes the fixed FLUX.1-schnell HTTPS API with the server-only
-   credential. The response must include a successful image artifact. The response JSON
+5. Next.js asks Laravel's protected provider/invoke endpoint to invoke the
+   fixed image API using Laravel's server-only credential. The response must include a successful image artifact. The response JSON
    is read with a hard 28 MB streamed byte limit even when Content-Length is
    missing or incorrect. Invalid HTML or malformed JSON fails safely.
    Filtered outputs and rate limits are not falsely recorded as successful generations.
