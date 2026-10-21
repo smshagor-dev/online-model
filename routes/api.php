@@ -14,6 +14,7 @@ use App\Http\Controllers\HostedMediaController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\NvidiaCosmosController;
 use App\Http\Controllers\NvidiaMagpieController;
+use App\Http\Controllers\NvidiaVoiceChatController;
 use App\Http\Controllers\NvidiaCosmosTransferController;
 use App\Http\Controllers\NvidiaMaxineController;
 use App\Http\Controllers\NvidiaAvSceneController;
@@ -29,6 +30,9 @@ use App\Services\AdminSettings;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
+    // Server-to-server ticket callbacks, protected by a dedicated worker secret.
+    Route::post('voicechat/worker/claim', [NvidiaVoiceChatController::class, 'claim'])->middleware('throttle:60,1');
+    Route::post('voicechat/worker/finish', [NvidiaVoiceChatController::class, 'finish'])->middleware('throttle:60,1');
     // Trusted apps sign every request; no per-user API key is sent from their clients.
     Route::get('first-party/models', [OpenMindAiGatewayController::class, 'internalModels'])->middleware('throttle:api');
     Route::post('first-party/chat/completions', [OpenMindAiGatewayController::class, 'internalChat'])->middleware('throttle:chat');
@@ -46,6 +50,9 @@ Route::prefix('v1')->group(function () {
         Route::post('openmindai/tts/generations', [NvidiaMagpieController::class, 'generate'])->middleware('throttle:chat');
         Route::get('openmindai/tts/{id}', [NvidiaMagpieController::class, 'status']);
         Route::get('openmindai/tts/{id}/download', [NvidiaMagpieController::class, 'download']);
+        Route::post('openmindai/voicechat/sessions', [NvidiaVoiceChatController::class, 'start'])->middleware('throttle:chat');
+        Route::get('openmindai/voicechat/sessions/{id}', [NvidiaVoiceChatController::class, 'status']);
+        Route::delete('openmindai/voicechat/sessions/{id}', [NvidiaVoiceChatController::class, 'close']);
         Route::post('openmindai/maxine/{slug}/jobs', [NvidiaMaxineController::class, 'create'])->middleware('throttle:chat');
         Route::get('openmindai/maxine/jobs/{id}', [NvidiaMaxineController::class, 'status']);
         Route::get('openmindai/maxine/jobs/{id}/download', [NvidiaMaxineController::class, 'download']);

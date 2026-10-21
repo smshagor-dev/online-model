@@ -189,3 +189,21 @@ Schedule::call(function () {
             }
         });
 })->hourly();
+
+// Expired one-time realtime tickets cannot block a user's next session.
+Schedule::call(function () {
+    DB::table('voicechat_sessions')->where('status', 'issued')
+        ->where('expires_at', '<', now())->update([
+            'status' => 'expired', 'ended_at' => now(), 'updated_at' => now(),
+        ]);
+    DB::table('voicechat_sessions')->where('status', 'claimed')
+        ->where('claimed_at', '<', now()->subMinutes(20))->update([
+            'status' => 'closed', 'ended_at' => now(), 'updated_at' => now(),
+        ]);
+    DB::table('voicechat_sessions')->where('created_at', '<', now()->subDay())
+        ->orderBy('created_at')->chunk(100, function ($rows) {
+            foreach ($rows as $row) {
+                DB::table('voicechat_sessions')->where('id', $row->id)->delete();
+            }
+        });
+})->hourly();
