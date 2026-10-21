@@ -69,6 +69,25 @@ before(async () => {
         res.setHeader("Retry-After", "25");
         return res.end(JSON.stringify({ message: "Too many requests." }));
       }
+      if (req.url === "/api/v1/developer/keys") {
+        if (req.method === "POST") {
+          res.statusCode = 201;
+          return res.end(JSON.stringify({
+            id: 6,
+            api_key: "only-once-fixture-key",
+            base_url: "https://models.example/api/v1/openmindai",
+            expires_at: "2027-01-01T00:00:00Z"
+          }));
+        }
+        return res.end(JSON.stringify({
+          base_url: "https://models.example/api/v1/openmindai",
+          keys: []
+        }));
+      }
+      if (/^\/api\/v1\/developer\/keys\/\d+$/.test(req.url || "") && req.method === "DELETE") {
+        res.statusCode = 204;
+        return res.end();
+      }
       if (req.url === "/api/v1/tokens") {
         res.setHeader("Content-Type", "text/html");
         return res.end("<html>upstream error</html>");
@@ -355,6 +374,36 @@ test("media binary downloads preserve privacy and reject HTML", async () => {
     (await request("media/10/output", { headers: { Cookie: cookie } })).status,
     502,
   );
+});
+
+test("developer key endpoints require login and remain origin protected", async () => {
+  assert.equal((await request("developer/keys")).status, 401);
+  const auth = await login();
+  const cookie = auth.headers.get("set-cookie").split(";")[0];
+  const list = await request("developer/keys", { headers: { Cookie: cookie } });
+  assert.equal(list.status, 200);
+  assert.deepEqual((await list.json()).keys, []);
+
+  const created = await request("developer/keys", {
+    method: "POST",
+    headers: { ...headers(), Cookie: cookie },
+    body: JSON.stringify({ name: "OpenMind Studio", password: "correct" }),
+  });
+  assert.equal(created.status, 201);
+  assert.equal((await created.json()).api_key, "only-once-fixture-key");
+  assert.equal(lastRequest.authorization, "Bearer fixture-secret-token");
+  const revoked = await request("developer/keys/6", {
+    method: "DELETE",
+    headers: { ...headers(), Cookie: cookie },
+    body: "{}",
+  });
+  assert.equal(revoked.status, 204);
+  const denied = await request("developer/keys", {
+    method: "POST",
+    headers: { ...headers(), Origin: "https://evil.example", Cookie: cookie },
+    body: "{}",
+  });
+  assert.equal(denied.status, 403);
 });
 
 test("profile settings and data actions use the authenticated proxy", async () => {

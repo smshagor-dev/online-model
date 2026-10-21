@@ -147,7 +147,19 @@ export default function AccountDialog({
               onChanged={onChanged}
             />
           )}
-          {tab === "developer" && <DeveloperApiSettings requiresTwoFactor={Boolean(user.two_factor_confirmed_at)} />}
+          {tab === "developer" && (
+            process.env.NEXT_PUBLIC_DEVELOPER_PORTAL_URL ? (
+              <section className="form-stack">
+                <h3>OpenMindAI Developer Portal</h3>
+                <p className="muted">Developer registration, API keys, usage reports, model catalog and integration documentation now live in the dedicated Developer Portal.</p>
+                <a className="secondary-button" href={process.env.NEXT_PUBLIC_DEVELOPER_PORTAL_URL} target="_blank" rel="noopener noreferrer">
+                  Open Developer Portal
+                </a>
+              </section>
+            ) : (
+              <DeveloperApiSettings requiresTwoFactor={Boolean(user.two_factor_confirmed_at)} />
+            )
+          )}
           {tab === "data" && (
             <SettingsData
               user={user}

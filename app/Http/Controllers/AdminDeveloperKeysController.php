@@ -27,7 +27,10 @@ class AdminDeveloperKeysController
         // The same per-user cap, Sanctum abilities and expiry as the Account
         // → Developer API implementation; no global app secret is involved.
         abort_if(
-            $user->tokens()->where('name', 'like', 'developer:%')->count() >= 10,
+            $user->tokens()->where('name', 'like', 'developer:%')
+                ->where(function ($query) {
+                    $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })->count() >= 10,
             422,
             'Maximum 10 active Developer API keys.'
         );

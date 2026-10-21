@@ -12,7 +12,9 @@ class DeveloperKeysController
         return [
             'base_url' => rtrim(config('app.url'), '/').'/api/v1/openmindai',
             'keys' => $request->user()->tokens()->where('name', 'like', 'developer:%')
-                ->latest()->get(['id', 'name', 'created_at', 'last_used_at', 'expires_at']),
+                ->where(function ($query) {
+                    $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })->latest()->get(['id', 'name', 'created_at', 'last_used_at', 'expires_at']),
         ];
     }
 
@@ -26,7 +28,10 @@ class DeveloperKeysController
         if ($request->user()->two_factor_confirmed_at) {
             abort_unless($two->verify($request->user(), (string) ($data['code'] ?? '')), 422, 'A valid two-factor code is required.');
         }
-        abort_if($request->user()->tokens()->where('name', 'like', 'developer:%')->count() >= 10, 422, 'Maximum 10 active API keys.');
+        abort_if($request->user()->tokens()->where('name', 'like', 'developer:%')
+            ->where(function ($query) {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })->count() >= 10, 422, 'Maximum 10 active API keys.');
         $name = 'developer:'.trim($data['name']);
         $token = $request->user()->createToken($name, ['openmindai:invoke'], now()->addDays(90));
 

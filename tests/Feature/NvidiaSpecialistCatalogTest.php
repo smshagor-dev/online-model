@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class NvidiaSpecialistCatalogTest extends TestCase
@@ -16,6 +15,7 @@ class NvidiaSpecialistCatalogTest extends TestCase
         $user = User::create(['name' => 'Admin', 'email' => 'specialist-admin@example.com', 'password' => 'GoodPassword123']);
         $user->forceFill(['is_admin' => true, 'email_verified_at' => now()])->save();
         $this->actingAs($user)->withSession(['admin_verified' => true]);
+
         return $user;
     }
 

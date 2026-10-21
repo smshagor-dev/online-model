@@ -82,7 +82,7 @@ class CosmosHostedGenerationTest extends TestCase
         Http::assertSent(fn ($r) => $r->url() === 'https://ai.api.nvidia.com/v1/cosmos/nvidia/cosmos3-nano'
             && $r['model_mode'] === 'text2image'
             && $r['resolution'] === '480_1_1'
-            && !isset($r['input_reference']));
+            && ! isset($r['input_reference']));
         $this->assertDatabaseCount('api_credit_usage', 1);
         (new RunCosmosGeneration($id))->handle(app(ApiCreditUsage::class));
         Http::assertSentCount(1);

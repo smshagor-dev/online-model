@@ -55,7 +55,7 @@ class MediaTest extends TestCase
         $this->postJson('/api/v1/media/'.$id.'/hosted/finish', [
             'mime' => 'image/png', 'data' => base64_encode($this->png()),
         ])->assertOk()->assertJsonPath('status', 'complete')->assertJsonPath('output_mime', 'image/png')
-          ->assertJsonMissingPath('output_path');
+            ->assertJsonMissingPath('output_path');
         $output = $this->get('/api/v1/media/'.$id.'/output')->assertOk()
             ->assertHeader('Content-Type', 'image/png');
         $this->assertSame($this->png(), $output->streamedContent());

@@ -17,6 +17,7 @@ class OpenMindAiGatewayTest extends TestCase
     {
         $u = User::create(['name' => 'Developer', 'email' => uniqid().'@example.com', 'password' => 'TestPassword123']);
         $u->forceFill(['email_verified_at' => now()])->save();
+
         return $u;
     }
 
@@ -112,6 +113,7 @@ class OpenMindAiGatewayTest extends TestCase
         $this->get($path, $headers)->assertStatus(409);
         $this->get($path, [...$headers, 'X-OpenMindAI-Nonce' => bin2hex(random_bytes(16))])->assertUnauthorized();
     }
+
     public function test_all_models_are_visible_even_when_provider_is_not_ready(): void
     {
         $this->assertDatabaseCount('hosted_code_agents', 42);
@@ -182,5 +184,4 @@ class OpenMindAiGatewayTest extends TestCase
         Http::assertSent(fn ($r) => $r['model'] === 'nvidia/nemotron-3-embed-1b'
             && ! isset($r['stream']));
     }
-
 }

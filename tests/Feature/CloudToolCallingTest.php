@@ -119,8 +119,7 @@ class CloudToolCallingTest extends TestCase
         config(['models.nvidia_key' => 'server-nvidia-token-123']);
         $stream = "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"OK\"},\"finish_reason\":null}]}\n\n"
             ."data: [DONE]\n\n";
-        Http::fake(['integrate.api.nvidia.com/*' =>
-            Http::response($stream, 200, ['Content-Type' => 'text/event-stream'])]);
+        Http::fake(['integrate.api.nvidia.com/*' => Http::response($stream, 200, ['Content-Type' => 'text/event-stream'])]);
 
         $result = $this->withToken($this->developerKey())
             ->postJson('/api/v1/openmindai/chat/completions', [

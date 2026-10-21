@@ -23,18 +23,21 @@ class OpenMindAiGatewayController
         abort_unless($user && $user->is_active, 401);
         $token = $user->currentAccessToken();
         abort_unless($token && ($token instanceof PersonalAccessToken) && $token->can('openmindai:invoke'), 403, 'An API key with model access is required.');
+
         return $user;
     }
 
     public function models(Request $request, HostedCodeAgents $agents)
     {
         $this->actor($request, false);
+
         return ['object' => 'list', 'data' => $agents->publicModels()];
     }
 
     public function internalModels(Request $request, HostedCodeAgents $agents)
     {
         $this->actor($request, true);
+
         return ['object' => 'list', 'data' => $agents->publicModels()];
     }
 
@@ -48,10 +51,10 @@ class OpenMindAiGatewayController
         return $this->completion($request, true, $agents, $credits);
     }
 
-
     public function catalog(Request $request, HostedCodeAgents $agents)
     {
         $this->actor($request, false);
+
         return response()->json(['object' => 'list', 'data' => $agents->publicCatalog()])
             ->header('Cache-Control', 'no-store');
     }
@@ -59,6 +62,7 @@ class OpenMindAiGatewayController
     public function internalCatalog(Request $request, HostedCodeAgents $agents)
     {
         $this->actor($request, true);
+
         return response()->json(['object' => 'list', 'data' => $agents->publicCatalog()])
             ->header('Cache-Control', 'no-store');
     }
@@ -86,7 +90,7 @@ class OpenMindAiGatewayController
         $model = $agents->find($slug);
         abort_unless($model, 404, 'This model is unavailable.');
         abort_if($model->api_protocol === 'chat', 422, 'Use /chat/completions for chat models.');
-        abort_unless($model->api_path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$~D', $model->api_path) && !str_contains($model->api_path, '..'),
+        abort_unless($model->api_path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$~D', $model->api_path) && ! str_contains($model->api_path, '..'),
             503, 'The NVIDIA API path has not been configured.');
 
         abort_if(strlen($request->getContent()) > 262144, 413, 'Request is too large for the JSON gateway.');
@@ -103,7 +107,7 @@ class OpenMindAiGatewayController
         if ($model->api_path === '/v1/embeddings') {
             abort_unless(isset($payload['input']) && (is_string($payload['input']) || is_array($payload['input'])), 422, 'Embeddings require text or image input.');
             abort_if(is_string($payload['input']) && trim($payload['input']) === '', 422, 'Embedding input is empty.');
-            abort_if(isset($payload['input_type']) && !in_array($payload['input_type'], ['query', 'passage'], true), 422, 'Invalid embedding input_type.');
+            abort_if(isset($payload['input_type']) && ! in_array($payload['input_type'], ['query', 'passage'], true), 422, 'Invalid embedding input_type.');
             $payload['input_type'] ??= 'query';
         } elseif ($model->slug === 'nvidia-nemotron-3.5-rerank-8b') {
             abort_unless(isset($payload['query'], $payload['passages']) &&
@@ -257,6 +261,7 @@ class OpenMindAiGatewayController
                 // 12-tool validation cap. Return a safe, actionable error
                 // without echoing upstream data or private NVIDIA credentials.
                 $validationError = in_array($code, [400, 422], true);
+
                 return response()->json([
                     'error' => [
                         'message' => $code === 429
@@ -275,6 +280,7 @@ class OpenMindAiGatewayController
                 $result = $upstream->json();
                 abort_unless(is_array($result) && isset($result['choices'][0]['message']), 502, 'Invalid model response.');
                 $credits->completed($user->id, $connection, $usageKey);
+
                 return response()->json([
                     'id' => $result['id'] ?? $usageKey,
                     'object' => 'chat.completion',
@@ -286,6 +292,7 @@ class OpenMindAiGatewayController
             }
 
             $held = false;
+
             return response()->stream(function () use ($upstream, $credits, $user, $connection, $usageKey, $lock, $agent) {
                 $body = $upstream->toPsrResponse()->getBody();
                 $buffer = '';

@@ -17,7 +17,9 @@ class RunCosmosGeneration implements ShouldQueue
     use Queueable;
 
     public int $timeout = 900;
+
     public int $tries = 1;
+
     public bool $failOnTimeout = true;
 
     public function __construct(public string $generationId) {}
@@ -39,7 +41,7 @@ class RunCosmosGeneration implements ShouldQueue
             $response = Http::withToken($secret)->acceptJson()->connectTimeout(10)->timeout(config('cosmos.worker_timeout'))
                 ->withOptions(['allow_redirects' => false])
                 ->post(config('cosmos.origin'), $payload);
-            if (!$response->ok() || strlen($response->body()) > config('cosmos.max_response_bytes')) {
+            if (! $response->ok() || strlen($response->body()) > config('cosmos.max_response_bytes')) {
                 throw new \RuntimeException('provider_unavailable');
             }
             $body = $response->json();
@@ -78,6 +80,7 @@ class RunCosmosGeneration implements ShouldQueue
             });
             if ($changed !== 1) {
                 Storage::disk('local')->delete($path);
+
                 return;
             }
         } catch (Throwable $e) {

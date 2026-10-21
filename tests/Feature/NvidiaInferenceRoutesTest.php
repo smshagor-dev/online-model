@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -82,8 +81,7 @@ class NvidiaInferenceRoutesTest extends TestCase
     public function test_rerank_uses_retrieval_api_host_not_chat_host(): void
     {
         config(['models.nvidia_key' => 'test-secret-123456789']);
-        Http::fake(['ai.api.nvidia.com/v1/retrieval/nvidia/nemotron-3.5-rerank-8b/reranking' =>
-            Http::response(['rankings' => [['index' => 0, 'logit' => 2.1]]])]);
+        Http::fake(['ai.api.nvidia.com/v1/retrieval/nvidia/nemotron-3.5-rerank-8b/reranking' => Http::response(['rankings' => [['index' => 0, 'logit' => 2.1]]])]);
         $key = $this->developer();
         $this->withToken($key)->postJson('/api/v1/openmindai/models/nvidia-nemotron-3.5-rerank-8b/invoke', [
             'input' => [
@@ -98,8 +96,7 @@ class NvidiaInferenceRoutesTest extends TestCase
     public function test_kumo_uses_model_family_name_and_structured_data_host(): void
     {
         config(['models.nvidia_key' => 'test-secret-123456789']);
-        Http::fake(['ai.api.nvidia.com/v1/structured-data/nvidia/kumo-tabular/predictions' =>
-            Http::response(['predictions' => [['value' => 1]]])]);
+        Http::fake(['ai.api.nvidia.com/v1/structured-data/nvidia/kumo-tabular/predictions' => Http::response(['predictions' => [['value' => 1]]])]);
         $key = $this->developer();
         $path = '/api/v1/openmindai/models/nvidia-kumo-tabular/invoke';
         $this->withToken($key)->postJson($path, ['input' => ['model' => 'bad', 'task' => []]])->assertUnprocessable();
@@ -114,8 +111,7 @@ class NvidiaInferenceRoutesTest extends TestCase
     public function test_rfd4_uses_health_api_and_never_adds_catalog_model_field(): void
     {
         config(['models.nvidia_key' => 'test-secret-123456789']);
-        Http::fake(['health.api.nvidia.com/v1/biology/ipd/rfd4-proteina/generative' =>
-            Http::response(['outputs' => [['sequence' => 'AGTG']]])]);
+        Http::fake(['health.api.nvidia.com/v1/biology/ipd/rfd4-proteina/generative' => Http::response(['outputs' => [['sequence' => 'AGTG']]])]);
         $this->withToken($this->developer())->postJson('/api/v1/openmindai/models/nvidia-rfd4-proteina/invoke', [
             'input' => [
                 'model' => 'foreign/model', 'task' => 'generation',
@@ -123,14 +119,13 @@ class NvidiaInferenceRoutesTest extends TestCase
             ],
         ])->assertOk()->assertJsonPath('output.outputs.0.sequence', 'AGTG');
         Http::assertSent(fn ($r) => $r->url() === 'https://health.api.nvidia.com/v1/biology/ipd/rfd4-proteina/generative'
-            && !isset($r['model']));
+            && ! isset($r['model']));
     }
 
     public function test_live_test_requires_admin_password_and_records_success_without_secrets(): void
     {
         config(['models.nvidia_key' => 'test-secret-123456789']);
-        Http::fake(['integrate.api.nvidia.com/v1/embeddings' =>
-            Http::response(['data' => [['embedding' => [0.2]]]])]);
+        Http::fake(['integrate.api.nvidia.com/v1/embeddings' => Http::response(['data' => [['embedding' => [0.2]]]])]);
         $this->administrator();
         $endpoint = '/admin/nvidia-models/nvidia-nemotron-3.5-embed-1b/test';
         $this->postJson($endpoint, ['current_password' => 'bad'])->assertUnprocessable();
@@ -146,8 +141,7 @@ class NvidiaInferenceRoutesTest extends TestCase
     public function test_live_test_records_upstream_auth_errors_without_exposing_nvidia_key(): void
     {
         config(['models.nvidia_key' => 'test-secret-123456789']);
-        Http::fake(['integrate.api.nvidia.com/v1/embeddings' =>
-            Http::response(['error' => 'private provider details'], 403)]);
+        Http::fake(['integrate.api.nvidia.com/v1/embeddings' => Http::response(['error' => 'private provider details'], 403)]);
         $this->administrator();
         $this->post('/admin/nvidia-models/nvidia-nemotron-3.5-embed-1b/test', [
             'current_password' => 'CorrectPassword123',
