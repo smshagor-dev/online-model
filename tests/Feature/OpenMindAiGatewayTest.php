@@ -42,6 +42,7 @@ class OpenMindAiGatewayTest extends TestCase
         $newToken = $created->json('api_key');
         $this->withToken($newToken)->getJson('/api/v1/openmindai/models')->assertOk();
         $this->withToken($session)->deleteJson('/api/v1/developer/keys/'.$created->json('id'))->assertNoContent();
+        $this->app['auth']->forgetGuards();
         $this->withToken($newToken)->getJson('/api/v1/openmindai/models')->assertUnauthorized();
     }
 
@@ -107,8 +108,8 @@ class OpenMindAiGatewayTest extends TestCase
             'X-OpenMindAI-Nonce' => $nonce,
             'X-OpenMindAI-Signature' => hash_hmac('sha256', $message, $secret),
         ];
-        $this->getJson($path, $headers)->assertOk()->assertJsonCount(3, 'data');
-        $this->getJson($path, $headers)->assertStatus(409);
-        $this->getJson($path, [...$headers, 'X-OpenMindAI-Nonce' => bin2hex(random_bytes(16))])->assertUnauthorized();
+        $this->get($path, $headers)->assertOk()->assertJsonCount(3, 'data');
+        $this->get($path, $headers)->assertStatus(409);
+        $this->get($path, [...$headers, 'X-OpenMindAI-Nonce' => bin2hex(random_bytes(16))])->assertUnauthorized();
     }
 }
