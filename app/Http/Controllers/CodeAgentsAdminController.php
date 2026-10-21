@@ -23,9 +23,10 @@ class CodeAgentsAdminController
     public function model(Request $request, string $slug)
     {
         $data = $request->validate(['enabled' => 'required|boolean']);
-        abort_unless(DB::table('hosted_code_agents')->where('slug', $slug)->update([
+        abort_unless(DB::table('hosted_code_agents')->where('slug', $slug)->exists(), 404);
+        DB::table('hosted_code_agents')->where('slug', $slug)->update([
             'enabled' => $data['enabled'], 'updated_at' => now(),
-        ]), 404);
+        ]);
         return back()->with('status', 'Code model availability updated.');
     }
 
