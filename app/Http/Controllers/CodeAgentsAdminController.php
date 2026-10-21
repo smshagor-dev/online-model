@@ -51,6 +51,7 @@ class CodeAgentsAdminController
             'enabled' => 'required|boolean',
             'api_ready' => 'sometimes|boolean',
             'include_model' => 'sometimes|boolean',
+            'api_protocol' => 'sometimes|in:chat,json',
             'name' => 'sometimes|required|string|min:2|max:120',
             'provider_model' => ['sometimes', 'required', 'string', 'max:190',
                 'regex:/^[a-zA-Z0-9][a-zA-Z0-9._\\/-]*$/',
@@ -64,7 +65,7 @@ class CodeAgentsAdminController
             $path = $data['api_path'] ?? $model->api_path;
             abort_unless($path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_-]*$~D', $path),
                 422, 'Configure a verified NVIDIA /v1/ API path before enabling inference.');
-            if ($model->api_protocol === 'chat') {
+            if (($data['api_protocol'] ?? $model->api_protocol) === 'chat') {
                 abort_unless($path === '/v1/chat/completions', 422, 'Chat models must use the chat completions endpoint.');
             }
         }

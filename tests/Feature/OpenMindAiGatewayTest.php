@@ -42,6 +42,7 @@ class OpenMindAiGatewayTest extends TestCase
         $newToken = $created->json('api_key');
         $this->withToken($newToken)->getJson('/api/v1/openmindai/models')->assertOk();
         $this->withToken($session)->deleteJson('/api/v1/developer/keys/'.$created->json('id'))->assertNoContent();
+        $this->app['auth']->forgetGuards();
         $this->withToken($newToken)->getJson('/api/v1/openmindai/models')->assertUnauthorized();
     }
 
@@ -107,9 +108,9 @@ class OpenMindAiGatewayTest extends TestCase
             'X-OpenMindAI-Nonce' => $nonce,
             'X-OpenMindAI-Signature' => hash_hmac('sha256', $message, $secret),
         ];
-        $this->getJson($path, $headers)->assertOk()->assertJsonCount(3, 'data');
-        $this->getJson($path, $headers)->assertStatus(409);
-        $this->getJson($path, [...$headers, 'X-OpenMindAI-Nonce' => bin2hex(random_bytes(16))])->assertUnauthorized();
+        $this->get($path, $headers)->assertOk()->assertJsonCount(3, 'data');
+        $this->get($path, $headers)->assertStatus(409);
+        $this->get($path, [...$headers, 'X-OpenMindAI-Nonce' => bin2hex(random_bytes(16))])->assertUnauthorized();
     }
     public function test_catalog_contains_only_enabled_models_and_exposes_readiness(): void
     {
@@ -171,7 +172,7 @@ class OpenMindAiGatewayTest extends TestCase
         $token = $u->createToken('developer:safe', ['openmindai:invoke'])->plainTextToken;
         $slug = 'nvidia-nemotron-3-embed-1b';
         DB::table('hosted_code_agents')->where('slug', $slug)->update([
-            'enabled' => true, 'api_ready' => true, 'api_path' => '/v1/embeddings',
+            'enabled' => true, 'api_ready' => true, 'api_path' => '/v1/embeddings', 'include_model' => true,
         ]);
         $this->withToken($token)->postJson('/api/v1/openmindai/models/'.$slug.'/invoke', [
             'input' => ['model' => 'another/paid-model', 'input' => 'safe prompt', 'stream' => true],
