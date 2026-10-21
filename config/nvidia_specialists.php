@@ -47,10 +47,10 @@ return [
             'reference' => 'https://build.nvidia.com/nvidia/active-speaker-detection/api',
         ],
         'nvidia-cosmos-transfer2.5-2b' => [
-            'transport' => 'controlled_video',
-            'requirement' => 'Verified video-condition request workflow',
-            'note' => 'This model consumes spatial or control videos; generic JSON prompts are insufficient.',
-            'reference' => 'https://build.nvidia.com/nvidia/cosmos-transfer2_5-2b/modelcard',
+            'transport' => 'video_nim',
+            'requirement' => 'Separate GPU-hosted Cosmos Transfer2.5 NIM',
+            'note' => 'Uses a prompt, uploaded MP4 input, and one edge/depth/vis/seg MP4 control through /v1/infer on an operator-managed GPU NIM. Provider access is not live verified.',
+            'reference' => 'https://docs.nvidia.com/nim/cosmos/latest/api-reference.html',
         ],
         'nvidia-streampetr' => [
             'transport' => 'av_scene',

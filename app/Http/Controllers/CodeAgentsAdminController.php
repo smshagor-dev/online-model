@@ -71,6 +71,7 @@ class CodeAgentsAdminController
         abort_if(isset(config('nvidia_specialists.models', [])[$slug])
             && !isset(config('maxine.models', [])[$slug])
             && !isset(config('nvidia_av.routes', [])[$slug])
+            && $slug !== 'nvidia-cosmos-transfer2.5-2b'
             && $slug !== 'nvidia-streampetr'
             && (($data['api_ready'] ?? false) || (($data['api_protocol'] ?? $model->api_protocol) === 'chat')),
             422, 'This model needs a dedicated provider integration before activation.');
@@ -82,6 +83,16 @@ class CodeAgentsAdminController
             $data['api_protocol'] = 'json';
             $data['api_path'] = null;
             $data['api_ready'] = true;
+            $data['include_model'] = false;
+        }
+        if ($slug === 'nvidia-cosmos-transfer2.5-2b') {
+            abort_if((isset($data['provider_model']) && $data['provider_model'] !== $model->provider_model)
+                || (isset($data['api_path']) && $data['api_path'] !== '')
+                || (isset($data['api_protocol']) && $data['api_protocol'] !== 'json'),
+                422, 'This model uses the fixed Cosmos Transfer queue.');
+            $data['api_ready'] = true;
+            $data['api_path'] = null;
+            $data['api_protocol'] = 'json';
             $data['include_model'] = false;
         }
         if ($slug === 'nvidia-streampetr') {
@@ -103,6 +114,7 @@ class CodeAgentsAdminController
                 422, 'Maxine gRPC media uses a fixed, reviewed integration.');
         }
         if (!isset(config('maxine.models', [])[$slug]) && !isset(config('nvidia_av.routes', [])[$slug]) && $slug !== 'nvidia-streampetr'
+            && $slug !== 'nvidia-cosmos-transfer2.5-2b'
             && array_key_exists('api_ready', $data) && $data['api_ready']) {
             $path = $data['api_path'] ?? $model->api_path;
             abort_unless($path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$~D', $path) && ! str_contains($path, '..'),
