@@ -137,6 +137,10 @@ export async function hostedMediaRequest(
     );
     return response;
   };
+  const providerModel = job.kind === "transcription" ? "endpoint/audio-transcriptions"
+    : job.kind === "speech" ? "endpoint/audio-synthesize"
+    : job.kind === "video" ? "nvidia/cosmos3-nano"
+    : (config.chatModel || "nvidia/nemotron-3.5-lightning-30b-a3b");
   let taskId: number | null = null;
   try {
     const begin = await bridge("media/hosted/task/begin", { kind: job.kind, prompt: job.prompt });
@@ -198,7 +202,7 @@ export async function hostedMediaRequest(
       completed = { data: raw.toString("base64"), mime: job.format === "docx"
         ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/pdf" };
     }
-    const saved = await bridge("media/" + taskId + "/hosted/task/complete", completed, 45000);
+    const saved = await bridge("media/" + taskId + "/hosted/task/complete", { ...completed, provider_model: providerModel }, 45000);
     if (!saved.ok) throw new WorkError("Media created but could not be saved.");
     const result = await saved.json();
     if (result.status !== "complete" || result.id !== taskId) throw new WorkError("Media was not saved.");

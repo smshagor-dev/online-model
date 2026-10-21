@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MediaTask;
+use App\Services\ApiCreditUsage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -60,6 +61,7 @@ class HostedImageController
         $d = $r->validate([
             'data' => 'required|string|max:28000000',
             'mime' => 'required|in:image/png,image/jpeg',
+            'provider_model' => 'sometimes|string|max:190',
         ]);
         $raw = base64_decode($d['data'], true);
         abort_unless($raw && strlen($raw) <= 20000000, 422, 'Invalid image data.');
@@ -83,6 +85,10 @@ class HostedImageController
                 throw $e;
             }
 
+            if (! empty($d['provider_model'])) {
+                $connection = app(ApiCreditUsage::class)->connection('nvidia', $d['provider_model'], 'image');
+                app(ApiCreditUsage::class)->completed($task->user_id, $connection, 'media:'.$task->id);
+            }
             return response()->json($task->fresh());
         });
     }

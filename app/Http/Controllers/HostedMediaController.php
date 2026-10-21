@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MediaTask;
+use App\Services\ApiCreditUsage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -61,6 +62,7 @@ class HostedMediaController
             'text' => 'nullable|string|max:100000',
             'data' => 'nullable|string|max:28000000',
             'mime' => 'nullable|string|max:100',
+            'provider_model' => 'sometimes|string|max:190',
         ]);
         return DB::transaction(function () use ($r, $id, $data) {
             $task = MediaTask::where('user_id', $r->user()->id)->lockForUpdate()->findOrFail($id);
@@ -129,6 +131,10 @@ class HostedMediaController
                     Storage::disk('local')->delete($path);
                 }
                 throw $e;
+            }
+            if (! empty($data['provider_model'])) {
+                $connection = app(ApiCreditUsage::class)->connection('nvidia', $data['provider_model'], $task->kind);
+                app(ApiCreditUsage::class)->completed($task->user_id, $connection, 'media:'.$task->id);
             }
             return response()->json($task->fresh());
         });

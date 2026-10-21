@@ -1,6 +1,7 @@
 // Server-only hosted image integration. No provider credentials enter browser code.
 const IMAGE_ENDPOINT =
   "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell";
+const IMAGE_MODEL = "black-forest-labs/flux.1-schnell";
 
 type ImageConfig = { apiKey: string; bridgeKey: string };
 type Fetcher = typeof fetch;
@@ -152,7 +153,7 @@ export async function generateHostedImage(
     const mime = imageFormat(image);
     const finish = await requestBackend(
       "media/" + taskId + "/hosted/finish",
-      { data: encoded, mime },
+      { data: encoded, mime, provider_model: IMAGE_MODEL },
       45000,
     );
     if (!finish.ok)

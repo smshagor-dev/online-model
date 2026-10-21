@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Services\AutomaticMemory;
 use App\Services\ChatContext;
+use App\Services\ApiCreditUsage;
 use App\Services\HostedChatActivity;
 use App\Services\WebReader;
 use App\Services\WebResearch;
@@ -210,7 +211,7 @@ class FrontendChatController
     public function finish(Request $r)
     {
         [$key] = $this->lease($r);
-        $d = $r->validate(['content' => 'present|nullable|string', 'sources' => 'sometimes|array', 'sources.*.url' => 'required|string|max:2000', 'sources.*.title' => 'present|nullable|string|max:200', 'sources.*.snippet' => 'sometimes|nullable|string|max:2000', 'sources.*.read_status' => 'sometimes|in:read,unavailable,snippet_only', 'sources.*.citation' => 'sometimes|integer|min:1', 'status' => 'required|in:complete,failed,cancelled']);
+        $d = $r->validate(['content' => 'present|nullable|string', 'sources' => 'sometimes|array', 'sources.*.url' => 'required|string|max:2000', 'sources.*.title' => 'present|nullable|string|max:200', 'sources.*.snippet' => 'sometimes|nullable|string|max:2000', 'sources.*.read_status' => 'sometimes|in:read,unavailable,snippet_only', 'sources.*.citation' => 'sometimes|integer|min:1', 'status' => 'required|in:complete,failed,cancelled', 'provider_model' => 'sometimes|string|max:190']);
         // Preserve provider whitespace after validating the submitted field type.
         $d['content'] = json_decode($r->getContent(), true)['content'] ?? '';
         if (! is_string($d['content'])) {
@@ -242,6 +243,10 @@ class FrontendChatController
                     $m->fill($updates);
                     abort_unless(Message::whereKey($m->id)->where('inference_token', hash('sha256', $r->input('ticket')))->update($m->getDirty()), 410);
                 }
+            }
+            if ($d['status'] === 'complete' && ! empty($d['provider_model'])) {
+                $connection = app(ApiCreditUsage::class)->connection('nvidia', $d['provider_model'], 'chat');
+                app(ApiCreditUsage::class)->completed($r->user()->id, $connection, 'chat:'.hash('sha256', $d['ticket'] ?? $r->input('ticket')));
             }
             $lease['done'] = true;
             $lease['status'] = $d['status'];

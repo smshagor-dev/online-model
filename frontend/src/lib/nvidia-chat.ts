@@ -469,7 +469,7 @@ export async function nvidiaChat(
           try {
             const r = await backend(
               "finish",
-              { ticket: lease.ticket, content, status, sources: lease.sources },
+              { ticket: lease.ticket, content, status, sources: lease.sources, provider_model: config.model },
               8000,
             );
             if (r.ok && (await r.json()).stored) {
