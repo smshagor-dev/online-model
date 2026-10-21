@@ -61,6 +61,40 @@ function fixture({
   };
   return { calls, fetcher };
 }
+test("production-mode hosted chat sends inference from Next.js and saves through Laravel", async () => {
+  const previousKey = process.env.NVIDIA_API_KEY;
+  const previousBridge = process.env.FRONTEND_CHAT_BRIDGE_KEY;
+  try {
+    process.env.NVIDIA_API_KEY = "secret-nvidia-key";
+    process.env.FRONTEND_CHAT_BRIDGE_KEY = "k".repeat(32);
+    const f = fixture();
+    const fetcher = (url, options) => {
+      if (url.endsWith("/openmindai/models"))
+        return Promise.resolve(Response.json({ data: [{ id: "openmindai-lite" }] }));
+      return f.fetcher(url, options);
+    };
+    const result = await nvidiaChat(
+      JSON.stringify({ message: "Hi", model_id: -1 }),
+      "user-token",
+      "https://backend/api/v1",
+      new AbortController().signal,
+      { fetcher }, // No injected config: use the real server environment.
+    );
+    const body = await result.text();
+    assert.match(body, /Hello/);
+    const inference = f.calls.find(x => x.url === "https://integrate.api.nvidia.com/v1/chat/completions");
+    assert.ok(inference);
+    assert.equal(inference.options.headers.Authorization, "Bearer secret-nvidia-key");
+    assert.equal(f.calls.filter(x => x.url.endsWith("/finish")).length, 1);
+    assert.equal(f.calls.filter(x => x.url.includes("/provider/invoke")).length, 0);
+  } finally {
+    if (previousKey === undefined) delete process.env.NVIDIA_API_KEY;
+    else process.env.NVIDIA_API_KEY = previousKey;
+    if (previousBridge === undefined) delete process.env.FRONTEND_CHAT_BRIDGE_KEY;
+    else process.env.FRONTEND_CHAT_BRIDGE_KEY = previousBridge;
+  }
+});
+
 test("Next server connects directly to NVIDIA and persists only final answer to backend", async () => {
   const f = fixture();
   const r = await nvidiaChat(
