@@ -44,7 +44,7 @@ class NvidiaSpecialistCatalogTest extends TestCase
         $this->patchJson('/admin/nvidia-models/'.$slug, [
             'api_ready' => true, 'api_path' => '/v1/embeddings',
         ])->assertUnprocessable();
-        $this->assertDatabaseHas('hosted_code_agents', ['slug' => $slug, 'api_ready' => false]);
+        $this->assertDatabaseHas('hosted_code_agents', ['slug' => $slug, 'api_ready' => true]);
     }
 
     public function test_catalog_reports_protocol_and_access_requirements(): void

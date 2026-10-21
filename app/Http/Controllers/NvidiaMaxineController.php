@@ -64,7 +64,7 @@ class NvidiaMaxineController
                 429, 'Model monthly allowance reached.');
 
             $id = (string) Str::uuid();
-            $path = 'maxine/'.$user->id.'/'.$id.'.'.$info['extension'];
+            $path = 'maxine/'.$user->id.'/'.$id.'.input.'.$info['extension'];
             Storage::disk('local')->put($path, $bytes);
             try {
                 DB::transaction(function () use ($id, $user, $slug, $connection, $path) {
