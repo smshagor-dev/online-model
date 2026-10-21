@@ -131,6 +131,87 @@ test("PDF breaks long URLs and unspaced words within the page width", () => {
   assert.deepEqual(commands.map(match => match[1].length), [87, 87, 66]);
 });
 
+test("expired backend session is returned as 401 without contacting provider", async () => {
+  const calls = [];
+  const response = await hostedMediaRequest(
+    JSON.stringify({ kind: "speech", prompt: "Hello" }),
+    "expired-user",
+    "https://private-backend/api/v1",
+    new AbortController().signal,
+    {
+      config: cfg,
+      fetcher: async (url) => {
+        calls.push(url);
+        return Response.json({ message: "Unauthorized" }, { status: 401 });
+      },
+    },
+  );
+  assert.equal(response.status, 401);
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].endsWith("/media/hosted/task/begin"));
+});
+
+test("cancelled request never contacts media inference once task begins", async () => {
+  const controller = new AbortController();
+  const s = scenario();
+  const response = await hostedMediaRequest(
+    JSON.stringify({ kind: "speech", prompt: "Hello" }),
+    "signed-in-user",
+    "https://private-backend/api/v1",
+    controller.signal,
+    {
+      config: cfg,
+      fetcher: async (url, init) => {
+        const result = await s.fetcher(url, init);
+        if (url.endsWith("/media/hosted/task/begin")) controller.abort();
+        return result;
+      },
+    },
+  );
+  assert.equal(response.status, 499);
+  assert.deepEqual(s.calls.map(x => x.url.split("/").at(-1)), ["begin", "fail"]);
+});
+
+test("cancel after inference discards output without persisting completed media", async () => {
+  const controller = new AbortController();
+  const s = scenario();
+  const response = await hostedMediaRequest(
+    JSON.stringify({ kind: "speech", prompt: "Hello" }),
+    "signed-in-user",
+    "https://private-backend/api/v1",
+    controller.signal,
+    {
+      config: cfg,
+      fetcher: async (url, init) => {
+        const result = await s.fetcher(url, init);
+        if (url.endsWith("/audio/synthesize")) controller.abort();
+        return result;
+      },
+    },
+  );
+  assert.equal(response.status, 499);
+  assert.deepEqual(s.calls.map(x => x.url.split("/").at(-1)), ["begin", "synthesize", "fail"]);
+});
+
+test("deleted media task cannot be mistaken for storage failure", async () => {
+  const s = scenario();
+  const response = await hostedMediaRequest(
+    JSON.stringify({ kind: "speech", prompt: "Hello" }),
+    "signed-in-user",
+    "https://private-backend/api/v1",
+    new AbortController().signal,
+    {
+      config: cfg,
+      fetcher: (url, init) => url.endsWith("/hosted/task/complete")
+        ? Promise.resolve(Response.json({ message: "Not found" }, { status: 404 }))
+        : s.fetcher(url, init),
+    },
+  );
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).message, /deleted or cancelled/);
+  assert.equal(s.calls.some(x => x.url.endsWith("/audio/synthesize")), true);
+});
+
 test("invalid requests and absent server credentials never contact provider", async () => {
   const s = scenario();
   const first = await hostedMediaRequest(
