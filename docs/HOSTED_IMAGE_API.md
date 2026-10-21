@@ -45,8 +45,10 @@ the scheduler cleans it up.
    task. Requests are rejected before contacting the inference provider if
    the user lacks quota.
 5. Next.js invokes the fixed FLUX.1-schnell HTTPS API with the server-only
-   credential. The response must include a successful image artifact. Filtered
-   outputs and rate limits are not falsely recorded as successful generations.
+   credential. The response must include a successful image artifact. The response JSON
+   is read with a hard 28 MB streamed byte limit even when Content-Length is
+   missing or incorrect. Invalid HTML or malformed JSON fails safely.
+   Filtered outputs and rate limits are not falsely recorded as successful generations.
 6. Next.js verifies base64 and PNG/JPEG magic bytes, then sends the artifact
    through authenticated POST /api/v1/media/{id}/hosted/finish with the bridge
    secret. Laravel checks MIME, image dimensions and ownership before writing
