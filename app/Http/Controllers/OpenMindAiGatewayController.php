@@ -85,6 +85,8 @@ class OpenMindAiGatewayController
     private function invokeModel(Request $request, string $slug, bool $firstParty, HostedCodeAgents $agents, ApiCreditUsage $credits)
     {
         $user = $this->actor($request, $firstParty);
+        abort_if(isset(config('nvidia_av.routes', [])[$slug]), 422,
+            'Use /api/v1/openmindai/av-nim/{model}/jobs for queued NIM scene inference.');
         abort_if($slug === 'nvidia-streampetr', 422,
             'Use /api/v1/openmindai/av/streampetr/jobs for queued scene inference.');
         abort_if(isset(config('maxine.models', [])[$slug]), 422,
