@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {parseInlineImage} from "../src/lib/vision-input.ts";
 import {routePrompt} from "../src/lib/prompt-router.ts";
 import {nvidiaChat} from "../src/lib/nvidia-chat.ts";
@@ -113,4 +114,13 @@ test("resuming an expired image turn fails safely and releases Laravel's lease",
   assert.equal(response.status,409);
   assert.match((await response.json()).message,/attach it again/);
   assert.ok(calls.some(c=>c.endsWith("/finish")));
+});
+
+test("chat retains visual context until explicit clear or conversation switch", () => {
+  const file = readFileSync(new URL("../src/components/chat-workspace.tsx", import.meta.url), "utf8");
+  assert.match(file, /Keep the transient image in this composer for follow-up questions/);
+  assert.match(file, /setInlineImage\(null\)/);
+  assert.match(file, /setConversationId\(null\)/);
+  assert.match(file, /image: \{mime: inlineImage\.mime, data: inlineImage\.data\}/);
+  assert.doesNotMatch(file, /event === "done" && data\.status === "complete" && inlineImage\)\s*setInlineImage\(null\)/);
 });

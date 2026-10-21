@@ -28,6 +28,7 @@ class AdminSettings
         if (! array_key_exists($key, self::DEFAULTS)) {
             throw new \InvalidArgumentException('Unknown admin setting.');
         }
+
         return (string) (DB::table('admin_settings')->where('key', $key)->value('value') ?? self::DEFAULTS[$key]);
     }
 
@@ -38,7 +39,7 @@ class AdminSettings
 
     public function limit(string $key): int
     {
-        return max(1, (int) $this->get($key));
+        return max(0, (int) $this->get($key));
     }
 
     public function save(array $settings): void

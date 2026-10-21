@@ -32,6 +32,7 @@ class AdminSettingsController
             abort_unless($twoFactor->verify($request->user(), $data['code'] ?? ''), 422, 'A valid two-factor or recovery code is required.');
         }
         $settings->save(collect($data)->only(array_keys(AdminSettings::DEFAULTS))->all());
+
         return redirect('/admin/settings')->with('status', 'Workspace settings saved.');
     }
 }

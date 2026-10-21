@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
+use App\Services\AdminSettings;
 use App\Services\HostedChatActivity;
 use App\Services\WebResearch;
 use App\Services\WebSearch;
@@ -101,16 +102,16 @@ class FrontendChatTest extends TestCase
         $user = $this->authenticate();
         $request = Request::create('/api/v1/chat');
         $request->setUserResolver(fn () => $user);
-        config(['models.daily_limit' => 0]);
+        app(AdminSettings::class)->save(['chat_daily_limit' => '0']);
         $this->assertCount(1, (RateLimiter::limiter('chat'))($request));
-        config(['models.daily_limit' => 2]);
+        app(AdminSettings::class)->save(['chat_daily_limit' => '2']);
         $this->assertCount(2, (RateLimiter::limiter('chat'))($request));
     }
 
     public function test_daily_limit_blocks_new_requests_but_allows_an_active_turn_to_finish(): void
     {
         $this->authenticate();
-        config(['models.daily_limit' => 1]);
+        app(AdminSettings::class)->save(['chat_daily_limit' => '1']);
         $r = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'First request'], $this->headers())->assertOk();
         $this->postJson('/api/v1/chat/frontend/status', ['ticket' => $r->json('ticket')], $this->headers())->assertOk();
         $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $r->json('ticket'), 'content' => 'Complete answer', 'status' => 'complete'], $this->headers())->assertOk();
@@ -223,7 +224,7 @@ class FrontendChatTest extends TestCase
     public function test_resume_does_not_charge_another_daily_chat_request(): void
     {
         $this->authenticate();
-        config(['models.daily_limit' => 1]);
+        app(AdminSettings::class)->save(['chat_daily_limit' => '1']);
         $first = $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'One request'], $this->headers())->assertOk();
         $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $first->json('ticket'), 'content' => '', 'status' => 'failed'], $this->headers())->assertOk();
         $this->postJson('/api/v1/chat/frontend/begin', ['message' => 'New request'], $this->headers())->assertStatus(429);

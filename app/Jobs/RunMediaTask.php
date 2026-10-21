@@ -56,7 +56,13 @@ class RunMediaTask implements ShouldQueue
                     throw new \RuntimeException('Invalid media output.');
                 }
                 $actual = (new \finfo(FILEINFO_MIME_TYPE))->buffer($raw);
-                if ($actual !== $expected[$task->kind] && ! ($task->kind === 'speech' && $actual === 'audio/x-wav')) {
+                // PHP/fileinfo can report ZIP archives as octet-stream on some
+                // platforms. Verify the ZIP structure independently instead of
+                // accepting an arbitrary binary labelled application/zip.
+                $validZip = $task->kind === 'code'
+                    && str_starts_with($raw, "PK\x03\x04")
+                    && str_contains(substr($raw, -65557), "PK\x05\x06");
+                if (($task->kind === 'code' && ! $validZip) || ($task->kind !== 'code' && $actual !== $expected[$task->kind] && ! ($task->kind === 'speech' && $actual === 'audio/x-wav'))) {
                     throw new \RuntimeException('Invalid output format.');
                 }
                 $path = 'media/'.$task->user_id.'/'.$task->id.'.output';

@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Services\TwoFactor;
-use Laravel\Sanctum\PersonalAccessToken;
+use Illuminate\Http\Request;
 
 class DeveloperKeysController
 {
@@ -30,6 +29,7 @@ class DeveloperKeysController
         abort_if($request->user()->tokens()->where('name', 'like', 'developer:%')->count() >= 10, 422, 'Maximum 10 active API keys.');
         $name = 'developer:'.trim($data['name']);
         $token = $request->user()->createToken($name, ['openmindai:invoke'], now()->addDays(90));
+
         return response()->json([
             'id' => $token->accessToken->id,
             'name' => $name,
@@ -43,6 +43,7 @@ class DeveloperKeysController
     public function destroy(Request $request, int $id)
     {
         $request->user()->tokens()->where('name', 'like', 'developer:%')->findOrFail($id)->delete();
+
         return response()->noContent();
     }
 }

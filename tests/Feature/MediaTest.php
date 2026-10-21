@@ -72,7 +72,7 @@ class MediaTest extends TestCase
         $this->withHeaders(['X-Chat-Bridge-Key' => str_repeat('s', 32)]);
         $id = $this->postJson('/api/v1/media/hosted/begin', ['prompt' => 'Amber sunset'])
             ->assertStatus(202)->json('id');
-        $jpeg = base64_decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAT/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABv/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/ALABcjf/2Q==');
+        $jpeg = base64_decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAACAAIDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDiqKKK+uPmD//Z');
         $this->postJson('/api/v1/media/'.$id.'/hosted/finish', [
             'mime' => 'image/jpeg', 'data' => base64_encode($jpeg),
         ])->assertOk()->assertJsonPath('output_mime', 'image/jpeg');
@@ -399,7 +399,7 @@ class MediaTest extends TestCase
         $this->setupEngine();
         config(['media.kinds' => ['code']]);
         $id = $this->postJson('/api/v1/media', ['kind' => 'code', 'prompt' => 'print(1)', 'approved' => true])->assertStatus(202)->json('id');
-        Http::fake(['*' => Http::response(['text' => 'hello', 'mime' => 'application/zip', 'data' => 'UEsDBBQAAAAAAOBEU12GphA2BQAAAAUAAAAKAAAAc3Rkb3V0LnR4dGhlbGxvUEsBAhQDFAAAAAAA4ERTXYamEDYFAAAABQAAAAoAAAAAAAAAAAAAAIABAAAAAHN0ZG91dC50eHRQSwUGAAAAAAEAAQA4AAAALQAAAAAA', 'artifacts' => [['name' => 'data.csv', 'type' => 'table', 'rows' => [['x', 'y'], ['1', '2']]]]])]);
+        Http::fake(['*' => Http::response(['text' => 'hello', 'mime' => 'application/zip', 'data' => 'UEsDBBQAAAAIAAEUVV2GphA2BwAAAAUAAAAKAAAAc3Rkb3V0LnR4dMtIzcnJBwBQSwECFAMUAAAACAABFFVdhqYQNgcAAAAFAAAACgAAAAAAAAAAAAAAgAEAAAAAc3Rkb3V0LnR4dFBLBQYAAAAAAQABADgAAAAvAAAAAAA=', 'artifacts' => [['name' => 'data.csv', 'type' => 'table', 'rows' => [['x', 'y'], ['1', '2']]]]])]);
         (new RunMediaTask($id))->handle();
         $this->getJson('/api/v1/media/'.$id)->assertOk()->assertJsonPath('status', 'complete')->assertJsonPath('artifacts.0.rows.1.1', '2');
         $this->getJson('/api/v1/media')->assertOk()->assertJsonMissingPath('data.0.artifacts');
