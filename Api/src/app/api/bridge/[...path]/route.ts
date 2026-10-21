@@ -78,6 +78,14 @@ export async function handler(request: NextRequest, context: { params: Promise<{
     if (raw.length > 1_000_000) throw new Error("Oversized API response");
     let data: Record<string, unknown> = {};
     try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error("Non-JSON API response"); }
+    // Public developer requests must use this portal, never Laravel directly.
+    if (endpoint === "developer/keys" && backend.ok) {
+      const portal = new URL(process.env.PORTAL_ORIGIN || request.nextUrl.origin);
+      if (process.env.NODE_ENV === "production" && portal.protocol !== "https:") {
+        return NextResponse.json({ message: "The public portal origin must use HTTPS." }, { status: 503 });
+      }
+      data.base_url = portal.origin + "/api/v1/openmindai";
+    }
     const response = backend.status === 204
       ? new NextResponse(null, { status: 204 })
       : NextResponse.json(data, { status: backend.status });

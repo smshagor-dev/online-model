@@ -43,7 +43,7 @@ class AdminDeveloperKeysController
             'name' => $label,
             'api_key' => $token->plainTextToken,
             'expires_at' => $token->accessToken->expires_at,
-            'base_url' => rtrim(config('app.url'), '/').'/api/v1/openmindai',
+            'base_url' => config('developer.public_base_url'),
             'note' => 'This Developer API Key is displayed only once. Store it in OpenMind Studio secure settings.',
         ], 201)
             ->header('Cache-Control', 'no-store, private')

@@ -13,6 +13,7 @@ class DeveloperPortalTest extends TestCase
 
     public function test_developers_can_register_and_use_their_login_for_key_management(): void
     {
+        config(['developer.public_base_url' => 'https://portal.example.test/api/v1/openmindai']);
         $created = $this->postJson('/api/v1/register', [
             'name' => 'Portal Developer',
             'email' => 'new-portal@example.com',
@@ -25,13 +26,15 @@ class DeveloperPortalTest extends TestCase
         $this->withToken($loginToken)
             ->getJson('/api/v1/developer/keys')
             ->assertOk()
-            ->assertJsonPath('keys', []);
+            ->assertJsonPath('keys', [])
+            ->assertJsonPath('base_url', 'https://portal.example.test/api/v1/openmindai');
 
         $issued = $this->withToken($loginToken)
             ->postJson('/api/v1/developer/keys', [
                 'name' => 'My desktop editor',
                 'password' => 'CorrectPassword123',
-            ])->assertCreated()->assertJsonStructure(['api_key', 'base_url', 'expires_at']);
+            ])->assertCreated()->assertJsonStructure(['api_key', 'base_url', 'expires_at'])
+            ->assertJsonPath('base_url', 'https://portal.example.test/api/v1/openmindai');
 
         $gatewayToken = $issued->json('api_key');
         $this->app['auth']->forgetGuards();

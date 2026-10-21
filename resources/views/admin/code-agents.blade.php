@@ -19,7 +19,7 @@
 </div>
 <div class="section-separator"><h2>Unified API</h2><p>One origin for models and completions. Use a generated developer key on your own backend.</p></div>
 <section class="admin-card" style="margin-bottom:24px">
-  <div class="field"><label>API base URL</label><input readonly value="{{ $apiBase }}/openmindai"></div>
+  <div class="field"><label>API base URL</label><input readonly value="{{ $developerApiBase }}"></div>
   <p class="entity-meta">GET /models · POST /chat/completions · Authorization: Bearer YOUR_DEVELOPER_KEY</p>
   <p class="entity-meta">User keys are generated in OpenMindAI Account → Developer API. Keys are shown once, expire after 90 days and can be revoked.</p>
 </section>
