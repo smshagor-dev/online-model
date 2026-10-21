@@ -127,7 +127,7 @@ test("PDF output keeps WinAnsi Euro, ellipsis and trademark glyphs", () => {
 
 test("PDF breaks long URLs and unspaced words within the page width", () => {
   const pdf = renderPdf("X".repeat(240));
-  const commands = [...pdf.toString("latin1").matchAll(/Tm \\(([^)]*)\\) Tj/g)];
+  const commands = [...pdf.toString("latin1").matchAll(/Tm \(([^)]*)\) Tj/g)];
   assert.deepEqual(commands.map(match => match[1].length), [87, 87, 66]);
 });
 
