@@ -313,11 +313,11 @@ export default function MediaDialog({
                   {imageConfig?.image_masking && <option value="outpaint">Outpaint using mask</option>}
                 </select>
               </label>
-              <label>Aspect ratio
+              {imageMode === "generate" && <label>Aspect ratio
                 <select value={imageRatio} disabled={busy} onChange={(e) => setImageRatio(e.target.value)}>
                   {(imageConfig?.ratios || ["1:1","16:9","9:16","5:4","4:5","3:2","2:3"]).map(ratio => <option key={ratio} value={ratio}>{ratio}</option>)}
                 </select>
-              </label>
+              </label>}
               <label>Variations (separate provider requests)
                 <select value={imageCount} disabled={busy} onChange={(e) => setImageCount(Number(e.target.value))}>
                   {[1,2,3,4].map(count => <option key={count} value={count}>{count}</option>)}
