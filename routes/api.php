@@ -58,6 +58,7 @@ Route::prefix('v1')->group(function () {
         Route::post('forgot-password', [AuthController::class, 'forgot']);
         Route::post('reset-password', [AuthController::class, 'reset']);
         Route::post('email/resend', [AuthController::class, 'resend']);
+        Route::post('email/verify-code', [AuthController::class, 'verifyCode']);
     });
     Route::middleware(['auth:sanctum', 'active', 'interactive-token', 'throttle:api'])->group(function () {
         Route::middleware('throttle:sensitive')->group(function () {
