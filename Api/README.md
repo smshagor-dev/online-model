@@ -77,3 +77,7 @@ php artisan test --filter=OpenMindAiGatewayTest
 ```
 
 The CI workflow runs the Next.js build and typecheck. Complete end-to-end HTTPS/cPanel and live NVIDIA integration testing after deployment. Use separate credentials for staging; do not test with production secrets in CI.
+
+## Link from the existing frontend
+
+Set `NEXT_PUBLIC_DEVELOPER_PORTAL_URL=https://YOUR-PORTAL-DOMAIN` on the existing `frontend/` deployment, rebuild and restart. Settings → Developer API then opens this standalone portal. Without the variable, original key-management settings remain functional through the authenticated proxy.
