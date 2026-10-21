@@ -198,8 +198,6 @@ class MediaTest extends TestCase
         Storage::disk('local')->assertMissing('media/'.$user->id.'/'.$id.'.output');
     }
 
-    // The media callback limiter is independent from admin/security mutations:
-    // one generation may require several validation failures before success.
     public function test_hosted_audio_and_document_formats_are_validated_before_storage(): void
     {
         $this->setupEngine();
