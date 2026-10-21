@@ -12,9 +12,9 @@ class EmailOtp
 {
     public function send(User $user, string $purpose): void
     {
-        $email = mb_strtolower($user->email);
+        $email = mb_strtolower(trim($user->email));
         $existing = DB::table('email_otp_challenges')->where('email', $email)->where('purpose', $purpose)->first();
-        if ($existing && now()->diffInSeconds($existing->updated_at, false) > -60) {
+        if ($existing && \Illuminate\Support\Carbon::parse($existing->updated_at)->greaterThan(now()->subSeconds(60))) {
             throw ValidationException::withMessages(['email' => 'Wait 60 seconds before requesting another code.']);
         }
         $code = (string) random_int(100000, 999999);
@@ -34,7 +34,7 @@ class EmailOtp
     {
         return DB::transaction(function () use ($email, $purpose, $code, $action) {
             $query = DB::table('email_otp_challenges')
-                ->where('email', mb_strtolower($email))->where('purpose', $purpose);
+                ->where('email', mb_strtolower(trim($email)))->where('purpose', $purpose);
             $challenge = (clone $query)->lockForUpdate()->first();
             if (! $challenge || now()->greaterThan($challenge->expires_at)) {
                 return false;
