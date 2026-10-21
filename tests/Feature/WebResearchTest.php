@@ -18,7 +18,7 @@ class WebResearchTest extends TestCase
 
     public function test_search_deduplicates_tracking_links_and_rejects_unsafe_results(): void
     {
-        config(['models.search_url' => 'https://search.example/search']);
+        config(['models.search_url' => 'https://search.example/search', 'models.public_search_fallback' => false]);
         Http::fake(['*' => Http::response(['results' => [
             ['url' => 'https://example.org/article?utm_source=x#one', 'title' => '<b>Evidence</b>', 'content' => 'A &amp; B'],
             ['url' => 'https://example.org/article', 'title' => 'Duplicate'],
@@ -103,4 +103,33 @@ class WebResearchTest extends TestCase
         $this->postJson('/api/v1/chat/frontend/finish', ['ticket' => $r->json('ticket'), 'content' => 'Report [1](https://example.org/paper)', 'status' => 'complete'], $headers)->assertOk();
         $this->assertDatabaseHas('messages', ['content' => 'Report [1](https://example.org/paper)', 'status' => 'complete']);
     }
+    public function test_search_falls_back_to_public_rss_without_exposing_primary_errors(): void
+    {
+        config(['models.search_url' => 'https://search.example/search', 'models.public_search_fallback' => true]);
+        Http::fake([
+            'https://search.example/*' => Http::response('private error', 503),
+            'https://www.bing.com/search*' => Http::response('<rss><channel><item><title>Primary evidence</title><link>https://example.org/paper?utm_source=bing</link><description>Useful summary</description></item></channel></rss>', 200, ['Content-Type' => 'application/rss+xml']),
+        ]);
+        $sources = app(WebSearch::class)->search('Evidence', ['time_range' => 'week']);
+        $this->assertSame('https://example.org/paper', $sources[0]['url']);
+        $this->assertSame('bing_rss', $sources[0]['provider']);
+        $this->assertFalse($sources[0]['time_filter_applied']);
+        Http::assertSentCount(2);
+    }
+
+    public function test_quick_search_reads_pages_and_preserves_unavailable_source_status(): void
+    {
+        $this->mock(WebSearch::class)->shouldReceive('search')->once()->andReturn([
+            ['url' => 'https://a.example/paper', 'title' => 'Read', 'snippet' => 'Snippet'],
+            ['url' => 'https://b.example/paper', 'title' => 'Unavailable', 'snippet' => 'Snippet'],
+        ]);
+        $reader = $this->mock(WebReader::class);
+        $reader->shouldReceive('read')->with('https://a.example/paper')->once()->andReturn(str_repeat('Evidence ', 30));
+        $reader->shouldReceive('read')->with('https://b.example/paper')->once()->andThrow(new \RuntimeException('Unavailable'));
+        $sources = app(WebResearch::class)->quick('Evidence');
+        $this->assertSame('read', $sources[0]['read_status']);
+        $this->assertSame('unavailable', $sources[1]['read_status']);
+        $this->assertArrayNotHasKey('page_text', app(WebResearch::class)->summaries($sources)[0]);
+    }
+
 }
