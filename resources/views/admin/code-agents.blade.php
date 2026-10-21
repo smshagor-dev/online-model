@@ -11,13 +11,9 @@
 <div class="card-grid" style="margin-bottom:25px">
 @foreach($agents as $agent)
   <section class="admin-card">
-    <div class="entity-card-header"><div><h2>{{ $agent->name }}</h2><p class="entity-meta">Code agent</p></div><span class="status-pill {{ $agent->enabled ? 'success' : 'warning' }}">{{ $agent->enabled ? 'Enabled' : 'Disabled' }}</span></div>
+    <div class="entity-card-header"><div><h2>{{ $agent->name }}</h2><p class="entity-meta">Code agent</p></div><span class="status-pill success">Listed</span></div>
     <p class="entity-meta"><code style="word-break:break-all">{{ $agent->provider_model }}</code></p>
-    <form method="post" action="/admin/code-agents/{{ $agent->slug }}">
-      @csrf @method('PATCH')
-      <div class="field"><label>Availability</label><select name="enabled"><option value="1" @selected($agent->enabled)>Enabled</option><option value="0" @selected(!$agent->enabled)>Disabled</option></select></div>
-      <div class="form-actions"><button class="btn-primary-admin" type="submit">Save model</button></div>
-    </form>
+    <p class="entity-meta">Always listed. <a href="/admin/nvidia-models?category=Coding">Manage NVIDIA model settings</a>.</p>
   </section>
 @endforeach
 </div>

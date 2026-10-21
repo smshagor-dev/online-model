@@ -39,7 +39,7 @@ class CodeAgentsAdminController
             'search' => $q,
             'total' => $models->count(),
             'configured' => $models->where('api_ready', true)->count(),
-            'enabled' => $models->where('enabled', true)->count(),
+            'enabled' => $models->count(),
             'apiBase' => rtrim(config('app.url'), '/').'/api/v1/openmindai',
             'nvidiaReady' => strlen((string) config('models.nvidia_key')) >= 12,
         ]);
@@ -48,7 +48,7 @@ class CodeAgentsAdminController
     public function model(Request $request, string $slug)
     {
         $data = $request->validate([
-            'enabled' => 'required|boolean',
+            'enabled' => 'sometimes|accepted',
             'api_ready' => 'sometimes|boolean',
             'include_model' => 'sometimes|boolean',
             'api_protocol' => 'sometimes|in:chat,json',
@@ -69,7 +69,15 @@ class CodeAgentsAdminController
                 abort_unless($path === '/v1/chat/completions', 422, 'Chat models must use the chat completions endpoint.');
             }
         }
-        DB::table('hosted_code_agents')->where('slug', $slug)->update([...$data, 'updated_at' => now()]);
+        // Catalog entries must remain visible. A valid API key does not grant
+        // upstream NVIDIA entitlements, so non-chat integrations still require
+        // an explicitly reviewed protocol and path.
+        unset($data['enabled']);
+        if (($data['api_protocol'] ?? $model->api_protocol) === 'chat') {
+            $data['api_path'] = '/v1/chat/completions';
+            $data['api_ready'] = true;
+        }
+        DB::table('hosted_code_agents')->where('slug', $slug)->update([...$data, 'enabled' => true, 'updated_at' => now()]);
         return back()->with('status', 'NVIDIA model configuration saved.');
     }
 
