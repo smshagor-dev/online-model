@@ -49,7 +49,9 @@ Route::prefix('admin')->middleware(['auth', 'active', 'admin'])->group(function 
     Route::patch('nvidia-models/{slug}', [CodeAgentsAdminController::class, 'model'])->middleware('throttle:sensitive');
     Route::patch('code-agents/{slug}', [CodeAgentsAdminController::class, 'model'])->middleware('throttle:sensitive');
     Route::post('code-agents/apps', [CodeAgentsAdminController::class, 'addApp'])->middleware('throttle:sensitive');
+    Route::post('code-agents/apps/{app}/reveal', [CodeAgentsAdminController::class, 'revealAppSecret'])->middleware('throttle:sensitive');
     Route::delete('code-agents/apps/{app}', [CodeAgentsAdminController::class, 'disableApp'])->middleware('throttle:sensitive');
+    Route::delete('code-agents/apps/{app}/permanent', [CodeAgentsAdminController::class, 'deleteApp'])->middleware('throttle:sensitive');
     Route::get('models', [AdminController::class, 'models']);
     Route::get('models/search', [AdminController::class, 'search'])->middleware('throttle:hub');
     Route::get('models/inspect', [AdminController::class, 'inspect'])->middleware('throttle:hub');
