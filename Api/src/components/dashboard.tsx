@@ -9,15 +9,17 @@ export default function Dashboard({ user }: { user: Developer }) {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [keys, setKeys] = useState<KeyResponse | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
     Promise.all([api<Usage>("developer/usage"), api<KeyResponse>("developer/keys")])
-      .then(([u, k]) => { setUsage(u); setKeys(k); }).catch((e) => setError(e.message));
+      .then(([u, k]) => { setUsage(u); setKeys(k); }).catch((e) => setError(e.message)).finally(() => setLoading(false));
   }, []);
   const fraction = usage?.limit ? Math.min(100, Math.round((usage.used / usage.limit) * 100)) : 0;
   const max = Math.max(1, ...(usage?.daily.map((x) => x.used) || [1]));
   return <main className="page">
     <div className="page-heading"><div><div className="eyebrow">DEVELOPER OVERVIEW</div><h1>Welcome back, {user.name.split(" ")[0]}</h1><p>Manage your integrations and review the requests made with your account.</p></div><Link className="button primary" href="/keys">Manage API keys <ArrowRight size={17}/></Link></div>
     {error && <p className="alert error" role="alert">{error}</p>}
+    {loading && <p className="subtle small-text" role="status">Loading current account usage…</p>}
     <div className="metrics">
       <article className="metric"><div className="metric-top"><span>Completed requests this month</span><ChartColumnIncreasing size={19}/></div><strong>{usage?.used.toLocaleString() ?? "—"}</strong><small>Application request credits</small></article>
       <article className="metric"><div className="metric-top"><span>Remaining allocation</span><ShieldCheck size={19}/></div><strong>{usage ? (usage.remaining === null ? "Not set" : usage.remaining.toLocaleString()) : "—"}</strong><small>{usage?.month || "Current month"}</small></article>
