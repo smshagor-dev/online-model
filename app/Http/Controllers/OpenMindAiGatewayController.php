@@ -84,7 +84,7 @@ class OpenMindAiGatewayController
         $model = $agents->find($slug);
         abort_unless($model, 404, 'This model is unavailable.');
         abort_if($model->api_protocol === 'chat', 422, 'Use /chat/completions for chat models.');
-        abort_unless($model->api_path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_-]*$~D', $model->api_path),
+        abort_unless($model->api_path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$~D', $model->api_path) && !str_contains($model->api_path, '..'),
             503, 'The NVIDIA API path has not been configured.');
 
         abort_if(strlen($request->getContent()) > 262144, 413, 'Request is too large for the JSON gateway.');

@@ -60,13 +60,13 @@ class CodeAgentsAdminController
                 'regex:/^[a-zA-Z0-9][a-zA-Z0-9._\\/-]*$/',
                 Rule::unique('hosted_code_agents', 'provider_model')->ignore($slug, 'slug')],
             'api_path' => ['sometimes', 'nullable', 'string', 'max:190',
-                'regex:~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_-]*$~'],
+                'regex:~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$~'],
         ]);
         $model = DB::table('hosted_code_agents')->where('slug', $slug)->first();
         abort_unless($model, 404);
         if (array_key_exists('api_ready', $data) && $data['api_ready']) {
             $path = $data['api_path'] ?? $model->api_path;
-            abort_unless($path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_-]*$~D', $path),
+            abort_unless($path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$~D', $path) && !str_contains($path, '..'),
                 422, 'Configure a verified NVIDIA /v1/ API path before enabling inference.');
             if (($data['api_protocol'] ?? $model->api_protocol) === 'chat') {
                 abort_unless($path === '/v1/chat/completions', 422, 'Chat models must use the chat completions endpoint.');
