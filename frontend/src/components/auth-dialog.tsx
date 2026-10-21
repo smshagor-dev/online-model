@@ -262,6 +262,8 @@ export default function AuthDialog({
       <div className="auth-links">
         {ipChallengeId ? (
           <button className="text-button" type="button" disabled={busy} onClick={() => change("login")}>Back to sign in</button>
+        ) : mode === "verify-email" ? (
+          <><button className="text-button" disabled={busy} type="button" onClick={resend}>Resend verification code</button><button className="text-button" disabled={busy} type="button" onClick={() => change("login")}>Back to sign in</button></>
         ) : mode === "login" ? (
           <>
             <button
