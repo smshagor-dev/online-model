@@ -1,4 +1,5 @@
 // Server-only hosted image integration. No provider credentials enter browser code.
+import { readProviderJson } from "./provider-response";
 const IMAGE_ENDPOINT =
   "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell";
 const IMAGE_MODEL = "black-forest-labs/flux.1-schnell";
@@ -122,19 +123,13 @@ export async function generateHostedImage(
         upstream.status === 429 ? 429 : 503,
       );
     }
-    if (
-      Number(upstream.headers.get("content-length") || 0) > 28000000 ||
-      !upstream.headers.get("content-type")?.includes("application/json")
-    )
-      throw new ImageFailure("Unexpected image service response.", 502);
-    const responseText = await upstream.text();
-    if (responseText.length > 28000000)
-      throw new ImageFailure("The generated image exceeds the size limit.", 502);
+    // Check the actual streamed byte count even if the provider omits
+    // Content-Length. This prevents unbounded JSON buffering.
     let result: { artifacts?: { base64?: string; finishReason?: string }[] };
     try {
-      result = JSON.parse(responseText);
+      result = await readProviderJson<typeof result>(upstream, 28000000);
     } catch {
-      throw new ImageFailure("Invalid image service response.", 502);
+      throw new ImageFailure("Invalid or oversized image service response.", 502);
     }
     const artifact = result?.artifacts?.[0];
     if (artifact?.finishReason && artifact.finishReason !== "SUCCESS")
