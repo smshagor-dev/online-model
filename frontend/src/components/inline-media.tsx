@@ -83,6 +83,9 @@ export default function InlineMedia({
           />
         </a>
       )}
+      {url && task?.output_mime === "application/pdf" && (
+        <iframe title="Generated document" className="pdf-preview" src={url} />
+      )}
       {url && task?.output_mime === "audio/wav" && <audio controls src={url} />}{" "}
       {url && task?.output_mime === "video/mp4" && (
         <video className="media-preview" controls src={url} />
