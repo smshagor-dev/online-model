@@ -10,7 +10,6 @@ use App\Http\Controllers\DeveloperKeysController;
 use App\Http\Controllers\DeveloperPortalController;
 use App\Http\Controllers\FrontendChatController;
 use App\Http\Controllers\HostedImageController;
-use App\Http\Controllers\HostedInferenceController;
 use App\Http\Controllers\HostedMediaController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\NvidiaCosmosController;
@@ -104,9 +103,6 @@ Route::prefix('v1')->group(function () {
         Route::get('conversations/{id}/branches', [ToolsController::class, 'branches']);
         Route::get('canvases/{id}/versions', [CanvasController::class, 'versions']);
         Route::get('canvases/{id}/versions/{version}', [CanvasController::class, 'version']);
-        // Trusted frontend only; Laravel owns the provider credential and HTTP calls.
-        // Deliberately absent from the browser proxy's public route allowlist.
-        Route::post('provider/invoke', [HostedInferenceController::class, 'invoke']);
         Route::get('media', [MediaController::class, 'index']);
         Route::post('media', [MediaController::class, 'create'])->middleware('throttle:sensitive');
         // Server-only hosted image bridge; requires the existing 32+ character shared secret.
