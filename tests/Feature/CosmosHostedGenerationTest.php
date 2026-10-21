@@ -44,12 +44,10 @@ class CosmosHostedGenerationTest extends TestCase
             'api_path' => '/v1/cosmos/nvidia/cosmos3-nano',
         ]);
         [$u, $token] = $this->account();
-        $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()
-            ->assertJsonFragment([
-                'id' => 'nvidia-cosmos3-nano',
-                'operation' => 'generate',
-                'path' => '/cosmos/generations',
-            ]);
+        $catalog = $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data');
+        $cosmos = collect($catalog)->firstWhere('id', 'nvidia-cosmos3-nano');
+        $this->assertSame('generate', $cosmos['operation']);
+        $this->assertSame('/cosmos/generations', $cosmos['path']);
         $this->withToken($token)->postJson(
             '/api/v1/openmindai/models/nvidia-cosmos3-nano/invoke',
             ['input' => ['prompt' => 'bad legacy synchronous route']],
@@ -170,6 +168,7 @@ class CosmosHostedGenerationTest extends TestCase
         DB::table('cosmos_generations')->where('user_id', $user->id)
             ->update(['status' => 'failed']);
         $user->forceFill(['monthly_credit_limit' => 0])->save();
+        $this->app['auth']->forgetGuards();
         $this->withToken($token)->postJson('/api/v1/openmindai/cosmos/generations', [
             'model_mode' => 'text2image', 'prompt' => 'Robot moves packages',
         ])->assertStatus(429);
