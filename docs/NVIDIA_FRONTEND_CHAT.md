@@ -70,9 +70,11 @@ Laravel chat begin/status/checkpoint/finish bridge is unchanged.
   and honored on resume. On an early provider error (before any streamed answer)
   the configured NVIDIA_MODEL is tried once as fallback. No switching mid-stream.
 
-No Laravel migrations are required. The existing model selector still exposes
-the single OpenMindAI hosted entry and any independently configured local
-models. The frontend's media-mode selector remains available for explicit
+No Laravel migrations are required. The composer defaults to OpenMindAI Auto when hosted code models are enabled.
+Users can explicitly choose Lite, Super or Ultra, but automatic generation
+intent is still honored. The automatic router only uses models enabled by
+Laravel's existing hosted code-model catalog. Other existing local models
+remain available independently. The frontend's media-mode selector remains available for explicit
 user control; it is no longer required for clear creation requests.
 
 See frontend/tests/prompt-router.integration.test.mjs for routing regression
@@ -80,3 +82,37 @@ coverage. The recorded test fixtures do not prove NVIDIA account eligibility.
 Before production rollout verify both Nemotron IDs against the account key,
 especially rate limits and output handling. For PDF output in Bangla or other
 non-Latin scripts, use DOCX until the PDF font renderer gains Unicode support.
+
+
+### Chat-style image routing (Next.js only)
+
+The same chat composer now accepts PNG/JPEG/WebP images by file selection,
+drag-and-drop, or clipboard paste (up to 4 MB each, one per turn). The browser
+shows a removable preview. The protected Next.js route validates the binary
+signature against the claimed MIME type and uses an authenticated, fixed NVIDIA
+vision model endpoint with a base64 data URL in a multimodal user message.
+The model defaults to the server-side NVIDIA_VISION_MODEL for these turns,
+regardless of a previously selected local text model. Nothing in the browser
+can override upstream URLs, credentials, or model IDs.
+
+Laravel continues to own sign-in, session validation, text conversations,
+quotas, checkpoints, API usage accounting, and generated private media.
+The original image bytes **never pass to Laravel**, are not stored in history,
+and are stripped from checkpoints. A failed image turn cannot be resumed without
+reattachment, and image requests never fall back to a text-only model.
+Follow-up turns contain previously saved *text* only; users must reattach an
+image when further visual inspection is needed. This intentional transient
+behavior preserves the existing Laravel database/storage design.
+
+Uploaded PDFs/DOCX and audio still use their existing file-processing and
+transcription paths where configured; image editing is not supported by the
+current text-to-image-only generator. The existing PDF writer cannot embed
+Bengali/other non-Latin glyphs. Use DOCX for those languages until a Unicode
+PDF font/shaping engine is added.
+
+To verify, run npm run typecheck and npm run test:integration in frontend,
+then test image input and hosted-generation features with an authorized
+NVIDIA key on the deployed host. Automated fixtures are not proof of actual
+model access or provider limits.
+
+OpenMindAI Auto is a frontend-only selection; it is not a fourth NVIDIA endpoint or a new Laravel database record. The existing three provider aliases remain unchanged.
