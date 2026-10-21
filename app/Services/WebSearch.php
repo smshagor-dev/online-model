@@ -29,15 +29,97 @@ class WebSearch
 
     public function search(string $query, array $options = []): array
     {
-        abort_unless(config('models.search_url'), 503, 'Configure your self-hosted SearXNG search endpoint first.');
         $params = ['q' => mb_substr($query, 0, 500), 'format' => 'json', 'safesearch' => 1];
         if (in_array($options['time_range'] ?? '', ['day', 'week', 'month', 'year'], true)) {
             $params['time_range'] = $options['time_range'];
         }
-        $r = Http::acceptJson()->connectTimeout(3)->timeout(8)->withOptions(['allow_redirects' => false])->get(config('models.search_url'), $params);
-        abort_unless($r->successful() && is_array($r->json('results')), 503, 'Your search service is unavailable or returned invalid results.');
+        $providers = [];
+        if (config('models.search_url')) {
+            $providers[] = ['searxng', config('models.search_url'), $params];
+        }
+        if (config('models.public_search_fallback')) {
+            $providers[] = ['bing_rss', 'https://www.bing.com/search', ['q' => $params['q'], 'format' => 'rss']];
+            $providers[] = ['duckduckgo', 'https://html.duckduckgo.com/html/', ['q' => $params['q']]];
+        }
+        foreach ($providers as [$provider, $url, $queryParams]) {
+            try {
+                $r = Http::withHeaders(['Accept' => $provider === 'searxng' ? 'application/json' : 'application/rss+xml,text/html', 'User-Agent' => 'OpenMindAI-Research/1.0'])->connectTimeout(3)->timeout(8)->withOptions(['allow_redirects' => false, 'stream' => true])->get($url, $queryParams);
+                if (! $r->successful()) {
+                    continue;
+                }
+                $stream = $r->toPsrResponse()->getBody();
+                try {
+                    $body = '';
+                    while (! $stream->eof()) {
+                        $body .= $stream->read(65536);
+                        if (strlen($body) > 1000000) {
+                            throw new \RuntimeException('Search response too large.');
+                        }
+                    }
+                } finally {
+                    $stream->close();
+                }
+                $rows = $this->parseResults($provider, $body);
+                $results = $this->normalize($rows, $options);
+                if ($results) {
+                    return array_map(fn ($source) => [...$source, 'provider' => $provider, 'time_filter_applied' => $provider === 'searxng' && isset($params['time_range'])], $results);
+                }
+            } catch (\Throwable $e) {
+                // Try the next provider without exposing credentials or upstream error bodies.
+            }
+        }
+        abort(503, 'Web search is unavailable. No live sources could be retrieved.');
+    }
+
+    private function parseResults(string $provider, string $body): array
+    {
+        if ($provider === 'searxng') {
+            $data = json_decode($body, true);
+            return is_array($data['results'] ?? null) ? $data['results'] : [];
+        }
+        if (stripos($body, '<!DOCTYPE') !== false && $provider === 'bing_rss') {
+            return [];
+        }
+        $dom = new \DOMDocument;
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $loaded = $provider === 'bing_rss'
+                ? $dom->loadXML($body, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)
+                : $dom->loadHTML('<?xml encoding="UTF-8">'.$body, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+            if (! $loaded) {
+                return [];
+            }
+            $rows = [];
+            if ($provider === 'bing_rss') {
+                foreach ($dom->getElementsByTagName('item') as $item) {
+                    $rows[] = ['url' => $item->getElementsByTagName('link')->item(0)?->textContent ?? '', 'title' => $item->getElementsByTagName('title')->item(0)?->textContent ?? '', 'content' => $item->getElementsByTagName('description')->item(0)?->textContent ?? ''];
+                }
+            } else {
+                $xpath = new \DOMXPath($dom);
+                foreach ($xpath->query('//a[contains(concat(" ", normalize-space(@class), " "), " result__a ")]') as $link) {
+                    $url = $link->getAttribute('href');
+                    if (str_starts_with($url, '//')) {
+                        $url = 'https:'.$url;
+                    }
+                    $parts = parse_url($url);
+                    if (in_array($parts['host'] ?? '', ['duckduckgo.com', 'www.duckduckgo.com'], true)) {
+                        parse_str($parts['query'] ?? '', $wrapped);
+                        $url = is_string($wrapped['uddg'] ?? null) ? $wrapped['uddg'] : '';
+                    }
+                    $rows[] = ['url' => $url, 'title' => $link->textContent, 'content' => ''];
+                }
+            }
+            return $rows;
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+    }
+
+    private function normalize(array $rows, array $options): array
+    {
         $results = [];
-        foreach ($r->json('results') as $v) {
+        foreach ($rows as $v) {
             if (! is_array($v) || ! is_string($v['url'] ?? null) || strlen($v['url']) > 2000 || ! ($url = self::canonicalUrl($v['url']))) {
                 continue;
             }

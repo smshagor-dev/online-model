@@ -41,7 +41,7 @@ class StreamChatController
         $research = app(WebResearch::class);
         $deep = ! empty($d['deep_research']);
         $options = ['time_range' => $d['search_time_range'] ?? null];
-        $evidence = $deep ? $research->collect($d['message'], $options) : (! empty($d['web_search']) ? app(WebSearch::class)->search($d['message'], $options) : []);
+        $evidence = $deep ? $research->collect($d['message'], $options) : (! empty($d['web_search']) ? $research->quick($d['message'], $options) : []);
         $sources = $research->summaries($evidence);
         $messages = $context->build($r->user(), $c, $d['message'], $d['attachment_ids'] ?? [], $temporary);
         if ($evidence || ! empty($d['web_search'])) {

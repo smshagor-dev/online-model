@@ -834,6 +834,9 @@ export default function ChatWorkspace() {
                 ),
               );
           }
+          if (event === "answer" && typeof data.content === "string") {
+            setMessages(previous=>previous.map((message,index)=>index === previous.length-1 ? {...message,content:data.content as string} : message));
+          }
           if (event === "delta")
             setMessages((previous) =>
               previous.map((m, i) =>

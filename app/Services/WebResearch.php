@@ -7,6 +7,31 @@ use Throwable;
 
 class WebResearch
 {
+    public function quick(string $question, array $options = []): array
+    {
+        $sources = app(WebSearch::class)->search($question, $options);
+        foreach ($sources as $index => &$source) {
+            $source['citation'] = $index + 1;
+            $source['read_status'] = 'snippet_only';
+            if ($index >= 3) {
+                continue;
+            }
+            try {
+                $text = app(WebReader::class)->read($source['url']);
+                if (mb_strlen(trim($text)) >= 80) {
+                    $source['page_text'] = mb_substr($text, 0, 8000);
+                    $source['read_status'] = 'read';
+                } else {
+                    $source['read_status'] = 'unavailable';
+                }
+            } catch (Throwable $e) {
+                $source['read_status'] = 'unavailable';
+            }
+        }
+        unset($source);
+        return $sources;
+    }
+
     // Fixed, bounded query expansion does not require a second AI provider.
     public function collect(string $question, array $options = [], ?callable $progress = null, ?callable $cancelled = null): array
     {
