@@ -23,12 +23,12 @@ const publicPaths = new Set([
   "email/change/confirm",
 ]);
 const routes: Record<string, RegExp> = {
-  GET: /^(public-config|teams(?:\/\d+(?:\/(documents|threads)\/\d+)?)?|connectors|explore\/assistants(?:\/[a-f0-9-]{36})?|assistants|tasks(?:\/\d+\/runs)?|canvases\/\d+\/versions(?:\/\d+)?|conversations\/\d+\/branches|media(?:\/\d+(?:\/output)?)?|me|models|tokens|developer\/keys|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
-  POST: /^(teams(?:\/\d+\/(preview|invites|documents|threads(?:\/\d+)?))?|team-invites\/\d+\/accept|connectors\/[a-zA-Z0-9_-]{1,80}\/(connect|tools|call)|live\/(start|input|stop)|explore\/assistants\/[a-f0-9-]{36}\/copy|assistants(?:\/\d+\/publish)?|tasks(?:\/\d+\/runs(?:\/\d+\/resume)?)?|me\/(avatar|email)|email\/change\/confirm|settings\/data|media(?:\/(?:image|transcription|speech|video|document_create))?|login(?:\/verify-ip)?|register|forgot-password|reset-password|email\/resend|developer\/keys|logout|logout-all|web-search|chat(?:\/(stream|resume))?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
+  GET: /^(public-config|teams(?:\/\d+(?:\/(documents|threads)\/\d+)?)?|connectors|explore\/assistants(?:\/[a-f0-9-]{36})?|assistants|tasks(?:\/\d+\/runs)?|canvases\/\d+\/versions(?:\/\d+)?|conversations\/\d+\/branches|media(?:\/\d+(?:\/output)?)?|me|models|tokens|capabilities|preferences|projects|memories|attachments(?:\/\d+)?|canvases(?:\/\d+)?|shares|export|shared\/[a-f0-9]{64}|conversations(?:\/\d+)?)$/,
+  POST: /^(teams(?:\/\d+\/(preview|invites|documents|threads(?:\/\d+)?))?|team-invites\/\d+\/accept|connectors\/[a-zA-Z0-9_-]{1,80}\/(connect|tools|call)|live\/(start|input|stop)|explore\/assistants\/[a-f0-9-]{36}\/copy|assistants(?:\/\d+\/publish)?|tasks(?:\/\d+\/runs(?:\/\d+\/resume)?)?|me\/(avatar|email)|email\/change\/confirm|settings\/data|media(?:\/(?:image|transcription|speech|video|document_create))?|login(?:\/verify-ip)?|register|forgot-password|reset-password|email\/resend|logout|logout-all|web-search|chat(?:\/(stream|resume))?|projects|memories|attachments|canvases|conversations\/\d+\/(branch|share)|conversations\/\d+\/messages\/\d+\/stop|2fa\/(setup|confirm|recovery-codes))$/,
   PATCH: /^(me|preferences|conversations\/\d+)$/,
   PUT: /^(teams\/\d+\/(members|documents)\/\d+|assistants\/\d+|tasks\/\d+|me\/password|projects\/\d+|canvases\/\d+|memories\/\d+|conversations\/\d+\/messages\/\d+\/feedback)$/,
   DELETE:
-    /^(teams\/\d+(?:\/(invites|members|documents|threads)\/\d+)?|connectors\/[a-zA-Z0-9_-]{1,80}|connector-calls\/\d+|assistants\/\d+(?:\/publish)?|tasks\/\d+(?:\/runs\/\d+)?|me\/(avatar|email)|media\/\d+|me|2fa|tokens\/\d+|developer\/keys\/\d+|conversations\/\d+|projects\/\d+|canvases\/\d+|memories\/\d+|attachments\/\d+|shares\/\d+)$/,
+    /^(teams\/\d+(?:\/(invites|members|documents|threads)\/\d+)?|connectors\/[a-zA-Z0-9_-]{1,80}|connector-calls\/\d+|assistants\/\d+(?:\/publish)?|tasks\/\d+(?:\/runs\/\d+)?|me\/(avatar|email)|media\/\d+|me|2fa|tokens\/\d+|conversations\/\d+|projects\/\d+|canvases\/\d+|memories\/\d+|attachments\/\d+|shares\/\d+)$/,
 };
 async function proxy(
   request: NextRequest,
@@ -81,6 +81,8 @@ async function proxy(
           size >
           (endpoint === "media" || endpoint === "live/input" || endpoint === "media/transcription"
             ? 11_000_000
+            : endpoint === "chat/stream" && nvidiaEnabled()
+              ? 6_000_000 // one 4 MB image plus conversation metadata
             : endpoint === "me/avatar"
               ? 130_000
               : 100_000)

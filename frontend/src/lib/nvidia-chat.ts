@@ -1,5 +1,6 @@
 import { routePrompt, serverRouterConfig } from "./prompt-router.ts";
 import { dispatchPromptMedia } from "./auto-dispatch.ts";
+import { parseInlineImage, imageMessage } from "./vision-input.ts";
 import {
   plannerInstruction,
   researchLoop,
@@ -9,15 +10,20 @@ import {
 // Server-only implementation. Never import this module in a client component.
 const endpoint = "https://integrate.api.nvidia.com/v1/chat/completions";
 export const NVIDIA_MODEL_ID = -1;
+export const NVIDIA_AUTO_MODEL_ID = -4;
 export const NVIDIA_HOSTED_MODELS = [
   { id: -2, slug: "openmindai-super", name: "OpenMindAI Super", provider: "nvidia/nemotron-3.5-super-vl-120b-a12b" },
   { id: -3, slug: "openmindai-ultra", name: "OpenMindAI Ultra", provider: "nvidia/nemotron-3-ultra-550b-a55b" },
   { id: -1, slug: "openmindai-lite", name: "OpenMindAI Lite", provider: "nvidia/nemotron-3.5-lightning-30b-a3b" },
 ] as const;
-export const isNvidiaModelId = (id: number) => NVIDIA_HOSTED_MODELS.some((model) => model.id === id);
-export const nvidiaModels = (allowed: string[]) => NVIDIA_HOSTED_MODELS
-  .filter((model) => allowed.includes(model.slug))
-  .map((model) => ({ id: model.id, name: model.name, family: "Hosted coding", license: "External inference service" }));
+export const isNvidiaModelId = (id: number) =>
+  id === NVIDIA_AUTO_MODEL_ID || NVIDIA_HOSTED_MODELS.some((model) => model.id === id);
+export const nvidiaModels = (allowed: string[]) => [
+  ...(allowed.length ? [{id: NVIDIA_AUTO_MODEL_ID, name: "OpenMindAI Auto", family: "Hosted AI", license: "External inference service"}] : []),
+  ...NVIDIA_HOSTED_MODELS
+    .filter((model) => allowed.includes(model.slug))
+    .map((model) => ({id: model.id, name: model.name, family: "Hosted coding", license: "External inference service"})),
+];
 export const nvidiaEnabled = () => process.env.CHAT_PROVIDER === "nvidia";
 export function nvidiaModel() {
   return {
@@ -36,6 +42,7 @@ type Checkpoint = {
   previousPart?: string;
   finished?: boolean;
   modelId?: string;
+  imageRequired?: boolean;
   sources?: Source[];
 };
 type Lease = {
@@ -69,27 +76,54 @@ export async function nvidiaChat(
     );
   const fetcher = options.fetcher || fetch;
   const input = JSON.parse(body);
+  let inlineImage: ReturnType<typeof parseInlineImage>;
+  try {
+    inlineImage = parseInlineImage(input.image);
+    if (inlineImage && input.resume_message_id)
+      return Response.json({message: "Start a new turn with the image attached."}, {status: 422});
+  } catch (error) {
+    return Response.json({message: (error as Error).message}, {status: 422});
+  }
+  // Only text and metadata are sent to Laravel. Image bytes stay inside Next.js.
+  const {image: _discardImage, ...backendInput} = input;
+  void _discardImage;
   const selected = NVIDIA_HOSTED_MODELS.find((model) => model.id === Number(input.model_id));
-  if (!selected && !input.resume_message_id && !options.config)
-    return Response.json({ message: "Unknown hosted code model." }, { status: 404 });
-  // Enforce database visibility even when someone manually submits an unavailable model ID.
-  if (selected && !options.config && !input.resume_message_id) {
+  const isAuto = Number(input.model_id) === NVIDIA_AUTO_MODEL_ID;
+  if (!selected && !isAuto && !input.resume_message_id && !options.config)
+    return Response.json({message: "Unknown hosted model."}, {status: 404});
+  let permittedSlugs: string[] | null = null;
+  // Respect Laravel's existing admin-managed availability without changing its controllers.
+  if ((selected || isAuto) && !options.config && !input.resume_message_id) {
     try {
       const response = await fetcher(base.replace(/\/$/, "") + "/openmindai/models", {
-        headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+        headers: {Authorization: "Bearer " + token, Accept: "application/json"},
         cache: "no-store", redirect: "error",
         signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
       });
       if (!response.ok)
-        return Response.json({ message: "Cannot verify available models." }, { status: response.status === 401 ? 401 : 503 });
-      const models = await response.json();
-      if (!Array.isArray(models.data) || !models.data.some((model: {id:string}) => model.id === selected.slug))
-        return Response.json({ message: "This model is not enabled." }, { status: 403 });
+        return Response.json({message: "Cannot verify available models."},
+          {status: response.status === 401 ? 401 : 503});
+      const catalog = await response.json();
+      if (!Array.isArray(catalog.data))
+        return Response.json({message: "Invalid model catalog."}, {status: 503});
+      permittedSlugs = catalog.data
+        .map((m: {id?: string}) => m.id)
+        .filter((id: unknown): id is string => typeof id === "string");
+      if ((isAuto && permittedSlugs.length === 0) ||
+          (selected && !permittedSlugs.includes(selected.slug)))
+        return Response.json({message: "This model is not enabled."}, {status: 403});
+      if (inlineImage && !permittedSlugs.includes("openmindai-super"))
+        return Response.json({message: "Image understanding requires an enabled vision model."}, {status: 503});
     } catch {
-      return Response.json({ message: "Cannot verify available models." }, { status: 503 });
+      return Response.json({message: "Cannot verify available models."}, {status: 503});
     }
   }
   let routedModel = config.model;
+  let fallbackModel = config.model;
+  if (permittedSlugs?.length) {
+    fallbackModel = permittedSlugs.includes("openmindai-lite") ? NVIDIA_HOSTED_MODELS[2].provider :
+      permittedSlugs.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : NVIDIA_HOSTED_MODELS[1].provider;
+  }
   // The classifier is a paid upstream call: confirm the Laravel session first.
   // Existing injected test fixtures already exercise authenticated bridge responses.
   if (!options.config && !input.resume_message_id &&
@@ -109,10 +143,23 @@ export async function nvidiaChat(
     }
   }
   if (!input.resume_message_id && typeof input.message === "string") {
-    const decision = await routePrompt(input.message, serverRouterConfig(config.apiKey, config.model), {
+    const available = permittedSlugs || [];
+    const routing = serverRouterConfig(config.apiKey, config.model);
+    if (isAuto && permittedSlugs) {
+      const fast = available.includes("openmindai-lite") ? NVIDIA_HOSTED_MODELS[2].provider :
+        available.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : NVIDIA_HOSTED_MODELS[1].provider;
+      const reasoning = available.includes("openmindai-ultra") ? NVIDIA_HOSTED_MODELS[1].provider :
+        available.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : fast;
+      routing.fastModel = fast;
+      routing.reasoningModel = reasoning;
+      routing.visionModel = NVIDIA_HOSTED_MODELS[0].provider;
+      fallbackModel = fast;
+    }
+    const decision = await routePrompt(input.message, routing, {
       fetcher,
       signal,
       hasAttachments: Array.isArray(input.attachment_ids) && input.attachment_ids.length > 0,
+      hasImage: Boolean(inlineImage),
       deepResearch: Boolean(input.deep_research),
       webSearch: Boolean(input.web_search),
       // Fixture calls inject config and exercise the stream without an additional classifier request.
@@ -125,8 +172,9 @@ export async function nvidiaChat(
       });
     }
   }
-  // A user's explicit selection wins over automatic chat routing.
-  if (selected) routedModel = selected.provider;
+  // An explicit Lite/Super/Ultra selection is honored for ordinary text chat;
+  // automatic requests use the prompt's result. Images always require Super VL.
+  if (selected && !inlineImage && !options.config) routedModel = selected.provider;
   const backend = async (
     path: string,
     data: unknown,
@@ -155,7 +203,7 @@ export async function nvidiaChat(
       JSON.parse(body).resume_message_id ? "resume" : "begin",
       JSON.parse(body).resume_message_id
         ? { message_id: JSON.parse(body).resume_message_id }
-        : { ...JSON.parse(body), provider_model: routedModel },
+        : { ...backendInput, provider_model: routedModel },
       JSON.parse(body).deep_research ? 80000 : 15000,
     );
     if (!prepared.ok) {
@@ -184,6 +232,19 @@ export async function nvidiaChat(
       { status: 503 },
     );
   }
+  // Resume never silently continues without its original image bytes.
+  if (lease.checkpoint?.imageRequired && !inlineImage) {
+    const result = await backend("finish", {
+      ticket: lease.ticket, content: lease.checkpoint.content || "",
+      status: "failed", sources: lease.sources,
+      provider_model: lease.checkpoint.modelId || config.model,
+    }).catch(() => null);
+    if (!result?.ok)
+      return Response.json({message: "Unable to close the interrupted image request."}, {status: 503});
+    return Response.json({
+      message: "The previous image is no longer attached. Start a new message and attach it again.",
+    }, {status: 409});
+  }
   const deep = Boolean(lease.deep_research ?? JSON.parse(body).deep_research);
   // Resume uses the model stored with the checkpoint, not a fresh classification.
   let activeModel = lease.checkpoint?.modelId || routedModel;
@@ -206,6 +267,9 @@ export async function nvidiaChat(
         stage: deep ? "research" : "writing",
       };
       let generationMessages = checkpoint.messages || lease.messages;
+      // Send multimodal content to NVIDIA, but never checkpoint or persist the image.
+      const imageIndex = generationMessages.length - 1;
+      const streamImage = inlineImage;
       let previousPart = checkpoint.previousPart || "";
       const saveCheckpoint = async () => {
         if (!lease.message_id) return;
@@ -216,6 +280,7 @@ export async function nvidiaChat(
             state: {
               ...checkpoint,
               modelId: activeModel,
+              imageRequired: Boolean(inlineImage),
               content,
               messages: generationMessages,
               previousPart,
@@ -254,9 +319,12 @@ export async function nvidiaChat(
           sources: lease.sources,
           provider: "nvidia",
           content,
-          resumable: Boolean(lease.message_id),
+          resumable: Boolean(lease.message_id) && !inlineImage,
         });
         if (cancelled) throw new Error("Cancelled");
+        // Mark image turns non-resumable before inference so a failed request
+        // cannot resume without the transient image, even with zero output.
+        if (inlineImage) await saveCheckpoint();
         poll = setInterval(async () => {
           if (polling) return;
           polling = true;
@@ -423,9 +491,17 @@ export async function nvidiaChat(
             },
             body: JSON.stringify({
               model,
-              messages: generationMessages,
+              messages: streamImage
+                ? generationMessages.map((m, index) => index === imageIndex
+                    ? {...m, content: imageMessage(m.content, streamImage)}
+                    : m)
+                : generationMessages,
               stream: true,
               temperature: 0.6,
+              ...(inlineImage ? {
+                max_tokens: 4096,
+                chat_template_kwargs: {enable_thinking: false},
+              } : {}),
               ...(model === "nvidia/nemotron-3.5-lightning-30b-a3b"
                 ? { chat_template_kwargs: { enable_thinking: false } }
                 : {}),
@@ -439,8 +515,8 @@ export async function nvidiaChat(
           // Retry with the configured baseline only before any user-visible tokens.
           // Never mix two models in one partially streamed answer.
           if (([404, 410, 429].includes(response.status) || response.status >= 500) &&
-              activeModel !== config.model && !upstreamAbort.signal.aborted) {
-            activeModel = config.model;
+              activeModel !== fallbackModel && !inlineImage && !upstreamAbort.signal.aborted) {
+            activeModel = fallbackModel;
             response = await requestStream(activeModel);
           }
           if (

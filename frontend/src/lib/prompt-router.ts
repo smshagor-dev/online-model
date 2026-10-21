@@ -7,7 +7,7 @@ export type RouterConfig = {
 };
 type Options = {
   fetcher?: typeof fetch; signal?: AbortSignal; hasAttachments?: boolean;
-  deepResearch?: boolean; webSearch?: boolean; enableClassifier?: boolean;
+  deepResearch?: boolean; webSearch?: boolean; enableClassifier?: boolean; hasImage?: boolean;
 };
 const ENDPOINT = "https://integrate.api.nvidia.com/v1/chat/completions";
 const FAST = "nvidia/nemotron-3.5-lightning-30b-a3b";
@@ -57,6 +57,8 @@ function chooseChatModel(text: string, cfg: RouterConfig, opt: Options): string 
 export async function routePrompt(prompt: string, cfg: RouterConfig, opt: Options = {}): Promise<Route> {
   const text = prompt.slice(0, 16000).trim();
   const defaultRoute: Route = {kind: "chat", model: chooseChatModel(text, cfg, opt)};
+  // Images require a vision-capable model; a text-to-image generator cannot edit uploads.
+  if (opt.hasImage) return {kind: "chat", model: cfg.visionModel || VISION};
   if (!text) return defaultRoute;
   if (!opt.hasAttachments && !opt.deepResearch && !opt.webSearch) {
     const media = certainMedia(text);

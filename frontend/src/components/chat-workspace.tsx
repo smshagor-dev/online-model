@@ -116,6 +116,9 @@ export default function ChatWorkspace() {
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [toolsOpen, setToolsOpen] = useState<string | null>(null);
   const [filePreview, setFilePreview] = useState<File | null>(null);
+  const [inlineImage, setInlineImage] = useState<{
+    name: string; mime: "image/png" | "image/jpeg" | "image/webp"; data: string;
+  } | null>(null);
   const [inlineMedia, setInlineMedia] = useState<number[]>([]);
   const [assistant, setAssistant] = useState<{
     id: number;
@@ -211,6 +214,7 @@ export default function ChatWorkspace() {
     setMediaOpen(false);
     setToolsOpen(null);
     setFilePreview(null);
+    setInlineImage(null);
     setInlineMedia([]);
     setAssistant(null);
     setBranches(null);
@@ -489,6 +493,7 @@ export default function ChatWorkspace() {
     setConversationId(null);
     setAssistant(null);
     setMediaMode("chat");
+    setInlineImage(null);
     setInlineMedia([]);
     setMessages([]);
     setMessagePage(1);
@@ -524,6 +529,7 @@ export default function ChatWorkspace() {
       if (controller.signal.aborted) return;
       setConversationId(id);
       setInlineMedia([]);
+      setInlineImage(null);
       setAssistant(
         result.conversation.assistant_id
           ? {
@@ -576,13 +582,14 @@ export default function ChatWorkspace() {
     },
   ) {
     event?.preventDefault();
-    const text = (override?.text ?? draft).trim();
+    const text = (override?.text ?? draft).trim() ||
+      (!override && inlineImage ? "Describe this image." : "");
     if (!text || busy || loadingChat || initializing) return;
     if (!user) {
       setAuthOpen(true);
       return;
     }
-    if (mediaMode !== "chat" && !override) {
+    if (mediaMode !== "chat" && !override && !inlineImage) {
       if (!mediaKinds.includes(mediaMode))
         return setError("This media engine is not configured.");
       if (text.length > 4000)
@@ -607,6 +614,10 @@ export default function ChatWorkspace() {
       } finally {
         if (!controller.signal.aborted) setBusy(false);
       }
+      return;
+    }
+    if (inlineImage && !models.some((m) => m.id === -2)) {
+      setError("Image chat requires OpenMindAI hosted vision to be enabled.");
       return;
     }
     if (!modelId && !override?.resumeId) {
@@ -635,12 +646,13 @@ export default function ChatWorkspace() {
     try {
       await streamChat(
         {
-          model_id: modelId,
+          model_id: inlineImage && !override ? -2 : modelId,
           ...(override?.resumeId
             ? { resume_message_id: override.resumeId }
             : {}),
           ...(assistant ? { assistant_id: assistant.id } : {}),
           message: text,
+          ...(!override && inlineImage ? {image: {mime: inlineImage.mime, data: inlineImage.data}} : {}),
           ...(id ? { conversation_id: id } : {}),
           ...(projectId ? { project_id: projectId } : {}),
           temporary,
@@ -746,6 +758,8 @@ export default function ChatWorkspace() {
               /* Mobile browsers may require service-worker notifications. */
             }
           }
+          if (event === "done" && data.status === "complete" && inlineImage)
+            setInlineImage(null);
           if (event === "done" && !autoMedia)
             setMessages((previous) =>
               previous.map((m, i) =>
@@ -881,12 +895,52 @@ export default function ChatWorkspace() {
     if (action === "planner") setToolsOpen("research");
   }
 
+  async function attachImage(file: File) {
+    const mime = file.type;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(mime)) {
+      setError("Use a PNG, JPEG or WebP image.");
+      return;
+    }
+    if (!file.size || file.size > 4_000_000) {
+      setError("Image must be at most 4 MB.");
+      return;
+    }
+    const owner = user?.id;
+    setUploading(true);
+    setError("");
+    try {
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const value = String(reader.result || "");
+          const prefix = "data:" + mime + ";base64,";
+          if (!value.startsWith(prefix)) reject(new Error("Invalid image data."));
+          else resolve(value.slice(prefix.length));
+        };
+        reader.onerror = () => reject(new Error("Unable to read image."));
+        reader.readAsDataURL(file);
+      });
+      if (identityRef.current !== owner) return;
+      setInlineImage({name: file.name.slice(0, 120), mime: mime as "image/png" | "image/jpeg" | "image/webp", data});
+      setMediaMode("chat");
+      setFilePreview(null);
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
   function handleFile(file: File) {
     if (!user) {
       setAuthOpen(true);
       return;
     }
     if (busy || loadingChat || uploading) return;
+    if (file.type.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(file.name)) {
+      void attachImage(file);
+      return;
+    }
     if (file.size > 8000000) {
       setError("File exceeds 8 MB.");
       return;
@@ -1721,6 +1775,10 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
           >
             <textarea
               ref={inputRef}
+              onPaste={(e) => {
+                const imageFile = Array.from(e.clipboardData.files).find((f) => f.type.startsWith("image/"));
+                if (imageFile) { e.preventDefault(); handleFile(imageFile); }
+              }}
               aria-label="Message"
               placeholder="Ask anything"
               value={draft}
@@ -1750,6 +1808,17 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                 if (file) handleFile(file);
               }}
             />
+            {inlineImage && (
+              <div className="attachment-chips" role="group" aria-label="Image attached to the next message">
+                <span>
+                  <img src={"data:" + inlineImage.mime + ";base64," + inlineImage.data}
+                    width={36} height={36} alt="" style={{objectFit: "cover", borderRadius: 5}} />
+                  {inlineImage.name}
+                  <button type="button" aria-label="Remove attached image"
+                    onClick={() => setInlineImage(null)}><X size={13} /></button>
+                </span>
+              </div>
+            )}
             {attachments.length > 0 && (
               <div className="attachment-chips">
                 {attachments.map((a) => (
@@ -1826,9 +1895,9 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
               </details>
               {models.length > 1 && mediaMode === "chat" && (
                 <label className="composer-model-select" style={{display:"inline-flex", alignItems:"center", gap:6, maxWidth:"45%"}}>
-                  <span className="sr-only">OpenMindAI agent</span>
+                  <span className="sr-only">OpenMindAI model</span>
                   <select
-                    aria-label="OpenMindAI agent"
+                    aria-label="OpenMindAI model"
                     value={modelId ?? ""}
                     onChange={(event) => setModelId(Number(event.target.value))}
                     disabled={busy || loadingChat}
