@@ -48,6 +48,7 @@ export default function MediaDialog({
   const [kinds, setKinds] = useState<Kind[]>([]);
   const [kind, setKind] = useState<Kind>(initialKind);
   const [format, setFormat] = useState<"pdf" | "docx">("docx");
+  const [speechLanguage, setSpeechLanguage] = useState("en-US");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
@@ -165,7 +166,10 @@ export default function MediaDialog({
           ? "media/" + kind
           : "media",
         "POST",
-        { kind, prompt, input, ...(kind === "document_create" ? { format } : {}) },
+        { kind, prompt, input,
+          ...(kind === "document_create" ? { format } : {}),
+          ...(kind === "speech" ? { language: speechLanguage } : {}),
+        },
         c.signal,
       );
       if (!c.signal.aborted) {
@@ -235,6 +239,17 @@ export default function MediaDialog({
               ))}
             </select>
           </label>
+          {kind === "speech" && (
+            <label>
+              Speech language
+              <select value={speechLanguage} disabled={busy}
+                onChange={(e) => setSpeechLanguage(e.target.value)}>
+                <option value="en-US">English (United States)</option>
+                <option value="es-US">Spanish (United States)</option>
+                <option value="fr-FR">French (France)</option>
+              </select>
+            </label>
+          )}
           {kind === "document_create" && (
             <label>
               File format
