@@ -48,6 +48,95 @@ class OpenMindAiGatewayController
         return $this->completion($request, true, $agents, $credits);
     }
 
+
+    public function catalog(Request $request, HostedCodeAgents $agents)
+    {
+        $this->actor($request, false);
+        return response()->json(['object' => 'list', 'data' => $agents->publicCatalog()])
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function internalCatalog(Request $request, HostedCodeAgents $agents)
+    {
+        $this->actor($request, true);
+        return response()->json(['object' => 'list', 'data' => $agents->publicCatalog()])
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function invoke(Request $request, string $slug, HostedCodeAgents $agents, ApiCreditUsage $credits)
+    {
+        return $this->invokeModel($request, $slug, false, $agents, $credits);
+    }
+
+    public function internalInvoke(Request $request, string $slug, HostedCodeAgents $agents, ApiCreditUsage $credits)
+    {
+        return $this->invokeModel($request, $slug, true, $agents, $credits);
+    }
+
+    /**
+     * A constrained JSON gateway for non-chat NIM endpoints. Each model's path
+     * is selected by an administrator, never by the client. This is not a binary
+     * upload, websocket or asynchronous media job API.
+     */
+    private function invokeModel(Request $request, string $slug, bool $firstParty, HostedCodeAgents $agents, ApiCreditUsage $credits)
+    {
+        $user = $this->actor($request, $firstParty);
+        $model = $agents->find($slug);
+        abort_unless($model, 404, 'This model is unavailable.');
+        abort_if($model->api_protocol === 'chat', 422, 'Use /chat/completions for chat models.');
+        abort_unless($model->api_path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_-]*$~D', $model->api_path),
+            503, 'The NVIDIA API path has not been configured.');
+
+        abort_if(strlen($request->getContent()) > 262144, 413, 'Request is too large for the JSON gateway.');
+        abort_unless($request->isJson(), 415, 'JSON request required.');
+        $data = $request->validate(['input' => 'required|array']);
+        $payload = $data['input'];
+        abort_if(count($payload) > 64, 422, 'Too many input fields.');
+        // Prevent callers from selecting arbitrary paid or unauthorized models.
+        unset($payload['model'], $payload['stream']);
+        if ($model->include_model) {
+            $payload['model'] = $model->provider_model;
+        }
+        $key = (string) config('models.nvidia_key');
+        abort_unless(strlen($key) >= 12, 503, 'NVIDIA_API_KEY is not configured on the Laravel server.');
+
+        $lock = Cache::lock('openmindai:gateway:'.$user->id, 240);
+        abort_unless($lock->get(), 429, 'Another model request is already in progress.');
+        try {
+            $connection = $credits->connection('nvidia', $model->provider_model, strtolower($model->category));
+            $from = $credits->monthStart();
+            $used = (int) DB::table('api_credit_usage')->where('user_id', $user->id)
+                ->where('created_at', '>=', $from)->sum('credits');
+            $usedModel = (int) DB::table('api_credit_usage')->where('connection_id', $connection)
+                ->where('created_at', '>=', $from)->sum('credits');
+            $limit = DB::table('api_model_connections')->where('id', $connection)->value('monthly_credit_limit');
+            abort_if($user->monthly_credit_limit !== null && $used >= $user->monthly_credit_limit,
+                429, 'Your monthly API allowance has been reached.');
+            abort_if($limit !== null && $usedModel >= $limit, 429, 'This model has reached its monthly allowance.');
+
+            $upstream = Http::withToken($key)->acceptJson()->connectTimeout(10)->timeout(120)
+                ->withOptions(['allow_redirects' => false])
+                ->post('https://integrate.api.nvidia.com'.$model->api_path, $payload);
+            if (! $upstream->successful()) {
+                return response()->json(['error' => [
+                    'type' => 'upstream_error',
+                    'message' => $upstream->status() === 429
+                        ? 'Provider is rate limited.'
+                        : 'Model provider is temporarily unavailable.',
+                ]], $upstream->status() === 429 ? 429 : 502);
+            }
+            abort_if(strlen($upstream->body()) > 2097152, 502, 'Provider JSON response is too large.');
+            $result = $upstream->json();
+            abort_unless(is_array($result), 502, 'Invalid JSON response from NVIDIA.');
+            $credits->completed($user->id, $connection, 'gateway:'.bin2hex(random_bytes(16)));
+
+            return response()->json(['model' => $model->slug, 'output' => $result])
+                ->header('Cache-Control', 'no-store');
+        } finally {
+            $lock->release();
+        }
+    }
+
     private function completion(Request $request, bool $firstParty, HostedCodeAgents $agents, ApiCreditUsage $credits)
     {
         $user = $this->actor($request, $firstParty);
@@ -84,7 +173,7 @@ class OpenMindAiGatewayController
             }
         }
         $agent = $agents->find($data['model']);
-        abort_unless($agent, 404, 'This model is not enabled.');
+        abort_unless($agent && $agent->api_protocol === 'chat', 404, 'This chat model is not enabled.');
         $key = (string) config('models.nvidia_key');
         abort_unless(strlen($key) >= 12, 503, 'NVIDIA_API_KEY is not configured on the Laravel server.');
         $lock = Cache::lock('openmindai:gateway:'.$user->id, 240);

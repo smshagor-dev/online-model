@@ -45,6 +45,8 @@ Route::prefix('admin')->middleware(['auth', 'active', 'admin'])->group(function 
     Route::post('model-bundles', [ModelBundleController::class, 'import'])->middleware('throttle:hub');
     Route::post('model-bundles/{bundle}/download', [ModelBundleController::class, 'download']);
     Route::get('code-agents', [CodeAgentsAdminController::class, 'index']);
+    Route::get('nvidia-models', [CodeAgentsAdminController::class, 'catalog']);
+    Route::patch('nvidia-models/{slug}', [CodeAgentsAdminController::class, 'model'])->middleware('throttle:sensitive');
     Route::patch('code-agents/{slug}', [CodeAgentsAdminController::class, 'model'])->middleware('throttle:sensitive');
     Route::post('code-agents/apps', [CodeAgentsAdminController::class, 'addApp'])->middleware('throttle:sensitive');
     Route::delete('code-agents/apps/{app}', [CodeAgentsAdminController::class, 'disableApp'])->middleware('throttle:sensitive');

@@ -42,6 +42,7 @@ class OpenMindAiGatewayTest extends TestCase
         $newToken = $created->json('api_key');
         $this->withToken($newToken)->getJson('/api/v1/openmindai/models')->assertOk();
         $this->withToken($session)->deleteJson('/api/v1/developer/keys/'.$created->json('id'))->assertNoContent();
+        $this->app['auth']->forgetGuards();
         $this->withToken($newToken)->getJson('/api/v1/openmindai/models')->assertUnauthorized();
     }
 
@@ -107,8 +108,77 @@ class OpenMindAiGatewayTest extends TestCase
             'X-OpenMindAI-Nonce' => $nonce,
             'X-OpenMindAI-Signature' => hash_hmac('sha256', $message, $secret),
         ];
-        $this->getJson($path, $headers)->assertOk()->assertJsonCount(3, 'data');
-        $this->getJson($path, $headers)->assertStatus(409);
-        $this->getJson($path, [...$headers, 'X-OpenMindAI-Nonce' => bin2hex(random_bytes(16))])->assertUnauthorized();
+        $this->get($path, $headers)->assertOk()->assertJsonCount(3, 'data');
+        $this->get($path, $headers)->assertStatus(409);
+        $this->get($path, [...$headers, 'X-OpenMindAI-Nonce' => bin2hex(random_bytes(16))])->assertUnauthorized();
     }
+    public function test_catalog_contains_only_enabled_models_and_exposes_readiness(): void
+    {
+        $this->assertDatabaseCount('hosted_code_agents', 42);
+        $u = $this->account();
+        $token = $u->createToken('developer:catalog', ['openmindai:invoke'])->plainTextToken;
+        $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()
+            ->assertJsonCount(3, 'data')
+            ->assertJsonFragment(['id' => 'openmindai-super', 'available' => true]);
+        DB::table('hosted_code_agents')->where('slug', 'nvidia-nemotron-3.5-embed-1b')
+            ->update(['enabled' => true]);
+        $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()
+            ->assertJsonCount(4, 'data')
+            ->assertJsonFragment([
+                'id' => 'nvidia-nemotron-3.5-embed-1b',
+                'available' => false,
+                'path' => null,
+            ]);
+        $this->withToken($token)->getJson('/api/v1/openmindai/models')->assertOk()
+            ->assertJsonCount(3, 'data');
+    }
+
+    public function test_specialized_json_invoke_requires_admin_verified_configuration_and_tracks_usage(): void
+    {
+        config(['models.nvidia_key' => 'test-provider-secret-123']);
+        Http::fake(['integrate.api.nvidia.com/v1/embeddings' => Http::response([
+            'data' => [['embedding' => [0.5, 0.25]]],
+        ])]);
+        $u = $this->account();
+        $token = $u->createToken('developer:catalog', ['openmindai:invoke'])->plainTextToken;
+        $slug = 'nvidia-nemotron-3.5-embed-1b';
+        $endpoint = '/api/v1/openmindai/models/'.$slug.'/invoke';
+        $input = ['input' => ['input' => 'hello world']];
+        $this->withToken($token)->postJson($endpoint, $input)->assertNotFound();
+        DB::table('hosted_code_agents')->where('slug', $slug)->update([
+            'enabled' => true,
+            'api_ready' => true,
+            'api_path' => '/v1/embeddings',
+            'include_model' => true,
+        ]);
+        $this->withToken($token)->postJson($endpoint, $input)->assertOk()
+            ->assertJsonPath('model', $slug)
+            ->assertJsonPath('output.data.0.embedding.0', 0.5);
+        Http::assertSent(fn ($r) => $r->url() === 'https://integrate.api.nvidia.com/v1/embeddings'
+            && $r['model'] === 'nvidia/nemotron-3.5-embed-1b'
+            && $r['input'] === 'hello world');
+        $this->assertDatabaseHas('api_credit_usage', ['user_id' => $u->id, 'credits' => 1]);
+        $this->withToken($token)->postJson('/api/v1/openmindai/chat/completions', [
+            'model' => $slug, 'messages' => [['role' => 'user', 'content' => 'hello']],
+        ])->assertNotFound();
+        Http::assertSentCount(1);
+    }
+
+    public function test_model_configuration_never_forwards_client_supplied_provider_model(): void
+    {
+        config(['models.nvidia_key' => 'test-provider-secret-123']);
+        Http::fake(['integrate.api.nvidia.com/*' => Http::response(['result' => 'ok'])]);
+        $u = $this->account();
+        $token = $u->createToken('developer:safe', ['openmindai:invoke'])->plainTextToken;
+        $slug = 'nvidia-nemotron-3-embed-1b';
+        DB::table('hosted_code_agents')->where('slug', $slug)->update([
+            'enabled' => true, 'api_ready' => true, 'api_path' => '/v1/embeddings', 'include_model' => true,
+        ]);
+        $this->withToken($token)->postJson('/api/v1/openmindai/models/'.$slug.'/invoke', [
+            'input' => ['model' => 'another/paid-model', 'input' => 'safe prompt', 'stream' => true],
+        ])->assertOk();
+        Http::assertSent(fn ($r) => $r['model'] === 'nvidia/nemotron-3-embed-1b'
+            && ! isset($r['stream']));
+    }
+
 }

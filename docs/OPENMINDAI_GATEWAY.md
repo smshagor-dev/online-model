@@ -43,3 +43,27 @@ Construct the canonical input as `timestamp + "\n" + nonce + "\n" + uppercase_me
 **Security:** First-party secrets must stay on a server or trusted backend, never in a web/mobile binary or JavaScript bundle. Public browser users should use the existing authenticated site and Next.js proxy instead.
 
 **Scope:** The gateway currently exposes hosted code-model listing and chat completion. Image, speech, video and document workflows remain on their existing authenticated hosted-media routes; they have not been added as developer-key endpoints here.
+
+
+## NVIDIA Build free-endpoint catalog (2026-10-21)
+
+The NVIDIA Build catalog advertised 42 free endpoint models on October 21, 2026. The migration `2026_10_21_000006_nvidia_free_model_catalog.php` seeds them into the existing `hosted_code_agents` database table. The three original OpenMindAI chat aliases remain enabled and ready; the other 39 are disabled and not marked API-ready until an administrator has checked the exact NVIDIA model identifier, endpoint path, request schema and account entitlement.
+
+Admin → NVIDIA models (`/admin/nvidia-models`) displays all 42, with search, categories, editable display labels, NVIDIA model IDs, JSON API paths, whether the endpoint expects a model field, readiness and visibility. This is a database-backed configuration, not a .env list. Changing availability immediately affects the frontend catalog; no Next.js code change is needed for model discovery.
+
+Authenticated developer-key endpoints:
+
+- `GET /api/v1/openmindai/catalog` lists **enabled** models, including category, readiness, supported operation and relative API path when ready.
+- `GET /api/v1/openmindai/models` lists only enabled, API-ready chat models.
+- `POST /api/v1/openmindai/chat/completions` retains the existing streaming and non-streaming chat gateway.
+- `POST /api/v1/openmindai/models/{slug}/invoke` routes admin-verified **non-chat JSON** models to their configured NVIDIA `/v1/` API path, provided the service uses the `integrate.api.nvidia.com` origin.
+
+Invoke request body:
+
+```json
+{"input":{"input":"Text to embed"}}
+```
+
+The backend removes any caller-supplied `model` or `stream`, optionally inserts the server-side model ID and returns `{"model":"alias","output":{...provider JSON...}}`. It enforces the same user and model monthly limits and records successful requests. API keys are never sent to arbitrary user-selected hosts. HMAC-protected first-party equivalents exist under `/api/v1/first-party/catalog` and `/api/v1/first-party/models/{slug}/invoke`.
+
+**Important:** NVIDIA's free endpoint badge does not guarantee unrestricted or commercial availability. Models have different schemas and not all accept JSON-only invocation. No binary uploads, streaming audio, asynchronous media jobs, signed URLs or unsupported endpoint families are exposed through this gateway. These require their own reviewed integrations. Do not enable an untested specialized model solely because it appears in the catalog.

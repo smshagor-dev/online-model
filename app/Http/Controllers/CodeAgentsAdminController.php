@@ -7,27 +7,70 @@ use App\Services\TwoFactor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class CodeAgentsAdminController
 {
     public function index(HostedCodeAgents $agents)
     {
         return view('admin.code-agents', [
-            'agents' => $agents->all(),
+            'agents' => $agents->codeAgents(),
             'apps' => DB::table('first_party_apps')->orderByDesc('created_at')->get(),
             'apiBase' => rtrim(config('app.url'), '/').'/api/v1',
             'nvidiaReady' => strlen((string) config('models.nvidia_key')) >= 12,
         ]);
     }
 
+    public function catalog(Request $request, HostedCodeAgents $agents)
+    {
+        $models = $agents->all();
+        $q = trim((string) $request->query('q', ''));
+        $category = trim((string) $request->query('category', ''));
+        $categories = $models->pluck('category')->unique()->sort()->values()->all();
+        $filtered = $models->filter(fn ($model) =>
+            ($category === '' || $model->category === $category) &&
+            ($q === '' || str_contains(mb_strtolower(
+                $model->name.' '.$model->slug.' '.$model->provider_model),
+                mb_strtolower($q))));
+        return view('admin.nvidia-models', [
+            'grouped' => $filtered->groupBy('category'),
+            'categories' => $categories,
+            'selectedCategory' => $category,
+            'search' => $q,
+            'total' => $models->count(),
+            'configured' => $models->where('api_ready', true)->count(),
+            'enabled' => $models->where('enabled', true)->count(),
+            'apiBase' => rtrim(config('app.url'), '/').'/api/v1/openmindai',
+            'nvidiaReady' => strlen((string) config('models.nvidia_key')) >= 12,
+        ]);
+    }
+
     public function model(Request $request, string $slug)
     {
-        $data = $request->validate(['enabled' => 'required|boolean']);
-        abort_unless(DB::table('hosted_code_agents')->where('slug', $slug)->exists(), 404);
-        DB::table('hosted_code_agents')->where('slug', $slug)->update([
-            'enabled' => $data['enabled'], 'updated_at' => now(),
+        $data = $request->validate([
+            'enabled' => 'required|boolean',
+            'api_ready' => 'sometimes|boolean',
+            'include_model' => 'sometimes|boolean',
+            'api_protocol' => 'sometimes|in:chat,json',
+            'name' => 'sometimes|required|string|min:2|max:120',
+            'provider_model' => ['sometimes', 'required', 'string', 'max:190',
+                'regex:/^[a-zA-Z0-9][a-zA-Z0-9._\\/-]*$/',
+                Rule::unique('hosted_code_agents', 'provider_model')->ignore($slug, 'slug')],
+            'api_path' => ['sometimes', 'nullable', 'string', 'max:190',
+                'regex:~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_-]*$~'],
         ]);
-        return back()->with('status', 'Code model availability updated.');
+        $model = DB::table('hosted_code_agents')->where('slug', $slug)->first();
+        abort_unless($model, 404);
+        if (array_key_exists('api_ready', $data) && $data['api_ready']) {
+            $path = $data['api_path'] ?? $model->api_path;
+            abort_unless($path && preg_match('~^/v1/[a-zA-Z0-9][a-zA-Z0-9/_-]*$~D', $path),
+                422, 'Configure a verified NVIDIA /v1/ API path before enabling inference.');
+            if (($data['api_protocol'] ?? $model->api_protocol) === 'chat') {
+                abort_unless($path === '/v1/chat/completions', 422, 'Chat models must use the chat completions endpoint.');
+            }
+        }
+        DB::table('hosted_code_agents')->where('slug', $slug)->update([...$data, 'updated_at' => now()]);
+        return back()->with('status', 'NVIDIA model configuration saved.');
     }
 
     private function verify(Request $request, TwoFactor $two): void
