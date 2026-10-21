@@ -156,7 +156,12 @@ export async function generateHostedImage(
       45000,
     );
     if (!finish.ok)
-      throw new ImageFailure("The image was generated but could not be saved.", 503);
+      throw new ImageFailure(
+        finish.status === 404 || finish.status === 409
+          ? "This image task was deleted or cancelled."
+          : "The image was generated but could not be saved.",
+        finish.status === 404 || finish.status === 409 ? 409 : 503,
+      );
     const saved = await finish.json();
     if (saved?.status !== "complete" || saved?.id !== taskId)
       throw new ImageFailure("The image was not saved successfully.", 502);
