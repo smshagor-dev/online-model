@@ -1895,7 +1895,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
             <input
               ref={fileRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp,audio/*,.pdf,.docx,.webm,.txt,.md,.csv,.json,.py,.js,.jsx,.ts,.tsx,.php,.rs,.go,.java,.c,.cpp,.h,.html,.css,.sql,.yaml,.yml,.xml,.sh,.log"
+              accept="image/png,image/jpeg,image/webp,audio/*,.pdf,.doc,.docx,.webm,.txt,.md,.markdown,.csv,.json,.py,.js,.jsx,.ts,.tsx,.php,.rs,.go,.java,.c,.cpp,.h,.html,.css,.sql,.yaml,.yml,.xml,.sh,.log"
               hidden
               onChange={(e) => {
                 const file = e.target.files?.[0];
