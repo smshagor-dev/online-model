@@ -10,7 +10,7 @@ class DeveloperKeysController
     public function index(Request $request)
     {
         return [
-            'base_url' => rtrim(config('app.url'), '/').'/api/v1/openmindai',
+            'base_url' => config('developer.public_base_url'),
             'keys' => $request->user()->tokens()->where('name', 'like', 'developer:%')
                 ->where(function ($query) {
                     $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
@@ -40,7 +40,7 @@ class DeveloperKeysController
             'name' => $name,
             'api_key' => $token->plainTextToken,
             'expires_at' => $token->accessToken->expires_at,
-            'base_url' => rtrim(config('app.url'), '/').'/api/v1/openmindai',
+            'base_url' => config('developer.public_base_url'),
             'note' => 'Store this secret securely. It cannot be shown again.',
         ], 201)->header('Cache-Control', 'no-store');
     }

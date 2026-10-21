@@ -47,10 +47,12 @@ class AdminDeveloperApiKeysTest extends TestCase
         $user = $this->administrator();
         $path = '/admin/code-agents/developer-keys';
         $this->postJson($path, ['name' => 'Studio', 'current_password' => 'bad'])->assertUnprocessable();
+        config(['developer.public_base_url' => 'https://portal.example.test/api/v1/openmindai']);
         $response = $this->postJson($path, [
             'name' => 'Studio Desktop', 'current_password' => 'CorrectPassword123',
         ])->assertCreated()->assertJsonStructure(['id', 'api_key', 'base_url', 'expires_at'])
-            ->assertHeader('Cache-Control', 'no-store, private');
+            ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonPath('base_url', 'https://portal.example.test/api/v1/openmindai');
         $value = $response->json('api_key');
         $this->assertNotEmpty($value);
         $this->assertDatabaseHas('personal_access_tokens', [

@@ -21,6 +21,7 @@ class CodeAgentsAdminController
             })->latest()->get(['id', 'name', 'created_at', 'last_used_at', 'expires_at']),
             'apps' => DB::table('first_party_apps')->orderByDesc('created_at')->get(),
             'apiBase' => rtrim(config('app.url'), '/').'/api/v1',
+            'developerApiBase' => config('developer.public_base_url'),
             'nvidiaReady' => strlen((string) config('models.nvidia_key')) >= 12,
         ]);
     }
@@ -45,7 +46,7 @@ class CodeAgentsAdminController
             'total' => $models->count(),
             'configured' => $models->where('api_ready', true)->count(),
             'enabled' => $models->count(),
-            'apiBase' => rtrim(config('app.url'), '/').'/api/v1/openmindai',
+            'apiBase' => config('developer.public_base_url'),
             'nvidiaReady' => strlen((string) config('models.nvidia_key')) >= 12,
         ]);
     }

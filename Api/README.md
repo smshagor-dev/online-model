@@ -112,3 +112,7 @@ curl "https://YOUR-PORTAL-DOMAIN/api/v1/openmindai/models" \
 ```
 
 The Next.js deployment must use HTTPS and route `/api/v1/openmindai/*` to its own Node.js server. Do not configure an ingress rule that bypasses Next.js for these paths. For streaming inference, ensure the platform supports long-running HTTP responses.
+
+### Laravel admin and legacy settings
+
+Configure `DEVELOPER_API_BASE_URL=https://YOUR-PORTAL-DOMAIN/api/v1/openmindai` in the **Laravel** `.env`, and run `php artisan optimize:clear`. Laravel admin/API key screens will display the external Next.js URL instead of the Laravel backend URL. In the Next.js portal, API key responses always use the portal's configured `PORTAL_ORIGIN`.
