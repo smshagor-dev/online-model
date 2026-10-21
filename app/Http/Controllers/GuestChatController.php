@@ -46,7 +46,7 @@ class GuestChatController
                 ->post('https://integrate.api.nvidia.com/v1/chat/completions', [
                     'model' => $model->provider_model,
                     'messages' => [
-                        ['role' => 'system', 'content' => 'You are OpenMindAI. Answer clearly. Use fenced code blocks with a language name for code.' . "\n" . MultilingualPrompt::instructions()],
+                        ['role' => 'system', 'content' => 'You are OpenMindAI. Answer clearly. Use fenced code blocks with a language name for code.'."\n".MultilingualPrompt::instructions()],
                         ...($data['history'] ?? []),
                         ['role' => 'user', 'content' => $data['message']],
                     ],
