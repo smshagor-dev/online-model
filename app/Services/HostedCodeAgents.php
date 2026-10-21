@@ -59,7 +59,7 @@ class HostedCodeAgents
                 'description' => $model->summary,
                 'free_endpoint' => (bool) $model->free_endpoint,
                 'listed' => true,
-                'provider_access' => 'unverified',
+                'provider_access' => $model->last_test_status === 'success' ? 'verified' : 'unverified',
                 'available' => (bool) $model->api_ready,
                 'provider_verified' => $model->last_test_status === 'success',
                 'last_test_status' => $model->last_test_status,
