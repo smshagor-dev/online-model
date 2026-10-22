@@ -54,6 +54,7 @@ class VoiceChatSessionTest extends TestCase
 
     public function test_all_42_catalog_models_are_active_and_voicechat_uses_realtime_ws_sessions(): void
     {
+        $this->configureRelay();
         [$user, $key] = $this->userKey();
         $items = collect($this->withToken($key)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data'));
         $this->assertCount(42, $items);
