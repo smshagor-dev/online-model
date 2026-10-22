@@ -461,3 +461,40 @@ test("missing model selection defaults to Auto, while explicit choices suppress 
     else process.env.FRONTEND_CHAT_BRIDGE_KEY = previous;
   }
 });
+
+
+test("Auto displays an accepted image task and tells the model it is queued, not failed", async () => {
+  const previous = process.env.FRONTEND_CHAT_BRIDGE_KEY;
+  process.env.FRONTEND_CHAT_BRIDGE_KEY = "k".repeat(32);
+  const f = fixture();
+  let streams = 0;
+  const generation = [];
+  const fetcher = async (url, init) => {
+    if (url.endsWith("/public-config")) return Response.json({frontend_inference_route:"backend"});
+    if (url.endsWith("/chat/hosted-models")) return Response.json({data:[{id:"openmindai-ultra"}]});
+    if (url.endsWith("/media/cloud-image")) return Response.json({id:74,ids:[74],status:"queued",kind:"image"},{status:202});
+    if (url.endsWith("/chat/provider")) {
+      generation.push(JSON.parse(init.body));
+      const delta = streams++ === 0
+        ? {tool_calls:[{index:0,id:"image-task",type:"function",function:{name:"create_artifact",arguments:JSON.stringify({kind:"image",prompt:"A friendly dog"})}}]}
+        : {content:"Your image request is queued and will update when ready."};
+      const reason = streams === 1 ? "tool_calls" : "stop";
+      return new Response(`data: ${JSON.stringify({choices:[{delta,finish_reason:reason}]})}\n\ndata: [DONE]\n\n`,{headers:{"Content-Type":"text/event-stream"}});
+    }
+    return f.fetcher(url,init);
+  };
+  try {
+    const response = await nvidiaChat(JSON.stringify({message:"Generate a dog image"}),"token","https://backend/api/v1",new AbortController().signal,{fetcher,pollMs:100000});
+    const body = await response.text();
+    assert.match(body,/event: artifact/);
+    assert.match(body,/"id":74/);
+    assert.equal(streams,2);
+    const toolResult = JSON.stringify(generation[1].messages.filter(message=>message.role==="tool"));
+    assert.match(toolResult,/queued/);
+    assert.match(toolResult,/Do not retry generation/);
+    assert.doesNotMatch(toolResult,/"ok":false/);
+  } finally {
+    if (previous === undefined) delete process.env.FRONTEND_CHAT_BRIDGE_KEY;
+    else process.env.FRONTEND_CHAT_BRIDGE_KEY = previous;
+  }
+});
