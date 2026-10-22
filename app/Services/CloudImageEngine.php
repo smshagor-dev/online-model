@@ -56,6 +56,8 @@ class CloudImageEngine
         $mode = $options['mode'] ?? 'generate';
         $ratio = $options['aspect_ratio'] ?? '1:1';
         $prompt = app(CloudImagePrompt::class)->normalize($task->prompt);
+        MediaTask::whereKey($task->id)->where('status', 'running')
+            ->update(['progress_percent' => 20, 'progress_stage' => 'preparing']);
         $seed = (int) ($options['seed'] ?? 0);
         $headers = ['Accept' => 'application/json'];
         if ($mode === 'generate') {
@@ -109,6 +111,8 @@ class CloudImageEngine
             }
         }
 
+        MediaTask::whereKey($task->id)->where('status', 'running')
+            ->update(['progress_percent' => 28, 'progress_stage' => 'generating']);
         $response = Http::withToken((string) $key)->withHeaders($headers)
             ->connectTimeout(30)->timeout(max(30, min(720, (int) config('cloud_images.timeout', 720))))->withOptions(['allow_redirects' => false])
             ->post($url, $payload);
@@ -135,6 +139,9 @@ class CloudImageEngine
             || ! $size || $size[0] * $size[1] > 16000000) {
             throw new RuntimeException('Image output failed content validation.');
         }
+
+        MediaTask::whereKey($task->id)->where('status', 'running')
+            ->update(['progress_percent' => 90, 'progress_stage' => 'finalizing']);
 
         return ['binary' => $binary, 'mime' => $mime, 'model' => $model];
     }
