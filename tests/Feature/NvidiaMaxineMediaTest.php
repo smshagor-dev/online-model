@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\RunMaxineInference;
 use App\Models\User;
 use App\Services\ApiCreditUsage;
+use App\Services\HostedCodeAgents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -47,7 +48,7 @@ class NvidiaMaxineMediaTest extends TestCase
         [$user, $token] = $this->account();
         $response = $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk();
         $this->assertCount(3, $response->json('data'));
-        $rows = collect(app(\App\Services\HostedCodeAgents::class)->publicCatalog());
+        $rows = collect(app(HostedCodeAgents::class)->publicCatalog());
         foreach (array_keys(config('maxine.models')) as $slug) {
             $model = $rows->firstWhere('id', $slug);
             $this->assertSame('media.process', $model['operation']);

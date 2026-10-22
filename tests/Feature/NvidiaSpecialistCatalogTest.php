@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\HostedCodeAgents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -61,7 +62,7 @@ class NvidiaSpecialistCatalogTest extends TestCase
         $this->assertCount(3, $resp->json('data'));
         $this->assertNull(collect($resp->json('data'))->firstWhere('id', 'nvidia-synthetic-video-detector'));
         // Specialist metadata belongs to the internal/admin catalog, not developer API.
-        $internal = app(\App\Services\HostedCodeAgents::class)->publicCatalog();
+        $internal = app(HostedCodeAgents::class)->publicCatalog();
         $this->assertCount(42, $internal);
         $model = collect($internal)->firstWhere('id', 'nvidia-synthetic-video-detector');
         $this->assertFalse($model['provider_verified']);

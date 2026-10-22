@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\HostedCodeAgents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -57,7 +58,7 @@ class VoiceChatSessionTest extends TestCase
         [$user, $key] = $this->userKey();
         $developerData = $this->withToken($key)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data');
         $this->assertCount(3, $developerData);
-        $items = collect(app(\App\Services\HostedCodeAgents::class)->publicCatalog());
+        $items = collect(app(HostedCodeAgents::class)->publicCatalog());
         $this->assertCount(42, $items);
         $this->assertTrue($items->every(fn ($row) => $row['active'] === true));
         $voice = $items->firstWhere('id', 'nvidia-nemotron-voicechat');

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\HostedCodeAgents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -70,7 +71,7 @@ class NvidiaModelCatalogAdminTest extends TestCase
 
         // The administrator and non-developer apps still see the complete
         // specialist catalog; the public developer projection is deliberately smaller.
-        $internal = app(\App\Services\HostedCodeAgents::class)->publicCatalog();
+        $internal = app(HostedCodeAgents::class)->publicCatalog();
         $this->assertCount(42, $internal);
         $voice = collect($internal)->firstWhere('id', 'nvidia-nemotron-voicechat');
         $this->assertFalse($voice['provider_verified']);

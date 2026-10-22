@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\RunCosmosTransfer;
 use App\Models\User;
 use App\Services\ApiCreditUsage;
+use App\Services\HostedCodeAgents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -60,7 +61,7 @@ class CosmosTransferTest extends TestCase
         [$user,$token] = $this->account();
         $developerData = $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data');
         $this->assertCount(3, $developerData);
-        $catalog = collect(app(\App\Services\HostedCodeAgents::class)->publicCatalog());
+        $catalog = collect(app(HostedCodeAgents::class)->publicCatalog());
         $row = $catalog->firstWhere('id', 'nvidia-cosmos-transfer2.5-2b');
         $this->assertSame('video.transfer', $row['operation']);
         $this->assertSame('/transfer/generations', $row['path']);

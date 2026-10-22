@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\RunCosmosGeneration;
 use App\Models\User;
 use App\Services\ApiCreditUsage;
+use App\Services\HostedCodeAgents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -50,7 +51,7 @@ class CosmosHostedGenerationTest extends TestCase
 
         // The specialist remains registered internally and its existing
         // queued endpoint continues working without appearing in the portal.
-        $cosmos = collect(app(\App\Services\HostedCodeAgents::class)->publicCatalog())
+        $cosmos = collect(app(HostedCodeAgents::class)->publicCatalog())
             ->firstWhere('id', 'nvidia-cosmos3-nano');
         $this->assertSame('generate', $cosmos['operation']);
         $this->assertSame('/cosmos/generations', $cosmos['path']);

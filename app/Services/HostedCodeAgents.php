@@ -112,6 +112,7 @@ class HostedCodeAgents
                     : null,
             ])->all();
     }
+
     /** Developer API projection: coding agents only, without provider identities. */
     public function publicDeveloperCatalog(): array
     {
@@ -143,5 +144,4 @@ class HostedCodeAgents
             'operation' => 'chat.completions',
         ])->values()->all();
     }
-
 }
