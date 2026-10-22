@@ -1258,3 +1258,36 @@ html .dialog .settings-nav button.selected {
     min-height: 40px;
   }
 }
+
+/* A media task has an ID only after Laravel accepts it. Surface queue state
+   and connection failures instead of leaving a silent 0% card indefinitely. */
+.workspace .media-poll-status {
+  width: min(100%, 520px);
+  max-width: 100%;
+  min-width: 0;
+}
+.workspace .media-poll-status .creation-progress {
+  width: 100%;
+  max-width: 100%;
+}
+.workspace .media-queue-warning {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.workspace .media-queue-warning button {
+  display: block;
+  margin-top: 9px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text);
+  background: var(--ui-hover);
+  font: inherit;
+  font-weight: 600;
+}

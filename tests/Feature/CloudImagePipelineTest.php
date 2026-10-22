@@ -7,10 +7,12 @@ use App\Models\MediaTask;
 use App\Models\User;
 use App\Services\CloudImageEngine;
 use App\Services\CloudImagePrompt;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -31,6 +33,20 @@ class CloudImagePipelineTest extends TestCase
     private function png(): string
     {
         return base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=');
+    }
+
+    public function test_image_submission_returns_actionable_error_before_queueing_on_outdated_database(): void
+    {
+        $this->signIn();
+        Queue::fake();
+        Schema::table('media_tasks', function (Blueprint $table) {
+            $table->dropColumn(['progress_percent', 'progress_stage']);
+        });
+
+        $this->postJson('/api/v1/media/cloud-image', ['prompt' => 'Sunset over water'])
+            ->assertStatus(503)
+            ->assertJsonPath('message', 'The image service database needs its latest migrations. Ask an administrator to run php artisan migrate --force.');
+        Queue::assertNothingPushed();
     }
 
     public function test_images_are_queued_with_ratios_variations_and_no_frontend_provider_call(): void

@@ -431,7 +431,11 @@ export async function nvidiaChat(
                 ? generateHostedImage(JSON.stringify({prompt:work.prompt}),token,base,upstreamAbort.signal,{fetcher})
                 : hostedMediaRequest(JSON.stringify(work),token,base,upstreamAbort.signal,{fetcher,config:{apiKey:config.apiKey || "backend-managed",bridgeKey:config.bridgeKey,chatModel:activeModel}});
               const response = await request;
-              if (!response.ok) return {ok:false,message:"The requested file could not be generated."};
+              if (!response.ok) {
+                return {ok:false,message:work.kind === "image" && [502, 503, 504].includes(response.status)
+                  ? "The image service is unavailable (HTTP " + response.status + "). The request may have been accepted. Check Library before trying again."
+                  : "The requested file could not be generated."};
+              }
               const saved = await response.json();
               if (!Number.isSafeInteger(saved.id) || saved.id < 1) return {ok:false,message:"The generated task was not saved."};
               if (saved.status === "queued" || saved.status === "running" || response.status === 202) {

@@ -14,6 +14,10 @@ test("image creation renders a large server-supplied percentage in the card, wit
   assert.match(progress, /creation-progress-announcement/);
   assert.doesNotMatch(progress, /role="progressbar"|className="creation-meter"/);
   assert.match(progress, /imageStages\[stage\]/);
+  assert.match(progress, /taskId\?: number \| null/);
+  assert.match(progress, /accepted && typeof progress === "number"/);
+  assert.match(progress, /Submitting your image request/);
+  assert.match(progress, /Task #/);
   assert.doesNotMatch(progress, /setInterval|Date\.now\(|Math\.random\(/);
 });
 
@@ -24,6 +28,11 @@ test("chat preview polls the server's persisted generation progress", () => {
   assert.match(inline, /progress=\{task\?\.progress_percent\}/);
   assert.match(inline, /stage=\{task\?\.progress_stage\}/);
   assert.match(inline, /setTimeout\(load, 3000\)/);
+  assert.match(inline, /taskId=\{task\?\.id \?\? id\}/);
+  assert.match(inline, /setTimeout\(load, 6000\)/);
+  assert.match(inline, /queuedTooLong/);
+  assert.match(inline, /Check status again/);
+  assert.match(inline, /setRefreshCount/);
 });
 
 test("media studio renders progress for active images", () => {
