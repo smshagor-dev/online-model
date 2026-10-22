@@ -33,7 +33,7 @@ class RunCloudImage implements ShouldQueue
     {
         $task = MediaTask::find($this->taskId);
         if (! $task || ! MediaTask::whereKey($task->id)->where('status', 'queued')
-            ->update(['status' => 'running', 'updated_at' => now()])) {
+            ->update(['status' => 'running', 'progress_percent' => 8, 'progress_stage' => 'preparing', 'updated_at' => now()])) {
             return;
         }
         $path = 'media/'.$task->user_id.'/'.$task->id.'.output';
@@ -55,7 +55,7 @@ class RunCloudImage implements ShouldQueue
                 }
                 abort_unless(Storage::disk('local')->put($path, $result['binary']), 503, 'Cannot save the generated image.');
                 $current->update([
-                    'status' => 'complete', 'output_path' => $path,
+                    'status' => 'complete', 'progress_percent' => 100, 'progress_stage' => 'complete', 'output_path' => $path,
                     'output_mime' => $result['mime'], 'bytes' => strlen($result['binary']),
                     'error' => null,
                 ]);
@@ -102,6 +102,6 @@ class RunCloudImage implements ShouldQueue
         Log::warning('Cloud image generation failed', ['task_id' => $task->id, 'reason' => $reason, 'http_status' => $httpStatus]);
         Storage::disk('local')->delete(array_filter([$task->input_path, $task->cloud_mask_path]));
         MediaTask::whereKey($task->id)->whereIn('status', ['queued', 'running'])
-            ->update(['status' => 'failed', 'error' => $message, 'input_path' => null, 'cloud_mask_path' => null]);
+            ->update(['status' => 'failed', 'progress_stage' => 'failed', 'error' => $message, 'input_path' => null, 'cloud_mask_path' => null]);
     }
 }
