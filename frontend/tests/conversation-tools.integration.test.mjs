@@ -62,3 +62,20 @@ test("coding delegation uses the enabled specialist and returns its evidence to 
  assert.match(requests[1].messages[1].content,/null crash/);
  assert.ok(requests[2].messages.some(m=>m.role==="tool"&&m.content.includes("regression test")));
 });
+
+test('selected Web Search requires search then page reading before the final answer',async()=>{
+ const requests=[],actions=[];
+ const responses=[call('web_search',{query:'PHP array_map official documentation'},'s'),call('read_page',{url:'https://www.php.net/manual/en/function.array-map.php'},'r'),sse({content:'বাংলা উত্তর: callback receives one argument for each array. https://www.php.net/manual/en/function.array-map.php'},'stop')];
+ const result=await runConversationTools({...base(),webSearchSelected:true,fetcher:async(u,i)=>{requests.push(JSON.parse(i.body));return responses.shift();},web:async a=>{actions.push(a.action);return a.action==='search'?{sources:[{url:'https://www.php.net/manual/en/function.array-map.php',title:'array_map'}]}:{read_status:'read',page_text:'The callback accepts one argument per array.'};}});
+ assert.equal(requests[0].tool_choice,'required');
+ assert.equal(requests[1].tool_choice,'required');
+ assert.deepEqual(requests[1].tools.map(t=>t.function.name),['read_page']);
+ assert.deepEqual(actions,['search','read']);
+ assert.match(result.text,/callback/);
+});
+test('an explicit no-browse instruction can decline the selected search without fabricated verification',async()=>{
+ let webCalls=0;
+ const responses=[call('decline_web_search',{reason:'The user explicitly says do not browse.'},'n'),sse({content:'Answering without browsing.'},'stop')];
+ await runConversationTools({...base(),webSearchSelected:true,fetcher:async()=>responses.shift(),web:async()=>{webCalls++;}});
+ assert.equal(webCalls,0);
+});
