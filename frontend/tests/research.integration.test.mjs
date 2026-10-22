@@ -245,6 +245,16 @@ test("research bounds page evidence and rejects malformed source URLs",async()=>
 test('research tool outage preserves an explicitly limited report instead of interrupting the turn',async()=>{
  const result=await researchLoop({sources:[],signal:new AbortController().signal,progress(){},decide:async()=>'{"action":"search","query":"SQLite WAL"}',tool:async()=>{throw new ResearchToolUnavailableError('provider unavailable');}});
  assert.equal(result.complete,false);
- assert.match(result.conclusion,/could not be verified/);
+ assert.match(result.conclusion,/No new evidence/);
  assert.equal(result.coverage.pagesRead,0);
+});
+
+
+test('a search outage can recover by reading a known official page before writing',async()=>{
+ let plans=0;
+ const decisions=[{action:'search',query:'SQLite WAL'},{action:'read',url:'https://sqlite.org/wal.html'},{action:'finish',reason:'Official WAL page read; other comparisons remain limited.'}];
+ const result=await researchLoop({sources:[],signal:new AbortController().signal,progress(){},decide:async()=>JSON.stringify(decisions[plans++]),tool:async a=>{if(a.action==='search') throw new ResearchToolUnavailableError('Unavailable');return {url:a.url,read_status:'read',page_text:'Official WAL concurrency evidence.'};}});
+ assert.equal(result.coverage.pagesRead,1);
+ assert.equal(result.sources[0].url,'https://sqlite.org/wal.html');
+ assert.match(JSON.stringify(result.evidence),/could not be verified/);
 });
