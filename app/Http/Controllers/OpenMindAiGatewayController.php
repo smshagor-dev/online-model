@@ -7,6 +7,7 @@ use App\Services\ApiCreditUsage;
 use App\Services\FirstPartySignature;
 use App\Services\HostedCodeAgents;
 use App\Services\MultilingualPrompt;
+use App\Services\NvidiaModelProbe;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -202,6 +203,10 @@ class OpenMindAiGatewayController
             abort_if(strlen($upstream->body()) > 2097152, 502, 'Provider JSON response is too large.');
             $result = $upstream->json();
             abort_unless(is_array($result), 502, 'Invalid JSON response from NVIDIA.');
+            if ($model->api_path === '/v1/embeddings' || $model->slug === 'nvidia-nemotron-3.5-rerank-8b') {
+                abort_unless(app(NvidiaModelProbe::class)->validResponse($model, $result),
+                    502, 'Invalid model output. No completed request credit was recorded.');
+            }
             $credits->completed($user->id, $connection, 'gateway:'.bin2hex(random_bytes(16)));
 
             return response()->json(['model' => $model->slug, 'output' => $result])
