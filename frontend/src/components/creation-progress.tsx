@@ -13,11 +13,15 @@ export default function CreationProgress({
   preparing = false,
   progress = null,
   stage = null,
+  taskId = null,
+  status = null,
 }: {
   kind: string;
   preparing?: boolean;
   progress?: number | null;
   stage?: string | null;
+  taskId?: number | null;
+  status?: string | null;
 }) {
   const video = kind === "video";
   const image = kind === "image";
@@ -28,14 +32,19 @@ export default function CreationProgress({
       : kind;
   // This is server-reported workflow progress, not a guessed model-rendering
   // percentage. Providers with a single synchronous response cannot report steps.
-  const percent = image
-    ? typeof progress === "number" && Number.isFinite(progress)
-      ? Math.max(0, Math.min(100, Math.round(progress)))
-      : 0
+  // Until the backend returns a task ID and status, no percentage can be verified.
+  // The image provider reports completed workflow milestones, not rendering steps.
+  const accepted = image && taskId !== null && Number.isSafeInteger(taskId);
+  const percent = accepted && typeof progress === "number" && Number.isFinite(progress)
+    ? Math.max(0, Math.min(100, Math.round(progress)))
     : null;
-  const label = image && stage && imageStages[stage]
-    ? imageStages[stage]
-    : preparing ? `Preparing your ${name}` : `Creating your ${name}`;
+  const label = image && !accepted
+    ? "Submitting your image request"
+    : image && status == null
+      ? "Checking your image request"
+      : image && stage && imageStages[stage]
+        ? imageStages[stage]
+        : preparing ? `Preparing your ${name}` : `Creating your ${name}`;
 
   return (
     <section className={`creation-progress ${video ? "creation-video" : ""}`}
@@ -63,7 +72,9 @@ export default function CreationProgress({
             {"Image generation workflow: " + label + ", " + percent + "%"}
           </span>
         )}
-        <span>You can stay here while it takes shape.</span>
+        <span>{accepted
+          ? `Task #${taskId} accepted · Status: ${status || "checking"}`
+          : image ? "Waiting for the server to accept your request." : "You can stay here while it takes shape."}</span>
       </div>
     </section>
   );
