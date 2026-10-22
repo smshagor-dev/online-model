@@ -28,8 +28,10 @@ export default function CreationProgress({
       : kind;
   // This is server-reported workflow progress, not a guessed model-rendering
   // percentage. Providers with a single synchronous response cannot report steps.
-  const percent = image && typeof progress === "number" && Number.isFinite(progress)
-    ? Math.max(0, Math.min(100, Math.round(progress)))
+  const percent = image
+    ? typeof progress === "number" && Number.isFinite(progress)
+      ? Math.max(0, Math.min(100, Math.round(progress)))
+      : 0
     : null;
   const label = image && stage && imageStages[stage]
     ? imageStages[stage]
@@ -53,23 +55,15 @@ export default function CreationProgress({
           </div>
         )}
       </div>
-      <div className="creation-caption">
-        <div className="creation-status-line">
-          <TypingIndicator label={label} />
-          {percent !== null && <strong className="creation-percent">{percent}%</strong>}
-        </div>
+      <div className="creation-caption" role={image ? "status" : undefined}
+        aria-live={image ? "polite" : undefined} aria-atomic={image ? "true" : undefined}>
+        <TypingIndicator label={label} />
         {percent !== null && (
-          <div className="creation-meter" role="progressbar" aria-label="Image generation workflow progress"
-            aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}
-            aria-valuetext={`${label}: ${percent}%`}>
-            <span style={{ width: `${percent}%` }} />
-          </div>
+          <span className="creation-progress-announcement">
+            {"Image generation workflow: " + label + ", " + percent + "%"}
+          </span>
         )}
-        <span>
-          {percent !== null
-            ? "Progress reflects completed generation stages, not internal model steps."
-            : "You can stay here while it takes shape."}
-        </span>
+        <span>You can stay here while it takes shape.</span>
       </div>
     </section>
   );
