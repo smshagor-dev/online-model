@@ -410,17 +410,23 @@ export async function nvidiaChat(
             },
             artifact: async work => {
               if (!config.apiKey && !["document_create", "image"].includes(work.kind)) return {ok:false,message:"This media service has not been configured on the server."};
+              emit("creation", {kind:work.kind,status:"running"});
+              try {
               const request = work.kind === "image"
                 ? generateHostedImage(JSON.stringify({prompt:work.prompt}),token,base,upstreamAbort.signal,{fetcher,waitForCompletion:true})
                 : hostedMediaRequest(JSON.stringify(work),token,base,upstreamAbort.signal,{fetcher,config:{apiKey:config.apiKey || "backend-managed",bridgeKey:config.bridgeKey,chatModel:activeModel}});
               const response = await request;
               if (!response.ok) return {ok:false,message:"The requested file could not be generated."};
               const saved = await response.json();
-              if (saved.status === "queued" || saved.status === "running" || response.status === 202) return {ok:false,message:"Image generation continues in the background. Check Library for the saved task."};
+              if (saved.status === "queued" || saved.status === "running" || response.status === 202) {
+                if (Number.isSafeInteger(saved.id) && saved.id > 0) emit("artifact", {id:saved.id,kind:work.kind});
+                return {ok:false,message:"Generation continues in the displayed task. Check Library for the saved output."};
+              }
               if (!Number.isSafeInteger(saved.id) || saved.id < 1 || saved.status !== "complete") return {ok:false,message:"The generated output was not saved."};
               generatedFiles.push({id:saved.id,kind:work.kind});
               emit("artifact", {id:saved.id,kind:work.kind});
               return {ok:true,id:saved.id,kind:work.kind,status:"complete",message:"The saved file is displayed in this chat. Refer to it without inventing a download URL."};
+              } finally { emit("creation", {kind:work.kind,status:"finished"}); }
             },
           });
           for (const file of generatedFiles) {
