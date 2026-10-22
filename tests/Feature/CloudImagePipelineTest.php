@@ -39,7 +39,7 @@ class CloudImagePipelineTest extends TestCase
     {
         $this->signIn();
         Queue::fake();
-        \Illuminate\Support\Facades\Schema::table('media_tasks', function (\Illuminate\Database\Schema\Blueprint $table) {
+        Schema::table('media_tasks', function (Blueprint $table) {
             $table->dropColumn(['progress_percent', 'progress_stage']);
         });
 
