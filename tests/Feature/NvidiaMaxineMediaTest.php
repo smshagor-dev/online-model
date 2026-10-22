@@ -44,6 +44,7 @@ class NvidiaMaxineMediaTest extends TestCase
 
     public function test_catalog_contains_three_dedicated_maxine_routes_without_claiming_provider_verification(): void
     {
+        config(['maxine.worker_url' => 'https://maxine-worker.example.test', 'maxine.worker_key' => str_repeat('t', 40)]);
         [$user, $token] = $this->account();
         $response = $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk();
         $rows = collect($response->json('data'));
