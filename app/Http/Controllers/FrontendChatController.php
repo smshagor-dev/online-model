@@ -62,7 +62,7 @@ class FrontendChatController
             $research = app(WebResearch::class);
             $deep = ! empty($d['deep_research']);
             $options = ['time_range' => $d['search_time_range'] ?? null];
-            $evidence = $deep ? $research->collect($d['message'], $options) : (! empty($d['web_search']) ? $research->quick($d['message'], $options) : []);
+            $evidence = ! empty($d['conversation_tools']) ? [] : ($deep ? $research->collect($d['message'], $options) : (! empty($d['web_search']) ? $research->quick($d['message'], $options) : []));
             if ($evidence || ! empty($d['web_search'])) {
                 $messages[0]['content'] .= $research->prompt($evidence, $deep);
             }
