@@ -72,7 +72,7 @@ class WebResearchTest extends TestCase
             'www.bing.com/*' => Http::response('<rss><channel><item><title>Soup Restaurant</title><link>https://example.org/restaurant</link></item></channel></rss>'),
             'html.duckduckgo.com/*' => Http::response('<a class="result__a" href="https://sqlite.org/wal.html">SQLite WAL concurrency</a>'),
         ]);
-        $sources = app(WebSearch::class)->search('SQLite WAL concurrency official documentation');
+        $sources = app(WebSearch::class)->search('SQLite WAL');
         $this->assertCount(1, $sources);
         $this->assertSame('https://sqlite.org/wal.html', $sources[0]['url']);
         $this->assertSame('duckduckgo', $sources[0]['provider']);
