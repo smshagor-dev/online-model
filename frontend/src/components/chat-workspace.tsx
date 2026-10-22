@@ -8,6 +8,7 @@ import {
   Paperclip,
   FolderOpen,
   FolderPlus,
+  GitBranch,
   Images,
   Grid2X2,
   Archive,
@@ -405,7 +406,7 @@ export default function ChatWorkspace() {
         top: scrollRef.current.scrollHeight,
         behavior: preferences?.reduced_motion ? "instant" : "smooth",
       });
-  }, [messages.length, busy, loadingChat]);
+  }, [messages.length, busy, loadingChat, pendingCreation, inlineMedia.length]);
   useEffect(() => {
     function dismiss(event: MouseEvent) {
       if (!accountMenuRef.current?.contains(event.target as Node))
@@ -1497,7 +1498,7 @@ export default function ChatWorkspace() {
       <main
         className={
           "main-panel " +
-          (messages.length === 0 && !loadingChat ? "is-empty" : "")
+          (messages.length === 0 && !loadingChat && !pendingCreation && inlineMedia.length === 0 ? "is-empty" : "")
         }
       >
         <header className="topbar">
@@ -1579,6 +1580,24 @@ export default function ChatWorkspace() {
                 Log in
               </button>
             )}
+            {conversationId && (
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Conversation branches"
+                title="Conversation branches"
+                disabled={busy}
+                onClick={() =>
+                  void api<{ id: number; title: string }[]>(
+                    `conversations/${conversationId}/branches`,
+                  )
+                    .then(setBranches)
+                    .catch(report)
+                }
+              >
+                <GitBranch size={18} />
+              </button>
+            )}
             {user && (
               <button
                 className="icon-button"
@@ -1594,7 +1613,7 @@ export default function ChatWorkspace() {
           const container = event.currentTarget;
           followOutput.current = container.scrollHeight - container.scrollTop - container.clientHeight < 160;
         }}>
-          {messages.length === 0 && !loadingChat ? (
+          {messages.length === 0 && !loadingChat && !pendingCreation && inlineMedia.length === 0 ? (
             <section className="welcome">
               <div className="welcome-identity">
                 <Image src="/openmindai-logo.png" width={36} height={36} alt="" />
@@ -1827,12 +1846,28 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
               {busy && !pendingCreation && messages[messages.length - 1]?.role === "user" && (
                 <div className="thinking"><span className="assistant-avatar"><Image src="/openmindai-logo.png" alt="" width={23} height={23} /></span><TypingIndicator label={researchProgress || "Thinking"} /></div>
               )}
+              {pendingCreation && (
+                <div className="generated-media-entry" role="status" aria-live="polite">
+                  <span className="assistant-avatar" aria-hidden="true">
+                    <Image src="/openmindai-logo.png" alt="" width={23} height={23} />
+                  </span>
+                  <div className="generated-media-content">
+                    <CreationProgress kind={pendingCreation} />
+                  </div>
+                </div>
+              )}
+              {inlineMedia.map((id) => (
+                <div className="generated-media-entry" key={id}>
+                  <span className="assistant-avatar" aria-hidden="true">
+                    <Image src="/openmindai-logo.png" alt="" width={23} height={23} />
+                  </span>
+                  <div className="generated-media-content">
+                    <InlineMedia id={id} onText={setDraft} />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-          {pendingCreation && <CreationProgress kind={pendingCreation} />}
-          {inlineMedia.map((id) => (
-            <InlineMedia key={id} id={id} onText={setDraft} />
-          ))}
           {loadingChat && (
             <div className="chat-loading" role="status">
               <LoaderCircle className="spin" size={21} />
@@ -1841,7 +1876,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
           )}
         </div>
         <div
-          className={`composer-area ${messages.length === 0 ? "empty-composer" : ""}`}
+          className={`composer-area ${messages.length === 0 && !pendingCreation && inlineMedia.length === 0 ? "empty-composer" : ""}`}
         >
           {error && (
             <div className="chat-error" role="alert">
@@ -1867,21 +1902,6 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                 Leave assistant
               </button>
             </div>
-          )}
-          {conversationId && (
-            <button
-              className="text-button"
-              disabled={busy}
-              onClick={() =>
-                void api<{ id: number; title: string }[]>(
-                  `conversations/${conversationId}/branches`,
-                )
-                  .then(setBranches)
-                  .catch(report)
-              }
-            >
-              Conversation branches
-            </button>
           )}
           {mediaMode !== "chat" && (
             <p className="muted">
@@ -2087,7 +2107,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
               </div>
             </div>
           </form>
-          {messages.length === 0 && !loadingChat && (
+          {messages.length === 0 && !loadingChat && !pendingCreation && inlineMedia.length === 0 && (
             <div className="suggestions" aria-label="Try a prompt">
               {suggestions.slice(0, 4).map((item) => (
                 <button
