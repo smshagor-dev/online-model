@@ -46,7 +46,9 @@ class NvidiaAvSceneTest extends TestCase
             'api_path' => '/v1/av/nvidia/streampetr',
         ]);
         [$user, $token] = $this->account();
-        $data = $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data');
+        $developerData = $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data');
+        $this->assertCount(3, $developerData);
+        $data = app(\App\Services\HostedCodeAgents::class)->publicCatalog();
         $item = collect($data)->firstWhere('id', 'nvidia-streampetr');
         $this->assertSame('scene.process', $item['operation']);
         $this->assertSame('/av/streampetr/jobs', $item['path']);

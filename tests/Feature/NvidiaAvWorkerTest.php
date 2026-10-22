@@ -46,7 +46,9 @@ class NvidiaAvWorkerTest extends TestCase
     public function test_both_nim_models_expose_dedicated_catalog_routes(): void
     {
         [$user, $token] = $this->account();
-        $rows = collect($this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data'));
+        $developerData = $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data');
+        $this->assertCount(3, $developerData);
+        $rows = collect(app(\App\Services\HostedCodeAgents::class)->publicCatalog());
         foreach (['nvidia-sparsedrive', 'nvidia-bevformer'] as $slug) {
             $record = $rows->firstWhere('id', $slug);
             $this->assertTrue($record['available']);

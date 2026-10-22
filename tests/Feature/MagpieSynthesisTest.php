@@ -55,7 +55,9 @@ class MagpieSynthesisTest extends TestCase
     public function test_magpie_is_active_and_uses_queued_tts_inference(): void
     {
         [$user, $key] = $this->account();
-        $models = collect($this->withToken($key)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data'));
+        $developerData = $this->withToken($key)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data');
+        $this->assertCount(3, $developerData);
+        $models = collect(app(\App\Services\HostedCodeAgents::class)->publicCatalog());
         $tts = $models->firstWhere('id', 'nvidia-magpie-tts-zeroshot');
         $this->assertTrue($tts['active']);
         $this->assertTrue($tts['available']);
