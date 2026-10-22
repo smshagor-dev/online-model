@@ -39,7 +39,7 @@ class ImageGenerationProgressTest extends TestCase
         $this->getJson('/api/v1/media/'.$id)
             ->assertOk()->assertJsonPath('status', 'queued')
             ->assertJsonPath('progress_percent', 0)->assertJsonPath('progress_stage', 'queued')
-            ->assertHeader('Cache-Control', 'private, no-store');
+            ->assertHeader('Cache-Control', 'no-store, private');
 
         $image = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=');
         Http::fake(function () use ($id, $image) {
