@@ -48,3 +48,17 @@ test("long answers continue without replaying completed tools",async()=>{
  assert.equal(generated,1);
  assert.ok(requests[2].messages.some(m=>m.role==="tool" && m.tool_call_id==="file1"));
 });
+
+test("coding delegation uses the enabled specialist and returns its evidence to the coordinator", async()=>{
+ const requests=[];
+ let round=0;
+ await runConversationTools({...base(),model:"nvidia/nemotron-3.5-lightning-30b-a3b",fetcher:async(url,init)=>{
+  const body=JSON.parse(init.body);requests.push(body);
+  if(body.stream===false) return Response.json({choices:[{message:{content:"Fixed the null check with a regression test."}}]});
+  return round++===0 ? call("ask_specialist",{model:"code",task:"Fix the null crash in the supplied handler and explain the test."},"coding") : sse({content:"The handler now checks null."},"stop");
+ }});
+ assert.equal(requests[0].chat_template_kwargs.enable_thinking,false);
+ assert.equal(requests[1].model,"enabled/code");
+ assert.match(requests[1].messages[1].content,/null crash/);
+ assert.ok(requests[2].messages.some(m=>m.role==="tool"&&m.content.includes("regression test")));
+});
