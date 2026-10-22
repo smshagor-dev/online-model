@@ -7,8 +7,8 @@ use App\Models\User;
 use App\Services\ApiCreditUsage;
 use App\Services\CloudImageEngine;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -19,7 +19,9 @@ class RunCloudImage implements ShouldQueue
 {
     use Queueable;
 
-    public int $timeout = 180;
+    // Provider wait (up to 720s), prompt normalization and storage must finish
+    // before the media queue reservation expires (retry_after = 1000s).
+    public int $timeout = 900;
 
     public int $tries = 1;
 
