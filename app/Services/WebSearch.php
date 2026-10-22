@@ -27,6 +27,15 @@ class WebSearch
         return strtolower($p['scheme']).'://'.$host.(isset($p['port']) ? ':'.$p['port'] : '').($p['path'] ?? '/').($query ? '?'.http_build_query($query) : '');
     }
 
+    public static function isSearchPortal(string $url): bool
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $path = rtrim((string) parse_url($url, PHP_URL_PATH), '/');
+        $portal = preg_match('/^(www\.|search\.|html\.)?(google\.[a-z.]+|bing\.com|duckduckgo\.com|yahoo\.com|search\.yahoo\.com)$/D', $host);
+
+        return (bool) $portal && ($path === '' || preg_match('~^/(search|xhtml/search|html|lite|web|results)(/|$)~', $path));
+    }
+
     public function search(string $query, array $options = []): array
     {
         $params = ['q' => mb_substr($query, 0, 500), 'format' => 'json', 'safesearch' => 1];
@@ -125,7 +134,7 @@ class WebSearch
             if (! is_array($v) || ! is_string($v['url'] ?? null) || strlen($v['url']) > 2000 || ! ($url = self::canonicalUrl($v['url']))) {
                 continue;
             }
-            if (isset($results[$url])) {
+            if (self::isSearchPortal($url) || isset($results[$url])) {
                 continue;
             }
             $text = fn ($value, $max) => mb_substr(html_entity_decode(strip_tags(is_scalar($value) ? (string) $value : ''), ENT_QUOTES | ENT_HTML5, 'UTF-8'), 0, $max);
