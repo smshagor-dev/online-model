@@ -112,4 +112,36 @@ class HostedCodeAgents
                     : null,
             ])->all();
     }
+    /** Developer API projection: coding agents only, without provider identities. */
+    public function publicDeveloperCatalog(): array
+    {
+        return $this->codeAgents()->map(fn ($model) => [
+            'id' => $model->slug,
+            'object' => 'model',
+            'name' => 'OpenMindAI',
+            'category' => 'Coding agent',
+            'description' => 'OpenMindAI coding assistance for development, debugging, and tool-based workflows.',
+            'listed' => true,
+            'active' => (bool) $model->enabled,
+            'available' => (bool) ($model->enabled && $model->api_ready),
+            'operation' => 'chat.completions',
+            'path' => ($model->enabled && $model->api_ready) ? '/chat/completions' : null,
+        ])->values()->all();
+    }
+
+    public function publicDeveloperModels(): array
+    {
+        return $this->codeAgents()->map(fn ($model) => [
+            'id' => $model->slug,
+            'object' => 'model',
+            'name' => 'OpenMindAI',
+            'created' => $model->created_at ? strtotime($model->created_at) : 0,
+            'owned_by' => 'openmindai',
+            'type' => 'code',
+            'active' => (bool) $model->enabled,
+            'available' => (bool) ($model->enabled && $model->api_ready),
+            'operation' => 'chat.completions',
+        ])->values()->all();
+    }
+
 }
