@@ -214,7 +214,10 @@ async function mobile(
     // sanitized result that never exposes hostnames, cookies or credentials.
     const target = endpoint === "status" ? "public-config" : endpoint;
     const upstreamUrl = backendUrl(target);
-    const identity = identityRoutes.has(endpoint)
+    const identity = (identityRoutes.has(endpoint) ||
+        endpoint === "media/cloud-image" ||
+        endpoint === "media/image-capabilities" ||
+        mediaStatus || imageOutput)
       ? signedMobileIdentity(request, upstreamUrl, body ?? "")
       : {};
     if (!identity) {
@@ -269,7 +272,20 @@ async function mobile(
       }
       // Keep the media private. Relay bytes only for an authenticated
       // request; do not expose a public storage URL or Set-Cookie.
-      return new Response(upstream.body, {
+      // Stream with a hard byte cap even when upstream omits Content-Length.
+      let forwardedBytes = 0;
+      const safeStream = upstream.body.pipeThrough(
+        new TransformStream<Uint8Array, Uint8Array>({
+          transform(chunk, controller) {
+            forwardedBytes += chunk.byteLength;
+            if (forwardedBytes > 25 * 1024 * 1024) {
+              throw new Error("Cloud image exceeded the media size limit");
+            }
+            controller.enqueue(chunk);
+          },
+        }),
+      );
+      return new Response(safeStream, {
         status: 200,
         headers: {
           "Content-Type": mime,
