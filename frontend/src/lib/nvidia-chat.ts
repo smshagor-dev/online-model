@@ -413,14 +413,15 @@ export async function nvidiaChat(
               emit("creation", {kind:work.kind,status:"running"});
               try {
               const request = work.kind === "image"
-                ? generateHostedImage(JSON.stringify({prompt:work.prompt}),token,base,upstreamAbort.signal,{fetcher,waitForCompletion:true})
+                ? generateHostedImage(JSON.stringify({prompt:work.prompt}),token,base,upstreamAbort.signal,{fetcher})
                 : hostedMediaRequest(JSON.stringify(work),token,base,upstreamAbort.signal,{fetcher,config:{apiKey:config.apiKey || "backend-managed",bridgeKey:config.bridgeKey,chatModel:activeModel}});
               const response = await request;
               if (!response.ok) return {ok:false,message:"The requested file could not be generated."};
               const saved = await response.json();
+              if (!Number.isSafeInteger(saved.id) || saved.id < 1) return {ok:false,message:"The generated task was not saved."};
               if (saved.status === "queued" || saved.status === "running" || response.status === 202) {
-                if (Number.isSafeInteger(saved.id) && saved.id > 0) emit("artifact", {id:saved.id,kind:work.kind});
-                return {ok:false,message:"Generation continues in the displayed task. Check Library for the saved output."};
+                emit("artifact", {id:saved.id,kind:work.kind});
+                return {ok:true,id:saved.id,kind:work.kind,status:"queued",message:"The request was accepted and the displayed task is processing. This is not a failure or a completed image. Do not retry generation. Tell the user the task will update when ready; do not claim the output already exists."};
               }
               if (!Number.isSafeInteger(saved.id) || saved.id < 1 || saved.status !== "complete") return {ok:false,message:"The generated output was not saved."};
               generatedFiles.push({id:saved.id,kind:work.kind});

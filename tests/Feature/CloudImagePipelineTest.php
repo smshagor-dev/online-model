@@ -98,7 +98,20 @@ class CloudImagePipelineTest extends TestCase
         $id = $this->postJson('/api/v1/media/cloud-image', ['prompt' => 'Mountain'])->json('id');
         Http::fake(['ai.api.nvidia.com/*' => Http::response(['message' => 'rate limited'], 429)]);
         (new RunCloudImage($id))->handle(app(CloudImageEngine::class));
-        $this->assertDatabaseHas('media_tasks', ['id' => $id, 'status' => 'failed']);
+        $this->assertDatabaseHas('media_tasks', ['id' => $id, 'status' => 'failed', 'error' => 'The image provider is rate limited or has no available quota (HTTP 429). Try later or check the provider account.']);
+        $this->assertDatabaseCount('api_credit_usage', 0);
+    }
+
+    public function test_connection_failure_is_actionable_without_exposing_exception_details(): void
+    {
+        $this->signIn();
+        Storage::fake('local');
+        $task = MediaTask::create(['user_id' => auth()->id(), 'kind' => 'image', 'prompt' => 'Dog', 'status' => 'running']);
+        (new RunCloudImage($task->id))->failed(new \Illuminate\Http\Client\ConnectionException('private-token and provider request details'));
+        $task->refresh();
+        $this->assertSame('failed', $task->status);
+        $this->assertStringContainsString('timed out or could not be reached', $task->error);
+        $this->assertStringNotContainsString('private-token', $task->error);
         $this->assertDatabaseCount('api_credit_usage', 0);
     }
 
