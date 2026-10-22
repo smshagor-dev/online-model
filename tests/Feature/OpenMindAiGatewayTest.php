@@ -26,8 +26,9 @@ class OpenMindAiGatewayTest extends TestCase
         $u = $this->account();
         $token = $u->createToken('developer:Test IDE', ['openmindai:invoke'], now()->addDays(90))->plainTextToken;
         $this->withToken($token)->getJson('/api/v1/openmindai/models')->assertOk()
-            ->assertJsonCount(42, 'data')
-            ->assertJsonFragment(['id' => 'openmindai-super', 'name' => 'OpenMindAI Super']);
+            ->assertJsonCount(3, 'data')
+            ->assertJsonFragment(['id' => 'openmindai-super', 'name' => 'OpenMindAI'])
+            ->assertJsonMissing(['id' => 'nvidia-background-noise-removal']);
         $this->withToken($token)->getJson('/api/v1/me')->assertForbidden();
         $this->withToken($token)->getJson('/api/v1/tokens')->assertForbidden();
         $this->withToken($token)->postJson('/api/v1/chat', ['model_id' => 1, 'message' => 'test'])->assertForbidden();
@@ -114,26 +115,27 @@ class OpenMindAiGatewayTest extends TestCase
         $this->get($path, [...$headers, 'X-OpenMindAI-Nonce' => bin2hex(random_bytes(16))])->assertUnauthorized();
     }
 
-    public function test_all_models_are_visible_even_when_provider_is_not_ready(): void
+    public function test_developer_catalog_lists_only_openmindai_coding_agents(): void
     {
         $this->assertDatabaseCount('hosted_code_agents', 42);
         $u = $this->account();
         $token = $u->createToken('developer:catalog', ['openmindai:invoke'])->plainTextToken;
         $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()
-            ->assertJsonCount(42, 'data')
-            ->assertJsonFragment(['id' => 'openmindai-super', 'available' => true]);
-        DB::table('hosted_code_agents')->where('slug', 'nvidia-background-noise-removal')
+            ->assertJsonCount(3, 'data')
+            ->assertJsonFragment(['id' => 'openmindai-super', 'name' => 'OpenMindAI', 'available' => true])
+            ->assertJsonMissing(['id' => 'nvidia-background-noise-removal'])
+            ->assertDontSee('provider_model');
+
+        DB::table('hosted_code_agents')->where('slug', 'openmindai-lite')
             ->update(['enabled' => false]);
         $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()
-            ->assertJsonCount(42, 'data')
-            ->assertJsonFragment([
-                'id' => 'nvidia-background-noise-removal',
-                'available' => false,
-                'path' => null,
-            ]);
+            ->assertJsonCount(3, 'data')
+            ->assertJsonFragment(['id' => 'openmindai-lite', 'available' => false, 'path' => null]);
+
         $this->withToken($token)->getJson('/api/v1/openmindai/models')->assertOk()
-            ->assertJsonCount(42, 'data')
-            ->assertJsonFragment(['id' => 'nvidia-background-noise-removal', 'available' => false]);
+            ->assertJsonCount(3, 'data')
+            ->assertJsonFragment(['id' => 'openmindai-lite', 'name' => 'OpenMindAI', 'available' => false])
+            ->assertJsonMissing(['id' => 'nvidia-background-noise-removal']);
     }
 
     public function test_specialized_json_invoke_requires_admin_verified_configuration_and_tracks_usage(): void

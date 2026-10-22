@@ -46,7 +46,7 @@ class OpenMindAiGatewayController
     {
         $this->actor($request, false);
 
-        return ['object' => 'list', 'data' => $agents->publicModels()];
+        return ['object' => 'list', 'data' => $agents->publicDeveloperModels()];
     }
 
     public function internalModels(Request $request, HostedCodeAgents $agents)
@@ -70,7 +70,7 @@ class OpenMindAiGatewayController
     {
         $this->actor($request, false);
 
-        return response()->json(['object' => 'list', 'data' => $agents->publicCatalog()])
+        return response()->json(['object' => 'list', 'data' => $agents->publicDeveloperCatalog()])
             ->header('Cache-Control', 'no-store');
     }
 

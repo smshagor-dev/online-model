@@ -91,7 +91,7 @@ function Landing({ loggedIn }: { loggedIn: boolean }) {
     <div className="hero">
       <div className="eyebrow"><Sparkles size={14}/> OPENMINDAI DEVELOPER PLATFORM</div>
       <h1>Build intelligent software.<br/><span>One API, your next idea.</span></h1>
-      <p className="hero-lead">Connect your editor, coding assistant or product to OpenMindAI hosted models. Generate scoped keys, inspect model capabilities and keep usage in view.</p>
+      <p className="hero-lead">Connect your editor or coding assistant to OpenMindAI. Generate scoped keys, explore coding capabilities and review your API usage.</p>
       <div className="button-row"><Link href={loggedIn ? "/dashboard" : "/register"} className="button primary">{loggedIn ? "Open developer dashboard" : "Start building"} <ArrowRight size={17}/></Link><Link href="/docs" className="button outline">Read API documentation <BookOpen size={17}/></Link></div>
       <div className="hero-note"><ShieldCheck size={17}/> Your keys stay private. Connect through this developer portal, not the backend.</div>
     </div>
@@ -100,7 +100,7 @@ function Landing({ loggedIn }: { loggedIn: boolean }) {
       <pre>{'curl "$OPENMINDAI_BASE_URL/chat/completions" \\\n  -H "Authorization: Bearer $OPENMINDAI_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"model":"openmindai-lite","messages":[{"role":"user","content":"Hello, OpenMindAI!"}]}\' '}</pre>
       <div className="terminal-bottom"><span className="dot"/> Private developer keys · OpenAI-compatible chat payload</div>
     </div>
-    <section className="benefits"><article><div className="benefit-icon"><KeyRound/></div><h3>Credentials that stay yours</h3><p>Personal access keys have limited permissions, expire automatically and can be revoked instantly.</p></article><article><div className="benefit-icon"><Cpu/></div><h3>Models with clear capabilities</h3><p>Explore chat, coding and specialist integrations. Availability is indicated separately from provider verification.</p></article><article><div className="benefit-icon"><ChartColumnIncreasing/></div><h3>Usage you can understand</h3><p>Review completed requests per model and your monthly allocation without confusing request credits with provider tokens.</p></article></section>
+    <section className="benefits"><article><div className="benefit-icon"><KeyRound/></div><h3>Credentials that stay yours</h3><p>Personal access keys have limited permissions, expire automatically and can be revoked instantly.</p></article><article><div className="benefit-icon"><Cpu/></div><h3>OpenMindAI coding agents</h3><p>Use OpenMindAI coding assistants for development workflows. Connection readiness is shown alongside each option.</p></article><article><div className="benefit-icon"><ChartColumnIncreasing/></div><h3>Usage you can understand</h3><p>Review coding agent activity and your monthly allocation without exposing underlying inference models.</p></article></section>
   </main>;
 }
 
@@ -156,7 +156,7 @@ function Auth({ view }: { view: "login" | "register" | "forgot" }) {
     } finally { setBusy(false); }
   }
   return <main className="auth-layout">
-    <div className="auth-context"><div className="eyebrow"><ShieldCheck size={14}/> SECURE DEVELOPER ACCESS</div><h1>Your workspace for<br/><span>building with AI.</span></h1><p>Sign in with your OpenMindAI account to create private API keys, explore models and monitor usage.</p><div className="auth-points"><span><KeyRound size={17}/> One-time API key disclosure</span><span><Box size={17}/> Hosted model catalog</span><span><ChartColumnIncreasing size={17}/> Per-model usage tracking</span></div></div>
+    <div className="auth-context"><div className="eyebrow"><ShieldCheck size={14}/> SECURE DEVELOPER ACCESS</div><h1>Your workspace for<br/><span>building with AI.</span></h1><p>Sign in with your OpenMindAI account to create private API keys, explore models and monitor usage.</p><div className="auth-points"><span><KeyRound size={17}/> One-time API key disclosure</span><span><Box size={17}/> OpenMindAI coding agents</span><span><ChartColumnIncreasing size={17}/> Coding agent usage</span></div></div>
     <section className="auth-card">
       <h2>{view === "login" ? (challenge ? "Verify your sign-in" : "Welcome back") : view === "register" ? "Create your developer account" : "Reset your password"}</h2>
       <p className="subtle">{view === "login" ? "Sign in to manage your integrations." : view === "register" ? "Start issuing keys for your projects." : "We'll send a password reset link if your account exists."}</p>
