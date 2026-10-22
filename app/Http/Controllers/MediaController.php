@@ -23,12 +23,13 @@ class MediaController
             $query->where('kind', $r->query('kind'));
         }
 
-        return $query->select(['id', 'kind', 'prompt', 'status', 'output_mime', 'result_text', 'error', 'bytes', 'created_at', 'updated_at'])->latest('id')->paginate(20);
+        return $query->select(['id', 'kind', 'prompt', 'status', 'progress_percent', 'progress_stage', 'output_mime', 'result_text', 'error', 'bytes', 'created_at', 'updated_at'])->latest('id')->paginate(20);
     }
 
     public function show(Request $r, int $id)
     {
-        return MediaTask::where('user_id', $r->user()->id)->findOrFail($id);
+        return response()->json(MediaTask::where('user_id', $r->user()->id)->findOrFail($id))
+            ->header('Cache-Control', 'private, no-store');
     }
 
     public function create(Request $r)
