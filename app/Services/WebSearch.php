@@ -161,7 +161,7 @@ class WebSearch
             }
             // Reject provider fallback noise rather than treating unrelated pages
             // as research evidence merely because the HTTP request succeeded.
-            if (count($topics) >= 3 && count(array_filter($topics, fn ($term) => str_contains($evidence, str_replace('_', '-', $term)))) < 2) {
+            if (count($topics) >= 2 && count(array_filter($topics, fn ($term) => str_contains($evidence, str_replace('_', '-', $term)))) < 2) {
                 continue;
             }
             $results[$url] = ['title' => $title, 'url' => $url, 'snippet' => $snippet];
