@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
+import CreationProgress from "./creation-progress";
 import TypingIndicator from "./typing-indicator";
 import ModelPicker from "./model-picker";
 import Dialog from "./dialog";
@@ -147,6 +148,7 @@ export default function ChatWorkspace() {
   const [searchAvailable, setSearchAvailable] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
   const [deepResearch, setDeepResearch] = useState(false);
+  const [pendingCreation, setPendingCreation] = useState<string | null>(null);
   const [researchProgress, setResearchProgress] = useState("");
   const [memoryNotice, setMemoryNotice] = useState("");
   const [searchTimeRange, setSearchTimeRange] = useState("");
@@ -232,7 +234,7 @@ export default function ChatWorkspace() {
     setToolsOpen(null);
     setFilePreview(null);
     setInlineImage(null);
-    setInlineMedia([]);
+    setInlineMedia([]); setPendingCreation(null);
     setAssistant(null);
     setBranches(null);
     setCanvasInitial(null);
@@ -527,7 +529,7 @@ export default function ChatWorkspace() {
     setAssistant(null);
     setMediaMode("chat");
     setInlineImage(null);
-    setInlineMedia([]);
+    setInlineMedia([]); setPendingCreation(null);
     setMessages([]);
     setMessagePage(1);
     setAttachments([]);
@@ -562,7 +564,7 @@ export default function ChatWorkspace() {
       if (controller.signal.aborted) return;
       setConversationId(id);
       changeUrl(chatUrl(id, result.conversation.title));
-      setInlineMedia([]);
+      setInlineMedia([]); setPendingCreation(null);
       setInlineImage(null);
       setAssistant(
         result.conversation.assistant_id
@@ -586,7 +588,7 @@ export default function ChatWorkspace() {
     generationRef.current?.abort();
     generationRef.current = null;
     setBusy(false);
-    setInlineMedia([]); setInlineImage(null); setAttachments([]); setDraft("");
+    setInlineMedia([]); setPendingCreation(null); setInlineImage(null); setAttachments([]); setDraft("");
     const slug = /^\/c\/([^/]+)\/?$/.exec(window.location.pathname)?.[1];
     if (!slug) { newChat(false); return; }
     if (slug.startsWith("guest-")) {
@@ -682,7 +684,7 @@ export default function ChatWorkspace() {
         if (e instanceof ApiError && [403, 429].includes(e.status)) setAuthOpen(true);
         report(e);
       } finally {
-        if (generationRef.current === controller) {setBusy(false); generationRef.current = null;}
+        if (generationRef.current === controller) {setBusy(false); setPendingCreation(null); generationRef.current = null;}
       }
       return;
     }
@@ -694,6 +696,7 @@ export default function ChatWorkspace() {
       const controller = new AbortController();
       generationRef.current = controller;
       setBusy(true);
+      setPendingCreation(mediaMode);
       setError("");
       try {
         const task = await api<{ id: number }>(
@@ -709,7 +712,7 @@ export default function ChatWorkspace() {
       } catch (e) {
         report(e);
       } finally {
-        if (!controller.signal.aborted) setBusy(false);
+        if (generationRef.current === controller) {setBusy(false); setPendingCreation(null); generationRef.current = null;}
       }
       return;
     }
@@ -768,7 +771,9 @@ export default function ChatWorkspace() {
         },
         (event, data) => {
           if (controller.signal.aborted) return;
+          if (event === "creation") setPendingCreation(data.status === "running" ? String(data.kind) : null);
           if (event === "artifact" && Number.isSafeInteger(data.id) && Number(data.id) > 0) {
+            setPendingCreation(null);
             setInlineMedia((ids) => ids.includes(Number(data.id)) ? ids : [...ids, Number(data.id)]);
           }
           if (event === "media" && Number.isSafeInteger(data.id) && Number(data.id) > 0) {
@@ -903,7 +908,7 @@ export default function ChatWorkspace() {
       }
     } finally {
       if (generationRef.current === controller) {
-        setBusy(false);
+        setBusy(false); setPendingCreation(null);
         generationRef.current = null;
         activeStream.current = null;
         inputRef.current?.focus();
@@ -911,6 +916,7 @@ export default function ChatWorkspace() {
     }
   }
   async function stop() {
+    setPendingCreation(null);
     const active = activeStream.current;
     if (active?.conversation_id && active.message_id) {
       try {
@@ -921,7 +927,7 @@ export default function ChatWorkspace() {
       } catch (e) {
         report(e);
       }
-    } else generationRef.current?.abort();
+    } else { generationRef.current?.abort(); setBusy(false); }
   }
   async function branch(index: number, edit = false) {
     if (busy || !conversationId) return;
@@ -1818,11 +1824,12 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
                   </div>
                 </article>
               ))}
-              {busy && messages[messages.length - 1]?.role === "user" && (
-                <div className="thinking"><span className="assistant-avatar"><Image src="/openmindai-logo.png" alt="" width={23} height={23} /></span><TypingIndicator /></div>
+              {busy && !pendingCreation && messages[messages.length - 1]?.role === "user" && (
+                <div className="thinking"><span className="assistant-avatar"><Image src="/openmindai-logo.png" alt="" width={23} height={23} /></span><TypingIndicator label={researchProgress || "Thinking"} /></div>
               )}
             </div>
           )}
+          {pendingCreation && <CreationProgress kind={pendingCreation} />}
           {inlineMedia.map((id) => (
             <InlineMedia key={id} id={id} onText={setDraft} />
           ))}
@@ -1968,9 +1975,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
             )}
             {busy && (deepResearch || researchProgress) && (
               <p className="muted tool-progress" role="status">
-                <LoaderCircle size={14} className="spin" aria-hidden="true" />
-                {researchProgress ||
-                  "Researching sources and drafting your report…"}
+                <TypingIndicator label={researchProgress || "Researching sources"} />
               </p>
             )}
             <div className="composer-toolbar">
@@ -2213,7 +2218,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
             setMediaOpen(false);
             setToolsOpen(null);
             setFilePreview(null);
-            setInlineMedia([]);
+            setInlineMedia([]); setPendingCreation(null);
             setAssistant(null);
             setBranches(null);
           }}
@@ -2269,7 +2274,7 @@ ${source.read_status === "read" ? "Page read" : "Snippet only"}`,
           onDataChanged={() => {
             generationRef.current?.abort();
             chatRequest.current?.abort();
-            setBusy(false);
+            setBusy(false); setPendingCreation(null);
             setLoadingChat(false);
             setConversationId(null);
             setMessages([]);
