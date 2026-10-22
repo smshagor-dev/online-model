@@ -69,7 +69,7 @@ class WebSearch
                     $stream->close();
                 }
                 $rows = $this->parseResults($provider, $body);
-                $results = $this->normalize($rows, $options);
+                $results = $this->normalize($rows, $options, $query);
                 if ($results) {
                     return array_map(fn ($source) => [...$source, 'provider' => $provider, 'time_filter_applied' => $provider === 'searxng' && isset($params['time_range'])], $results);
                 }
@@ -127,8 +127,12 @@ class WebSearch
         }
     }
 
-    private function normalize(array $rows, array $options): array
+    private function normalize(array $rows, array $options, string $query): array
     {
+        // Preserve technical identifiers such as array_map: a generic PHP home
+        // page is not relevant evidence for a requested function.
+        preg_match_all('/(?<![\pL\pN_])[\pL][\pL\pN]*_[\pL\pN_]+/u', $query, $matches);
+        $identifiers = array_map(fn ($term) => str_replace('_', '-', mb_strtolower($term)), $matches[0]);
         $results = [];
         foreach ($rows as $v) {
             if (! is_array($v) || ! is_string($v['url'] ?? null) || strlen($v['url']) > 2000 || ! ($url = self::canonicalUrl($v['url']))) {
@@ -138,7 +142,13 @@ class WebSearch
                 continue;
             }
             $text = fn ($value, $max) => mb_substr(html_entity_decode(strip_tags(is_scalar($value) ? (string) $value : ''), ENT_QUOTES | ENT_HTML5, 'UTF-8'), 0, $max);
-            $results[$url] = ['title' => $text($v['title'] ?? $url, 200) ?: mb_substr($url, 0, 200), 'url' => $url, 'snippet' => $text($v['content'] ?? '', 2000)];
+            $title = $text($v['title'] ?? $url, 200) ?: mb_substr($url, 0, 200);
+            $snippet = $text($v['content'] ?? '', 2000);
+            $evidence = str_replace('_', '-', mb_strtolower(urldecode($url).' '.$title.' '.$snippet));
+            if ($identifiers && ! array_filter($identifiers, fn ($term) => str_contains($evidence, $term))) {
+                continue;
+            }
+            $results[$url] = ['title' => $title, 'url' => $url, 'snippet' => $snippet];
             if (count($results) >= min(10, max(1, (int) ($options['limit'] ?? 5)))) {
                 break;
             }
