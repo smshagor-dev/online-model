@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\CloudImageEngine;
 use App\Services\CloudImagePrompt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -90,6 +91,33 @@ class CloudImagePipelineTest extends TestCase
             && $request['width'] === 1024 && $request['samples'] === 1);
     }
 
+    public function test_slow_provider_budget_fits_worker_and_queue_without_duplicate_generation(): void
+    {
+        $this->signIn();
+        Storage::fake('local');
+        Queue::fake();
+        $id = $this->postJson('/api/v1/media/cloud-image', ['prompt' => 'Dog'])->json('id');
+        // Even an excessive operator setting must not outlive the job reservation.
+        config(['cloud_images.timeout' => 3600]);
+        $calls = 0;
+        Http::fake(function ($request, $options) use (&$calls) {
+            $calls++;
+            $this->assertSame(720, $options['timeout']);
+            $this->assertSame(30, $options['connect_timeout']);
+            $this->assertSame('running', MediaTask::latest('id')->first()->status);
+
+            return Http::response(['artifacts' => [['base64' => base64_encode($this->png())]]]);
+        });
+        $job = new RunCloudImage($id);
+        $this->assertGreaterThan(750, $job->timeout);
+        $this->assertGreaterThan($job->timeout, config('queue.connections.media.retry_after'));
+        $job->handle(app(CloudImageEngine::class));
+        $job->handle(app(CloudImageEngine::class));
+        $this->assertSame(1, $calls);
+        $this->assertDatabaseHas('media_tasks', ['id' => $id, 'status' => 'complete']);
+        $this->assertDatabaseCount('api_credit_usage', 1);
+    }
+
     public function test_failed_provider_request_is_not_counted_as_success(): void
     {
         $this->signIn();
@@ -107,7 +135,7 @@ class CloudImagePipelineTest extends TestCase
         $this->signIn();
         Storage::fake('local');
         $task = MediaTask::create(['user_id' => auth()->id(), 'kind' => 'image', 'prompt' => 'Dog', 'status' => 'running']);
-        (new RunCloudImage($task->id))->failed(new \Illuminate\Http\Client\ConnectionException('private-token and provider request details'));
+        (new RunCloudImage($task->id))->failed(new ConnectionException('private-token and provider request details'));
         $task->refresh();
         $this->assertSame('failed', $task->status);
         $this->assertStringContainsString('timed out or could not be reached', $task->error);

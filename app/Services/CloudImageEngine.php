@@ -110,7 +110,7 @@ class CloudImageEngine
         }
 
         $response = Http::withToken((string) $key)->withHeaders($headers)
-            ->connectTimeout(10)->timeout(135)->withOptions(['allow_redirects' => false])
+            ->connectTimeout(30)->timeout(max(30, min(720, (int) config('cloud_images.timeout', 720))))->withOptions(['allow_redirects' => false])
             ->post($url, $payload);
         if (! $response->successful()) {
             throw new RuntimeException('Image model unavailable (HTTP '.$response->status().').');

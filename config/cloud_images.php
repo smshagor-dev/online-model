@@ -3,6 +3,8 @@
 return [
     'enabled' => (bool) env('CLOUD_IMAGE_ENABLED', true),
     'key' => env('NVIDIA_API_KEY'),
+    // Bounded below the 900-second image job and 1000-second queue reservation.
+    'timeout' => (int) env('CLOUD_IMAGE_TIMEOUT', 720),
     'fast_model' => 'black-forest-labs/flux.1-schnell',
     'fast_endpoint' => 'https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell',
     'ratio_model' => 'stabilityai/stable-diffusion-3-medium',
