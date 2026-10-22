@@ -1,3 +1,4 @@
+import { automaticModels, automaticCoordinator, automaticReasoner, automaticSpecialists } from "./auto-models.ts";
 import { groundResearchAnswer } from "./research-evidence.ts";
 import { withPromptUnderstanding } from "./prompt-understanding.ts";
 import { runConversationTools } from "./conversation-tools.ts";
@@ -19,7 +20,7 @@ export const NVIDIA_HOSTED_MODELS = [
   { id: -3, slug: "openmindai-ultra", name: "OpenMindAI Ultra", provider: "nvidia/nemotron-3-ultra-550b-a55b" },
   { id: -1, slug: "openmindai-lite", name: "OpenMindAI Lite", provider: "nvidia/nemotron-3.5-lightning-30b-a3b" },
 ] as const;
-type HostedModel = { id: number; slug: string; name: string; provider: string };
+type HostedModel = { id: number; slug: string; name: string; provider: string; lastTestStatus?: string | null };
 const chatLabels: Record<string, string> = {
   "nvidia-step-5-preview": "Horizon Preview",
   "nvidia-deepseek-v4.1-flash": "Flash",
@@ -42,15 +43,15 @@ const chatLabels: Record<string, string> = {
   "nvidia-llama-3.2-11b-vision-instruct": "Vision",
   "nvidia-llama-3.2-90b-vision-instruct": "Vision Plus",
 };
-export function hostedCatalog(rows: {id: string; name?: string; provider_model?: string}[]): HostedModel[] {
+export function hostedCatalog(rows: {id: string; name?: string; provider_model?: string; last_test_status?: string | null}[]): HostedModel[] {
   return rows.map((row) => {
     const known = NVIDIA_HOSTED_MODELS.find((model) => model.slug === row.id);
-    if (known) return {...known, name: known.name, provider: row.provider_model || known.provider};
+    if (known) return {...known, name: known.name, provider: row.provider_model || known.provider, lastTestStatus:row.last_test_status};
     // Stable IDs preserve selection when the catalog order changes.
     let hash = 2166136261;
     for (const char of row.id) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
     const label = (chatLabels[row.id] || row.name || row.id).replace(/^openmindai[ -]*/i, "").replace(/[-_]/g, " ");
-    return {id: -1000 - (hash >>> 0), slug: row.id, name: "OpenMindAI " + label, provider: row.provider_model || ""};
+    return {id: -1000 - (hash >>> 0), slug: row.id, name: "OpenMindAI " + label, provider: row.provider_model || "", lastTestStatus:row.last_test_status};
   }).filter((model) => Boolean(model.provider));
 }
 export function selectVisionModel(catalog: HostedModel[]): HostedModel | undefined {
@@ -172,7 +173,11 @@ export async function nvidiaChat(
   const isAuto = input.model_id == null || Number(input.model_id) === NVIDIA_AUTO_MODEL_ID;
   if (!selected && !isAuto && !input.resume_message_id && !options.config)
     return Response.json({message: "Unknown hosted model."}, {status: 404});
-  const visionModel = selectVisionModel(catalog);
+  const eligibleModels = automaticModels(catalog);
+  const coordinator = automaticCoordinator(eligibleModels);
+  if (isAuto && !input.resume_message_id && !coordinator)
+    return Response.json({message:"No healthy automatic model is available. Retest or configure a chat model."}, {status:503});
+  const visionModel = selectVisionModel(isAuto ? eligibleModels : (selected && selectVisionModel([selected]) ? [selected] : catalog));
   let permittedSlugs: string[] | null = null;
   // Respect Laravel's existing admin-managed availability without changing its controllers.
   if ((selected || isAuto) && !options.config && !input.resume_message_id) {
@@ -188,12 +193,13 @@ export async function nvidiaChat(
       return Response.json({message: "Cannot verify available models."}, {status: 503});
     }
   }
-  let routedModel = config.model;
+  let routedModel = isAuto ? ((input.deep_research ? automaticReasoner(eligibleModels) : coordinator)?.provider || config.model) : config.model;
   let fallbackModel = config.model;
   if (permittedSlugs?.length) {
     fallbackModel = permittedSlugs.includes("openmindai-lite") ? NVIDIA_HOSTED_MODELS[2].provider :
       permittedSlugs.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : (catalog.find((model) => model.slug === permittedSlugs?.[0])?.provider || config.model);
   }
+  if (isAuto) fallbackModel = coordinator?.provider || routedModel;
   // An explicit model selection is honored for ordinary text chat;
   // automatic requests use the prompt's result. Images require a configured vision model.
   if (selected && !inlineImage) { routedModel = selected.provider; fallbackModel = selected.provider; }
@@ -204,10 +210,7 @@ export async function nvidiaChat(
     // The native search tool forms a focused query from the full request.
     // Avoid the legacy quick-search path searching the entire instruction.
     backendInput.web_search = false;
-    routedModel = (input.web_search ? catalog.find(m => m.slug === "openmindai-lite")?.provider : undefined) ||
-      catalog.find(m => m.slug === "openmindai-super")?.provider ||
-      catalog.find(m => m.slug === "openmindai-ultra")?.provider ||
-      catalog.find(m => m.slug === "openmindai-lite")?.provider || catalog[0]?.provider || config.model;
+    routedModel = coordinator?.provider || config.model;
   }
   const backend = async (
     path: string,
@@ -398,7 +401,7 @@ export async function nvidiaChat(
           const generatedFiles: {id:number;kind:string}[] = [];
           await runConversationTools({
             model:activeModel, apiKey:config.apiKey, fetcher, messages:generationMessages, webSearchSelected:Boolean(input.web_search),
-            signal:AbortSignal.any([upstreamAbort.signal, AbortSignal.timeout(240000)]), specialists:catalog,
+            signal:AbortSignal.any([upstreamAbort.signal, AbortSignal.timeout(240000)]), specialists:automaticSpecialists(eligibleModels, activeModel),
             progress: label => emit("research", {label, sources:lease.sources}),
             delta: text => {content += text; emit("delta", {content:text});},
             web: async action => {
