@@ -98,7 +98,7 @@ export default function InlineMedia({
   if (active && !task?.error) {
     return (
       <div className="media-poll-status">
-        <CreationProgress kind={task?.kind || "image"} preparing={task?.status === "complete"}
+        <CreationProgress kind={task?.kind || "media"} preparing={task?.status === "complete"}
           progress={task?.progress_percent} stage={task?.progress_stage}
           taskId={task?.id ?? id} status={task?.status ?? null}/>
         {queuedTooLong && (
