@@ -57,6 +57,7 @@ class CosmosTransferTest extends TestCase
 
     public function test_controlled_video_catalog_and_generic_invoke_protection(): void
     {
+        $this->setupTransfer();
         [$user,$token] = $this->account();
         $catalog = collect($this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data'));
         $row = $catalog->firstWhere('id', 'nvidia-cosmos-transfer2.5-2b');
