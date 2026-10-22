@@ -46,6 +46,7 @@ class NvidiaAvWorkerTest extends TestCase
 
     public function test_both_nim_models_expose_dedicated_catalog_routes(): void
     {
+        $this->setupWorker();
         [$user, $token] = $this->account();
         $developerData = $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data');
         $this->assertCount(3, $developerData);

@@ -173,7 +173,7 @@ class OpenMindAiGatewayTest extends TestCase
     public function test_model_configuration_never_forwards_client_supplied_provider_model(): void
     {
         config(['models.nvidia_key' => 'test-provider-secret-123']);
-        Http::fake(['integrate.api.nvidia.com/*' => Http::response(['result' => 'ok'])]);
+        Http::fake(['integrate.api.nvidia.com/*' => Http::response(['data' => [['embedding' => [0.1, 0.2]]]])]);
         $u = $this->account();
         $token = $u->createToken('developer:safe', ['openmindai:invoke'])->plainTextToken;
         $slug = 'nvidia-nemotron-3-embed-1b';

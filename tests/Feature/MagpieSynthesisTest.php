@@ -55,6 +55,7 @@ class MagpieSynthesisTest extends TestCase
 
     public function test_magpie_is_active_and_uses_queued_tts_inference(): void
     {
+        $this->setupNim();
         [$user, $key] = $this->account();
         $developerData = $this->withToken($key)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data');
         $this->assertCount(3, $developerData);

@@ -58,6 +58,7 @@ class CosmosTransferTest extends TestCase
 
     public function test_controlled_video_catalog_and_generic_invoke_protection(): void
     {
+        $this->setupTransfer();
         [$user,$token] = $this->account();
         $developerData = $this->withToken($token)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data');
         $this->assertCount(3, $developerData);
