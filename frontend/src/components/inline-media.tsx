@@ -16,6 +16,8 @@ export default function InlineMedia({
     id: number;
     kind: string;
     status: string;
+    progress_percent?: number | null;
+    progress_stage?: string | null;
     result_text: string | null;
     output_mime: string | null;
     error: string | null;
@@ -77,7 +79,8 @@ export default function InlineMedia({
     };
   }, [id, task?.status, task?.output_mime]);
   if (!error && !task?.error && (!task || ["queued", "running"].includes(task.status) || (task.status === "complete" && task.output_mime && !url))) {
-    return <CreationProgress kind={task?.kind || "media"} preparing={task?.status === "complete"}/>;
+    return <CreationProgress kind={task?.kind || "media"} preparing={task?.status === "complete"}
+      progress={task?.progress_percent} stage={task?.progress_stage}/>;
   }
   return (
     <article className="inline-media manage-card creation-result">
