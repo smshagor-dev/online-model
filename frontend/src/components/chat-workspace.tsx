@@ -195,6 +195,10 @@ export default function ChatWorkspace() {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [messagePage, setMessagePage] = useState(1);
   const [draft, setDraft] = useState("");
+  const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -253,6 +257,9 @@ export default function ChatWorkspace() {
     setModelId(null);
     setConversations([]);
     setMessages([]);
+    setEditingMessageIndex(null);
+    setEditingText("");
+    setSavingEdit(false);
     setConversationId(null);
     setAccountOpen(false);
     setAccountMenu(false);
@@ -397,6 +404,13 @@ export default function ChatWorkspace() {
     return () => observer.disconnect();
   }, [draft]);
   useEffect(() => {
+    if (editingMessageIndex !== null) {
+      const textarea = editTextareaRef.current;
+      textarea?.focus();
+      textarea?.setSelectionRange(textarea.value.length, textarea.value.length);
+    }
+  }, [editingMessageIndex]);
+  useEffect(() => {
     if (skipScroll.current) {
       skipScroll.current = false;
       return;
@@ -532,6 +546,8 @@ export default function ChatWorkspace() {
     setInlineImage(null);
     setInlineMedia([]); setPendingCreation(null);
     setMessages([]);
+    setEditingMessageIndex(null);
+    setEditingText("");
     setMessagePage(1);
     setAttachments([]);
     setDraft("");
@@ -546,6 +562,8 @@ export default function ChatWorkspace() {
     const controller = new AbortController();
     chatRequest.current = controller;
     setLoadingChat(true);
+    setEditingMessageIndex(null);
+    setEditingText("");
     setTemporary(false);
     setAttachments([]);
     setError("");
@@ -590,6 +608,7 @@ export default function ChatWorkspace() {
     generationRef.current = null;
     setBusy(false);
     setInlineMedia([]); setPendingCreation(null); setInlineImage(null); setAttachments([]); setDraft("");
+    setEditingMessageIndex(null); setEditingText("");
     const slug = /^\/c\/([^/]+)\/?$/.exec(window.location.pathname)?.[1];
     if (!slug) { newChat(false); return; }
     if (slug.startsWith("guest-")) {
@@ -930,20 +949,47 @@ export default function ChatWorkspace() {
       }
     } else { generationRef.current?.abort(); setBusy(false); }
   }
-  async function branch(index: number, edit = false) {
-    if (busy || !conversationId) return;
+  function startEditingMessage(index: number) {
+    if (busy || savingEdit || !conversationId) return;
     const target = messages[index];
-    if (!target?.id) return;
-    const content = edit
-      ? prompt("Edit your message", target.content)
-      : target.content;
-    if (!content?.trim()) return;
+    if (!target?.id || target.role !== "user") return;
+    setEditingMessageIndex(index);
+    setEditingText(target.content);
+  }
+  function cancelEditingMessage() {
+    if (savingEdit) return;
+    setEditingMessageIndex(null);
+    setEditingText("");
+  }
+  async function saveEditedMessage(index: number) {
+    const original = messages[index];
+    const content = editingText.trim();
+    if (editingMessageIndex !== index || savingEdit || busy || !conversationId ||
+        !original?.id || original.role !== "user" || !content ||
+        content === original.content.trim()) return;
+    setSavingEdit(true);
+    try {
+      const saved = await branch(index, content);
+      if (saved) {
+        setEditingMessageIndex(null);
+        setEditingText("");
+      }
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+  async function branch(index: number, revisedText?: string): Promise<boolean> {
+    if (busy || !conversationId) return false;
+    const target = messages[index];
+    if (!target?.id) return false;
+    const content = (revisedText ?? target.content).trim();
+    if (!content) return false;
     try {
       const result = await api<{
         conversation_id: number;
         message: string;
         attachment_ids: number[];
-      }>(`conversations/${conversationId}/branch`, "POST", {
+      }>("conversations/" + conversationId + "/branch", "POST", {
         message_id: target.id,
       });
       setConversationId(result.conversation_id);
@@ -954,8 +1000,10 @@ export default function ChatWorkspace() {
         history: messages.slice(0, index),
         attachmentIds: result.attachment_ids,
       });
+      return true;
     } catch (e) {
       report(e);
+      return false;
     }
   }
   async function feedback(index: number, value: "up" | "down") {
@@ -1663,19 +1711,62 @@ export default function ChatWorkspace() {
                   )}
                   <div className="message-body">
                     {message.role === "user" ? (
-                      <div className="user-bubble">
-                        {message.content}
-                        {message.id && (
-                          <button
-                            className="icon-button edit-message"
-                            disabled={busy}
-                            onClick={() => void branch(index, true)}
-                            aria-label="Edit message"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                        )}
-                      </div>
+                      editingMessageIndex === index ? (
+                        <form
+                          className="inline-message-editor"
+                          aria-label="Edit your message"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            void saveEditedMessage(index);
+                          }}
+                        >
+                          <label htmlFor={"message-edit-" + message.id} className="inline-edit-label">Edit message</label>
+                          <textarea
+                            id={"message-edit-" + message.id}
+                            ref={editTextareaRef}
+                            value={editingText}
+                            onChange={(event) => setEditingText(event.target.value)}
+                            maxLength={16000}
+                            rows={Math.min(8, Math.max(3, editingText.split("\n").length))}
+                            disabled={savingEdit}
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                cancelEditingMessage();
+                              } else if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                                event.preventDefault();
+                                void saveEditedMessage(index);
+                              }
+                            }}
+                          />
+                          <div className="inline-edit-actions">
+                            <button type="button" className="inline-edit-cancel"
+                              disabled={savingEdit} onClick={cancelEditingMessage}>
+                              Cancel
+                            </button>
+                            <button type="submit" className="inline-edit-save"
+                              disabled={savingEdit || !editingText.trim() || editingText.trim() === message.content.trim()}>
+                              {savingEdit ? "Saving…" : "Save & send"}
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="user-bubble">
+                          {message.content}
+                          {message.id && conversationId && (
+                            <button
+                              type="button"
+                              className="icon-button edit-message"
+                              disabled={busy || savingEdit}
+                              onClick={() => startEditingMessage(index)}
+                              aria-label="Edit message"
+                              title="Edit message"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          )}
+                        </div>
+                      )
                     ) : (
                       <>
                         <ResponseMarkdown
