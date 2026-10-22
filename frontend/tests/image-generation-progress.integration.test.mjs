@@ -4,13 +4,15 @@ import { readFileSync } from "node:fs";
 
 const read = file => readFileSync(new URL("../src/" + file, import.meta.url), "utf8");
 
-test("image creation shows server-supplied percent with accessible progressbar", () => {
+test("image creation renders a large server-supplied percentage in the card, without a line", () => {
   const progress = read("components/creation-progress.tsx");
   assert.match(progress, /progress\?: number \| null/);
   assert.match(progress, /stage\?: string \| null/);
   assert.match(progress, /kind === "image"/);
-  assert.match(progress, /aria-valuenow=\{percent\}/);
-  assert.match(progress, /aria-label="Image generation workflow progress"/);
+  assert.match(progress, /className="creation-canvas-percent"/);
+  assert.match(progress, /role=\{image \? "status" : undefined\}/);
+  assert.match(progress, /creation-progress-announcement/);
+  assert.doesNotMatch(progress, /role="progressbar"|className="creation-meter"/);
   assert.match(progress, /imageStages\[stage\]/);
   assert.doesNotMatch(progress, /setInterval|Date\.now\(|Math\.random\(/);
 });
@@ -32,9 +34,10 @@ test("media studio renders progress for active images", () => {
   assert.match(studio, /stage=\{task.progress_stage\}/);
 });
 
-test("image progress bar respects reduced-motion preference", () => {
+test("large centered percentage replaces the horizontal progress meter", () => {
   const css = read("app/motion.css");
-  assert.match(css, /\.creation-meter/);
+  assert.doesNotMatch(css, /\.creation-meter/);
   assert.match(css, /\.creation-canvas-percent/);
+  assert.match(css, /\.creation-progress-announcement/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });
