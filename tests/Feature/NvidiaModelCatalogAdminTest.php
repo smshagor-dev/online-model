@@ -61,15 +61,18 @@ class NvidiaModelCatalogAdminTest extends TestCase
         $apiKey = $user->createToken('developer:Studio', ['openmindai:invoke'])->plainTextToken;
         $this->app['auth']->forgetGuards();
         $catalog = $this->withToken($apiKey)->getJson('/api/v1/openmindai/catalog')->assertOk()->json('data');
-        $this->assertCount(42, $catalog);
+        $this->assertCount(3, $catalog);
+        $this->assertSame(['openmindai-lite', 'openmindai-super', 'openmindai-ultra'], collect($catalog)->pluck('id')->sort()->values()->all());
         foreach ($catalog as $model) {
+            $this->assertSame('OpenMindAI', $model['name']);
             $this->assertTrue($model['active']);
-            $this->assertContains($model['inference_status'], ['configured', 'setup_required']);
-            if (! $model['available']) {
-                $this->assertSame('setup_required', $model['inference_status']);
-            }
         }
-        $voice = collect($catalog)->firstWhere('id', 'nvidia-nemotron-voicechat');
+
+        // The administrator and non-developer apps still see the complete
+        // specialist catalog; the public developer projection is deliberately smaller.
+        $internal = app(\App\Services\HostedCodeAgents::class)->publicCatalog();
+        $this->assertCount(42, $internal);
+        $voice = collect($internal)->firstWhere('id', 'nvidia-nemotron-voicechat');
         $this->assertFalse($voice['provider_verified']);
         $this->assertTrue($voice['active']);
     }
