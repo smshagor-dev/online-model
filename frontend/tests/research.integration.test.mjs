@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { researchLoop } from "../src/lib/research-loop.ts";
+import { researchLoop, ResearchToolUnavailableError } from "../src/lib/research-loop.ts";
 import { nvidiaChat } from "../src/lib/nvidia-chat.ts";
 
 test("research continues beyond the initial query/source batch until coverage is finished", async () => {
@@ -15,28 +15,20 @@ test("research continues beyond the initial query/source batch until coverage is
           ? { action: "search", query: "Question " + decisions }
           : { action: "finish", reason: "Every requested part has evidence" },
       ),
-    tool: async (action) => ({
-      sources: [
-        { url: `https://example.org/${action.query}`, title: "Source" },
-      ],
-    }),
+    tool: async (action) => action.action === "read"
+      ? {url:action.url,read_status:"read",page_text:"Actual page evidence"}
+      : {sources:[{url:`https://example.org/${action.query}`,title:"Source"}]},
   });
   assert.equal(decisions, 14);
   assert.equal(result.sources.length, 12);
   assert.equal(result.conclusion, "Every requested part has evidence");
 });
-test("repeated research actions fail explicitly instead of claiming completion", async () => {
-  await assert.rejects(
-    () =>
-      researchLoop({
-        sources: [],
-        signal: new AbortController().signal,
-        progress() {},
-        decide: async () => '{"action":"search","query":"same"}',
-        tool: async () => ({ sources: [] }),
-      }),
-    /request is incomplete/,
-  );
+test("repeated research actions produce an honest partial report instead of losing the answer", async () => {
+  const result = await researchLoop({sources:[],signal:new AbortController().signal,progress(){},
+    decide:async()=>'{"action":"search","query":"same"}',tool:async()=>({sources:[]})});
+  assert.equal(result.complete,false);
+  assert.match(result.conclusion,/No new evidence/);
+  assert.equal(result.coverage.actions,1);
 });
 test("research cancellation prevents the next tool request", async () => {
   const controller = new AbortController();
@@ -248,4 +240,11 @@ test("research bounds page evidence and rejects malformed source URLs",async()=>
  decide:async()=>JSON.stringify(++calls===1?{action:"search",query:"Evidence"}:calls===2?{action:"read",url:"https://example.org"}:{action:"finish",reason:"Done"}),
  tool:async action=>action.action==="search"?{sources:[{url:"javascript:alert(1)",title:"bad"},{url:"https://example.org",title:"Valid"}]}:{url:action.url,read_status:"read",page_text:"x".repeat(100000)}});
  assert.equal(result.sources.length,1);assert.equal(result.evidence[0].page_text.length,8000);
+});
+
+test('research tool outage preserves an explicitly limited report instead of interrupting the turn',async()=>{
+ const result=await researchLoop({sources:[],signal:new AbortController().signal,progress(){},decide:async()=>'{"action":"search","query":"SQLite WAL"}',tool:async()=>{throw new ResearchToolUnavailableError('provider unavailable');}});
+ assert.equal(result.complete,false);
+ assert.match(result.conclusion,/could not be verified/);
+ assert.equal(result.coverage.pagesRead,0);
 });
