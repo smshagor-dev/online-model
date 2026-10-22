@@ -79,3 +79,36 @@ test('an explicit no-browse instruction can decline the selected search without 
  await runConversationTools({...base(),webSearchSelected:true,fetcher:async()=>responses.shift(),web:async()=>{webCalls++;}});
  assert.equal(webCalls,0);
 });
+
+test('selected search outage retries once and finishes in requested Bangla without an invented model answer',async()=>{
+ let webCalls=0,modelCalls=0;const chunks=[];
+ const result=await runConversationTools({...base(),webSearchSelected:true,
+ messages:[{role:'user',content:'Search for Md Shahanur Islam Shagor and summarize in Bangla.'}],
+ fetcher:async()=>{modelCalls++;assert.equal(modelCalls,1);return call('web_search',{query:'"Md Shahanur Islam Shagor"'},'s');},
+ web:async()=>{webCalls++;throw Error('upstream private error');},delta:chunk=>chunks.push(chunk)});
+ assert.equal(webCalls,2);assert.equal(modelCalls,1);
+ assert.match(result.text,/যাচাইযোগ্য/);assert.equal(chunks.join(''),result.text);
+ assert.doesNotMatch(result.text,/known_people|database|upstream private/);
+});
+test('a transient search outage recovers before reading sources and answering',async()=>{
+ let searches=0;const responses=[call('web_search',{query:'Md Shahanur Islam Shagor'},'s'),call('read_page',{url:'https://example.org/profile'},'r'),sse({content:'Verified profile: https://example.org/profile'},'stop')];
+ const result=await runConversationTools({...base(),webSearchSelected:true,
+ fetcher:async()=>responses.shift(),web:async input=>{
+ if(input.action==='read')return {read_status:'read',page_text:'Public professional profile'};
+ if(++searches===1)throw Error('temporary outage');
+ return {sources:[{url:'https://example.org/profile',title:'Public profile'}]};
+ }});
+ assert.equal(searches,2);assert.match(result.text,/Verified profile/);
+});
+test('empty selected search results cannot produce a fabricated biography',async()=>{
+ let searches=0;
+ const result=await runConversationTools({...base(),webSearchSelected:true,
+ fetcher:async()=>call('web_search',{query:'Person name'},'s'),web:async()=>{searches++;return {sources:[]};}});
+ assert.equal(searches,2);assert.match(result.text,/cannot verify/);
+});
+test('cancellation during search outage prevents retry and fallback',async()=>{
+ const controller=new AbortController();let searches=0;
+ await assert.rejects(()=>runConversationTools({...base(),webSearchSelected:true,signal:controller.signal,
+ fetcher:async()=>call('web_search',{query:'Person name'},'s'),web:async()=>{searches++;controller.abort();throw Error('cancelled');}}));
+ assert.equal(searches,1);
+});
