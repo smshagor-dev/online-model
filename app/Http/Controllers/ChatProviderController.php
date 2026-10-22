@@ -25,7 +25,7 @@ class ChatProviderController
             'messages.*.tool_calls.*.function.arguments' => 'required|string|max:20000',
             'tools' => 'sometimes|array|max:8',
             'tools.*.type' => 'required|in:function',
-            'tools.*.function.name' => 'required|in:web_search,read_page,ask_specialist,create_artifact',
+            'tools.*.function.name' => 'required|in:web_search,read_page,ask_specialist,create_artifact,decline_web_search',
             'tools.*.function.description' => 'sometimes|string|max:10000',
             'tools.*.function.parameters' => 'required|array',
             'tool_choice' => 'sometimes|in:auto,none,required', 'stream' => 'sometimes|boolean',

@@ -1,4 +1,5 @@
 import { evidenceUrl } from "./research-evidence.ts";
+export class ResearchToolUnavailableError extends Error {}
 // Runs only on the Next.js server. Planning uses normal chat JSON responses.
 export type Source = {
   url: string;
@@ -38,6 +39,7 @@ export async function researchLoop(options: {
   const report = (conclusion: string, complete: boolean) => {
     const all = [...sources.values()];
     const read = all.filter(source=>source.read_status === "read");
+    complete = complete && read.length > 0;
     const domains = new Set(read.map(source=>new URL(source.url).hostname.replace(/^www\./,"")));
     return {sources:all, evidence, conclusion, complete,
       coverage:{actions:actions.size, sources:all.length, pagesRead:read.length, domainsRead:domains.size},
@@ -76,7 +78,7 @@ export async function researchLoop(options: {
     ) {
       // A planner cannot declare snippet-only search results to be inspected evidence.
       const unread = [...sources.values()].find(source=>source.read_status !== "read" && !actions.has(JSON.stringify({action:"read",url:source.url})));
-      if (!evidence.length && unread && actions.size < limits.actions) {
+      if (![...sources.values()].some(source=>source.read_status === "read") && unread && actions.size < limits.actions) {
         pending = {action:"read",url:unread.url};
         await save();
         continue;
@@ -102,10 +104,15 @@ export async function researchLoop(options: {
         ? { action: "search", query: action.query.trim() }
         : { action: "read", url: action.url };
     const key = JSON.stringify(request);
-    if (!pending && actions.has(key))
-      throw new Error(
-        "NVIDIA research stopped because it repeated an action without new evidence. The request is incomplete.",
-      );
+    if (!pending && actions.has(key)) {
+      const unread = [...sources.values()].find(source => !actions.has(JSON.stringify({action:"read",url:source.url})));
+      if (unread && evidence.length < limits.pages) {
+        pending = {action:"read",url:unread.url};
+        await save();
+        continue;
+      }
+      return report("No new evidence was found after a repeated action. Report the available findings and explicitly identify unresolved questions.", false);
+    }
     if (request.action === "read" && evidence.length >= limits.pages) return report("Page-reading budget reached.", false);
     actions.add(key);
     pending = request;
@@ -117,7 +124,15 @@ export async function researchLoop(options: {
         : `Reading: ${request.url}`,
       [...sources.values()],
     );
-    const result = await options.tool(request);
+    let result: Record<string, unknown>;
+    try { result = await options.tool(request); }
+    catch (error) {
+      options.signal.throwIfAborted();
+      if (!(error instanceof ResearchToolUnavailableError)) throw error;
+      pending = null;
+      await save();
+      return report("The search or page-reading service was unavailable. Summarize only the available evidence, distinguish general knowledge, and state which requested facts could not be verified.", false);
+    }
     if (request.action === "search") {
       if (!Array.isArray(result.sources))
         throw new Error(

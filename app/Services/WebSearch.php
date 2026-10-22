@@ -133,6 +133,10 @@ class WebSearch
         // page is not relevant evidence for a requested function.
         preg_match_all('/(?<![\pL\pN_])[\pL][\pL\pN]*_[\pL\pN_]+/u', $query, $matches);
         $identifiers = array_map(fn ($term) => str_replace('_', '-', mb_strtolower($term)), $matches[0]);
+        preg_match_all('/[a-z][a-z0-9_]{2,}/i', $query, $words);
+        $stop = explode(' ', 'the and for from with that this what when where which how are was were does using use into versus official documentation document search web research read sources source report compare comparing explain write concise detailed include exact url urls page pages evidence limitations information please about findings only then its can not could would should have has their they them you your request');
+        $topics = array_values(array_unique(array_diff(array_map('strtolower', $words[0]), $stop)));
+        preg_match('/\bsite:([a-z0-9.-]+)/i', $query, $site);
         $results = [];
         foreach ($rows as $v) {
             if (! is_array($v) || ! is_string($v['url'] ?? null) || strlen($v['url']) > 2000 || ! ($url = self::canonicalUrl($v['url']))) {
@@ -146,6 +150,18 @@ class WebSearch
             $snippet = $text($v['content'] ?? '', 2000);
             $evidence = str_replace('_', '-', mb_strtolower(urldecode($url).' '.$title.' '.$snippet));
             if ($identifiers && ! array_filter($identifiers, fn ($term) => str_contains($evidence, $term))) {
+                continue;
+            }
+            if (isset($site[1])) {
+                $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+                $domain = strtolower($site[1]);
+                if ($host !== $domain && ! str_ends_with($host, '.'.$domain)) {
+                    continue;
+                }
+            }
+            // Reject provider fallback noise rather than treating unrelated pages
+            // as research evidence merely because the HTTP request succeeded.
+            if (count($topics) >= 3 && count(array_filter($topics, fn ($term) => str_contains($evidence, str_replace('_', '-', $term)))) < 2) {
                 continue;
             }
             $results[$url] = ['title' => $title, 'url' => $url, 'snippet' => $snippet];

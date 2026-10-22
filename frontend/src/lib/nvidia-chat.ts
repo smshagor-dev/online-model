@@ -6,6 +6,7 @@ import { generateHostedImage } from "./hosted-image.ts";
 import { hostedMediaRequest } from "./hosted-media.ts";
 import { parseInlineImage, imageMessage } from "./vision-input.ts";
 import {
+  ResearchToolUnavailableError,
   plannerInstruction,
   researchLoop,
   type Source,
@@ -204,6 +205,7 @@ export async function nvidiaChat(
   // automatic requests use the prompt's result. Images require a configured vision model.
   if (selected && !inlineImage) { routedModel = selected.provider; fallbackModel = selected.provider; }
   if (inlineImage) routedModel = visionModel?.provider || NVIDIA_HOSTED_MODELS[0].provider;
+  if (input.deep_research && !input.resume_message_id) backendInput.conversation_tools = true;
   const conversationTools = isAuto && !input.resume_message_id && !inlineImage && !input.deep_research;
   if (conversationTools) {
     backendInput.conversation_tools = true;
@@ -485,10 +487,10 @@ export async function nvidiaChat(
                 30000,
                 upstreamAbort.signal,
               );
-              if (!r.ok)
-                throw new Error(
-                  "NVIDIA research tool failed. Check search availability or stop status.",
-                );
+              if (!r.ok) {
+                if ([429,502,503,504].includes(r.status)) throw new ResearchToolUnavailableError("Research evidence service unavailable.");
+                throw new Error("NVIDIA research tool failed. Check search availability or stop status.");
+              }
               return r.json();
             },
             decide: async (context) => {
