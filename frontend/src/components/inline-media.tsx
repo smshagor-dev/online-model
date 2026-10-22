@@ -1,4 +1,5 @@
 "use client";
+import CreationProgress from "./creation-progress";
 import DocumentPreview from "./document-preview";
 import ResponseMarkdown from "./response-markdown";
 import { useEffect, useState } from "react";
@@ -75,8 +76,11 @@ export default function InlineMedia({
       if (u) URL.revokeObjectURL(u);
     };
   }, [id, task?.status, task?.output_mime]);
+  if (!error && !task?.error && (!task || ["queued", "running"].includes(task.status) || (task.status === "complete" && task.output_mime && !url))) {
+    return <CreationProgress kind={task?.kind || "media"} preparing={task?.status === "complete"}/>;
+  }
   return (
-    <article className="inline-media manage-card">
+    <article className="inline-media manage-card creation-result">
       <strong>
         {task?.kind || "Media"} · {task?.status || "Loading"}
       </strong>
