@@ -53,6 +53,13 @@ export function hostedCatalog(rows: {id: string; name?: string; provider_model?:
     return {id: -1000 - (hash >>> 0), slug: row.id, name: "OpenMindAI " + label, provider: row.provider_model || ""};
   }).filter((model) => Boolean(model.provider));
 }
+export function selectVisionModel(catalog: HostedModel[]): HostedModel | undefined {
+  for (const slug of ["nvidia-llama-3.2-11b-vision-instruct", "nvidia-llama-3.2-90b-vision-instruct", "nvidia-nemotron-3-nano-omni-30b-a3b-reasoning", "openmindai-super"]) {
+    const model = catalog.find(item => item.slug === slug);
+    if (model) return model;
+  }
+  return undefined;
+}
 export const isNvidiaModelId = (id: number) =>
   Number.isSafeInteger(id) && (id <= -1000 || id === NVIDIA_AUTO_MODEL_ID || NVIDIA_HOSTED_MODELS.some((model) => model.id === id));
 export const nvidiaModels = (allowed: string[], catalog: HostedModel[] = [...NVIDIA_HOSTED_MODELS]) => [
@@ -165,6 +172,7 @@ export async function nvidiaChat(
   const isAuto = input.model_id == null || Number(input.model_id) === NVIDIA_AUTO_MODEL_ID;
   if (!selected && !isAuto && !input.resume_message_id && !options.config)
     return Response.json({message: "Unknown hosted model."}, {status: 404});
+  const visionModel = selectVisionModel(catalog);
   let permittedSlugs: string[] | null = null;
   // Respect Laravel's existing admin-managed availability without changing its controllers.
   if ((selected || isAuto) && !options.config && !input.resume_message_id) {
@@ -174,7 +182,7 @@ export async function nvidiaChat(
       if ((isAuto && allowedSlugs.length === 0) ||
           (selected && !allowedSlugs.includes(selected.slug)))
         return Response.json({message: "This model is not enabled."}, {status: 403});
-      if (inlineImage && !allowedSlugs.includes("openmindai-super"))
+      if (inlineImage && (!visionModel || !allowedSlugs.includes(visionModel.slug)))
         return Response.json({message: "Image understanding requires an enabled vision model."}, {status: 503});
     } catch {
       return Response.json({message: "Cannot verify available models."}, {status: 503});
@@ -187,13 +195,17 @@ export async function nvidiaChat(
       permittedSlugs.includes("openmindai-super") ? NVIDIA_HOSTED_MODELS[0].provider : (catalog.find((model) => model.slug === permittedSlugs?.[0])?.provider || config.model);
   }
   // An explicit model selection is honored for ordinary text chat;
-  // automatic requests use the prompt's result. Images always require Super VL.
+  // automatic requests use the prompt's result. Images require a configured vision model.
   if (selected && !inlineImage) { routedModel = selected.provider; fallbackModel = selected.provider; }
-  if (inlineImage) routedModel = catalog.find(m => m.slug === "openmindai-super")?.provider || NVIDIA_HOSTED_MODELS[0].provider;
-  const conversationTools = isAuto && !input.resume_message_id && !inlineImage && !input.web_search && !input.deep_research;
+  if (inlineImage) routedModel = visionModel?.provider || NVIDIA_HOSTED_MODELS[0].provider;
+  const conversationTools = isAuto && !input.resume_message_id && !inlineImage && !input.deep_research;
   if (conversationTools) {
     backendInput.conversation_tools = true;
-    routedModel = catalog.find(m => m.slug === "openmindai-super")?.provider ||
+    // The native search tool forms a focused query from the full request.
+    // Avoid the legacy quick-search path searching the entire instruction.
+    backendInput.web_search = false;
+    routedModel = (input.web_search ? catalog.find(m => m.slug === "openmindai-lite")?.provider : undefined) ||
+      catalog.find(m => m.slug === "openmindai-super")?.provider ||
       catalog.find(m => m.slug === "openmindai-ultra")?.provider ||
       catalog.find(m => m.slug === "openmindai-lite")?.provider || catalog[0]?.provider || config.model;
   }
@@ -385,7 +397,7 @@ export async function nvidiaChat(
           await saveCheckpoint();
           const generatedFiles: {id:number;kind:string}[] = [];
           await runConversationTools({
-            model:activeModel, apiKey:config.apiKey, fetcher, messages:generationMessages,
+            model:activeModel, apiKey:config.apiKey, fetcher, messages:generationMessages, webSearchSelected:Boolean(input.web_search),
             signal:AbortSignal.any([upstreamAbort.signal, AbortSignal.timeout(240000)]), specialists:catalog,
             progress: label => emit("research", {label, sources:lease.sources}),
             delta: text => {content += text; emit("delta", {content:text});},

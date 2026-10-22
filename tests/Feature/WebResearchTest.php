@@ -34,6 +34,37 @@ class WebResearchTest extends TestCase
         Http::assertSent(fn ($r) => $r['time_range'] === 'week' && $r['safesearch'] === 1);
     }
 
+    public function test_search_portals_are_not_evidence_and_trigger_the_next_provider(): void
+    {
+        config(['models.search_url' => 'https://search.example/search', 'models.public_search_fallback' => true]);
+        Http::fake([
+            'search.example/*' => Http::response(['results' => [
+                ['url' => 'https://www.google.com/xhtml/search', 'title' => 'Google'],
+                ['url' => 'https://search.yahoo.com/', 'title' => 'Search'],
+                ['url' => 'https://www.bing.com/search?q=php', 'title' => 'Bing'],
+            ]]),
+            'www.bing.com/*' => Http::response('<rss><channel><item><title>PHP array_map</title><link>https://www.php.net/manual/en/function.array-map.php</link></item></channel></rss>'),
+        ]);
+        $sources = app(WebSearch::class)->search('PHP array_map');
+        $this->assertCount(1, $sources);
+        $this->assertSame('https://www.php.net/manual/en/function.array-map.php', $sources[0]['url']);
+        $this->assertSame('bing_rss', $sources[0]['provider']);
+        $this->assertFalse(WebSearch::isSearchPortal('https://www.google.com/about'));
+    }
+
+    public function test_generic_search_results_do_not_satisfy_a_specific_function_query(): void
+    {
+        config(['models.search_url' => null, 'models.public_search_fallback' => true]);
+        Http::fake([
+            'www.bing.com/*' => Http::response('<rss><channel><item><title>PHP homepage</title><link>https://www.php.net/</link></item></channel></rss>'),
+            'html.duckduckgo.com/*' => Http::response('<a class="result__a" href="https://www.php.net/manual/en/function.array-map.php">PHP array_map</a>'),
+        ]);
+        $sources = app(WebSearch::class)->search('PHP array_map official documentation');
+        $this->assertCount(1, $sources);
+        $this->assertSame('duckduckgo', $sources[0]['provider']);
+        $this->assertSame('https://www.php.net/manual/en/function.array-map.php', $sources[0]['url']);
+    }
+
     public function test_research_merges_queries_limits_domains_and_keeps_failed_page_labels(): void
     {
         $found = [];

@@ -7,7 +7,7 @@ import {
   isNvidiaModelId,
 } from "@/lib/nvidia-chat";
 import { generateHostedImage } from "@/lib/hosted-image";
-import { hostedMediaRequest, hostedMediaEnabled } from "@/lib/hosted-media";
+import { hostedMediaRequest, hostedMediaEnabled, hostedDocumentEnabled } from "@/lib/hosted-media";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -263,15 +263,16 @@ async function proxy(
         );
       }
     }
-    // NVIDIA runs on the Next.js server; Laravel needs only the shared bridge
-    // secret for authenticated usage/history/media storage, not an NVIDIA key.
-    if (endpoint === "capabilities" && upstream.ok && hostedMediaEnabled()) {
+    // Document drafting uses authenticated Laravel inference; other media engines
+    // retain their own configuration requirements.
+    if (endpoint === "capabilities" && upstream.ok && (hostedMediaEnabled() || hostedDocumentEnabled())) {
       const advertised = Array.isArray(data.media)
         ? data.media.filter((item): item is string => typeof item === "string")
         : [];
       data.media = Array.from(new Set([
         ...advertised, 
-        ...(hostedMediaEnabled() ? ["transcription", "speech", "document_create", "video"] : []),
+        ...(hostedMediaEnabled() ? ["transcription", "speech", "video"] : []),
+        ...(hostedDocumentEnabled() ? ["document_create"] : []),
       ]));
       data.image_generation = data.image_generation === true;
       data.voice_transcription = hostedMediaEnabled() || data.voice_transcription === true;
