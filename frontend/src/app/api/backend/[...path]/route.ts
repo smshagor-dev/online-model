@@ -251,6 +251,15 @@ async function proxy(
         },
       });
     }
+    // cPanel/Cloudflare can return an HTML 504 instead of a JSON API error.
+    // Preserve the upstream status and never mistake a timeout for an image failure.
+    if (upstream.status === 504 || upstream.status === 502) {
+      return NextResponse.json({
+        message: /^media(?:\/|$)/.test(endpoint)
+          ? "The image service gateway timed out (HTTP " + upstream.status + "). Check the saved task in Library before trying again."
+          : "The backend gateway timed out (HTTP " + upstream.status + "). Please retry after checking its availability.",
+      }, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
+    }
     const text = await upstream.text();
     let data: Record<string, unknown> = {};
     if (text) {
