@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import ResponseMarkdown from "./response-markdown";
-export default function DocumentPreview({ file }: { file: File }) {
+export default function DocumentPreview({ file, onAttach }: { file: File; onAttach?: (file: File) => void }) {
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
@@ -20,7 +20,10 @@ export default function DocumentPreview({ file }: { file: File }) {
         if (file.size > 8_000_000)
           throw new Error("Preview supports files up to 8 MB.");
         let content = "";
-        if (extension === "docx") {
+        if (extension === "pdf") {
+          const { extractPdfText } = await import("@/lib/pdf-text");
+          content = await extractPdfText(new Uint8Array(await file.arrayBuffer()));
+        } else if (extension === "docx") {
           const { unzipSync, strFromU8 } = await import("fflate");
           const files = unzipSync(new Uint8Array(await file.arrayBuffer()), {
             filter: (entry) =>
@@ -93,6 +96,17 @@ export default function DocumentPreview({ file }: { file: File }) {
         <ResponseMarkdown content={text} />
       ) : (
         text && <pre className="file-text-preview">{text}</pre>
+      )}
+      {!loading && !error && text.trim() && onAttach && (
+        <>
+          <button className="primary-button"
+            disabled={text.length > 50000 || new TextEncoder().encode(text).length > 100000}
+            onClick={() => onAttach(new File([text], file.name.slice(0, 150) + ".txt", { type: "text/plain" }))}>
+            Attach extracted text to message
+          </button>
+          {(text.length > 50000 || new TextEncoder().encode(text).length > 100000) &&
+            <p role="alert">The extracted text exceeds the chat attachment limit. Split the document; no text was attached or silently omitted.</p>}
+        </>
       )}
       {url && (
         <a href={url} download={file.name}>
